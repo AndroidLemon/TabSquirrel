@@ -1,0 +1,654 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-12T18:46:09.618Z",
+  "title": "Design System: Tab Squirrel",
+  "extensions": {
+    "colorMeta": {
+      "paper": {
+        "role": "neutral",
+        "displayName": "Paper",
+        "canonical": "oklch(96.5% 0.010 87.5)",
+        "tonalRamp": [
+          "oklch(15.0% 0.010 87.5)",
+          "oklch(25.0% 0.010 87.5)",
+          "oklch(35.0% 0.010 87.5)",
+          "oklch(46.0% 0.010 87.5)",
+          "oklch(57.0% 0.010 87.5)",
+          "oklch(69.0% 0.010 87.5)",
+          "oklch(82.0% 0.010 87.5)",
+          "oklch(95.0% 0.010 87.5)"
+        ]
+      },
+      "paper-surface": {
+        "role": "neutral",
+        "displayName": "Paper Surface",
+        "canonical": "oklch(98.9% 0.006 84.6)",
+        "tonalRamp": [
+          "oklch(15.0% 0.006 84.6)",
+          "oklch(25.0% 0.006 84.6)",
+          "oklch(35.0% 0.006 84.6)",
+          "oklch(46.0% 0.006 84.6)",
+          "oklch(57.0% 0.006 84.6)",
+          "oklch(69.0% 0.006 84.6)",
+          "oklch(82.0% 0.006 84.6)",
+          "oklch(95.0% 0.006 84.6)"
+        ]
+      },
+      "paper-muted": {
+        "role": "neutral",
+        "displayName": "Paper Muted",
+        "canonical": "oklch(93.8% 0.014 84.6)",
+        "tonalRamp": [
+          "oklch(15.0% 0.014 84.6)",
+          "oklch(25.0% 0.014 84.6)",
+          "oklch(35.0% 0.014 84.6)",
+          "oklch(46.0% 0.014 84.6)",
+          "oklch(57.0% 0.014 84.6)",
+          "oklch(69.0% 0.014 84.6)",
+          "oklch(82.0% 0.014 84.6)",
+          "oklch(95.0% 0.014 84.6)"
+        ]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Rule",
+        "canonical": "oklch(89.9% 0.019 86.2)",
+        "tonalRamp": [
+          "oklch(15.0% 0.019 86.2)",
+          "oklch(25.0% 0.019 86.2)",
+          "oklch(35.0% 0.019 86.2)",
+          "oklch(46.0% 0.019 86.2)",
+          "oklch(57.0% 0.019 86.2)",
+          "oklch(69.0% 0.019 86.2)",
+          "oklch(82.0% 0.019 86.2)",
+          "oklch(95.0% 0.019 86.2)"
+        ]
+      },
+      "rule-strong": {
+        "role": "neutral",
+        "displayName": "Rule Strong",
+        "canonical": "oklch(83.2% 0.025 85.8)",
+        "tonalRamp": [
+          "oklch(15.0% 0.025 85.8)",
+          "oklch(25.0% 0.025 85.8)",
+          "oklch(35.0% 0.025 85.8)",
+          "oklch(46.0% 0.025 85.8)",
+          "oklch(57.0% 0.025 85.8)",
+          "oklch(69.0% 0.025 85.8)",
+          "oklch(82.0% 0.025 85.8)",
+          "oklch(95.0% 0.025 85.8)"
+        ]
+      },
+      "rule-input": {
+        "role": "neutral",
+        "displayName": "Rule Input",
+        "canonical": "oklch(63.9% 0.029 85.7)",
+        "tonalRamp": [
+          "oklch(15.0% 0.029 85.7)",
+          "oklch(25.0% 0.029 85.7)",
+          "oklch(35.0% 0.029 85.7)",
+          "oklch(46.0% 0.029 85.7)",
+          "oklch(57.0% 0.029 85.7)",
+          "oklch(69.0% 0.029 85.7)",
+          "oklch(82.0% 0.029 85.7)",
+          "oklch(95.0% 0.029 85.7)"
+        ]
+      },
+      "charcoal": {
+        "role": "neutral",
+        "displayName": "Charcoal",
+        "canonical": "oklch(22.6% 0.006 91.6)",
+        "tonalRamp": [
+          "oklch(15.0% 0.006 91.6)",
+          "oklch(25.0% 0.006 91.6)",
+          "oklch(35.0% 0.006 91.6)",
+          "oklch(46.0% 0.006 91.6)",
+          "oklch(57.0% 0.006 91.6)",
+          "oklch(69.0% 0.006 91.6)",
+          "oklch(82.0% 0.006 91.6)",
+          "oklch(95.0% 0.006 91.6)"
+        ]
+      },
+      "charcoal-secondary": {
+        "role": "neutral",
+        "displayName": "Charcoal Secondary",
+        "canonical": "oklch(39.9% 0.012 87.5)",
+        "tonalRamp": [
+          "oklch(15.0% 0.012 87.5)",
+          "oklch(25.0% 0.012 87.5)",
+          "oklch(35.0% 0.012 87.5)",
+          "oklch(46.0% 0.012 87.5)",
+          "oklch(57.0% 0.012 87.5)",
+          "oklch(69.0% 0.012 87.5)",
+          "oklch(82.0% 0.012 87.5)",
+          "oklch(95.0% 0.012 87.5)"
+        ]
+      },
+      "charcoal-muted": {
+        "role": "neutral",
+        "displayName": "Charcoal Muted",
+        "canonical": "oklch(51.5% 0.015 86.9)",
+        "tonalRamp": [
+          "oklch(15.0% 0.015 86.9)",
+          "oklch(25.0% 0.015 86.9)",
+          "oklch(35.0% 0.015 86.9)",
+          "oklch(46.0% 0.015 86.9)",
+          "oklch(57.0% 0.015 86.9)",
+          "oklch(69.0% 0.015 86.9)",
+          "oklch(82.0% 0.015 86.9)",
+          "oklch(95.0% 0.015 86.9)"
+        ]
+      },
+      "ink": {
+        "role": "primary",
+        "displayName": "Ink Blue",
+        "canonical": "oklch(41.1% 0.088 260.6)",
+        "tonalRamp": [
+          "oklch(15.0% 0.088 260.6)",
+          "oklch(25.0% 0.088 260.6)",
+          "oklch(35.0% 0.088 260.6)",
+          "oklch(46.0% 0.088 260.6)",
+          "oklch(57.0% 0.088 260.6)",
+          "oklch(69.0% 0.088 260.6)",
+          "oklch(82.0% 0.088 260.6)",
+          "oklch(95.0% 0.088 260.6)"
+        ]
+      },
+      "ink-deep": {
+        "role": "primary",
+        "displayName": "Deep Ink",
+        "canonical": "oklch(32.7% 0.070 260.6)",
+        "tonalRamp": [
+          "oklch(15.0% 0.070 260.6)",
+          "oklch(25.0% 0.070 260.6)",
+          "oklch(35.0% 0.070 260.6)",
+          "oklch(46.0% 0.070 260.6)",
+          "oklch(57.0% 0.070 260.6)",
+          "oklch(69.0% 0.070 260.6)",
+          "oklch(82.0% 0.070 260.6)",
+          "oklch(95.0% 0.070 260.6)"
+        ]
+      },
+      "ink-wash": {
+        "role": "primary",
+        "displayName": "Ink Wash",
+        "canonical": "oklch(93.3% 0.013 262.4)",
+        "tonalRamp": [
+          "oklch(15.0% 0.013 262.4)",
+          "oklch(25.0% 0.013 262.4)",
+          "oklch(35.0% 0.013 262.4)",
+          "oklch(46.0% 0.013 262.4)",
+          "oklch(57.0% 0.013 262.4)",
+          "oklch(69.0% 0.013 262.4)",
+          "oklch(82.0% 0.013 262.4)",
+          "oklch(95.0% 0.013 262.4)"
+        ]
+      },
+      "moss": {
+        "role": "secondary",
+        "displayName": "Moss",
+        "canonical": "oklch(48.5% 0.078 147.5)",
+        "tonalRamp": [
+          "oklch(15.0% 0.078 147.5)",
+          "oklch(25.0% 0.078 147.5)",
+          "oklch(35.0% 0.078 147.5)",
+          "oklch(46.0% 0.078 147.5)",
+          "oklch(57.0% 0.078 147.5)",
+          "oklch(69.0% 0.078 147.5)",
+          "oklch(82.0% 0.078 147.5)",
+          "oklch(95.0% 0.078 147.5)"
+        ]
+      },
+      "moss-wash": {
+        "role": "secondary",
+        "displayName": "Moss Wash",
+        "canonical": "oklch(93.3% 0.020 135.8)",
+        "tonalRamp": [
+          "oklch(15.0% 0.020 135.8)",
+          "oklch(25.0% 0.020 135.8)",
+          "oklch(35.0% 0.020 135.8)",
+          "oklch(46.0% 0.020 135.8)",
+          "oklch(57.0% 0.020 135.8)",
+          "oklch(69.0% 0.020 135.8)",
+          "oklch(82.0% 0.020 135.8)",
+          "oklch(95.0% 0.020 135.8)"
+        ]
+      },
+      "ochre": {
+        "role": "secondary",
+        "displayName": "Ochre",
+        "canonical": "oklch(50.9% 0.103 70.8)",
+        "tonalRamp": [
+          "oklch(15.0% 0.103 70.8)",
+          "oklch(25.0% 0.103 70.8)",
+          "oklch(35.0% 0.103 70.8)",
+          "oklch(46.0% 0.103 70.8)",
+          "oklch(57.0% 0.103 70.8)",
+          "oklch(69.0% 0.103 70.8)",
+          "oklch(82.0% 0.103 70.8)",
+          "oklch(95.0% 0.103 70.8)"
+        ]
+      },
+      "brick": {
+        "role": "secondary",
+        "displayName": "Brick",
+        "canonical": "oklch(50.5% 0.141 30.3)",
+        "tonalRamp": [
+          "oklch(15.0% 0.141 30.3)",
+          "oklch(25.0% 0.141 30.3)",
+          "oklch(35.0% 0.141 30.3)",
+          "oklch(46.0% 0.141 30.3)",
+          "oklch(57.0% 0.141 30.3)",
+          "oklch(69.0% 0.141 30.3)",
+          "oklch(82.0% 0.141 30.3)",
+          "oklch(95.0% 0.141 30.3)"
+        ]
+      },
+      "brick-wash": {
+        "role": "secondary",
+        "displayName": "Brick Wash",
+        "canonical": "oklch(92.1% 0.023 34.3)",
+        "tonalRamp": [
+          "oklch(15.0% 0.023 34.3)",
+          "oklch(25.0% 0.023 34.3)",
+          "oklch(35.0% 0.023 34.3)",
+          "oklch(46.0% 0.023 34.3)",
+          "oklch(57.0% 0.023 34.3)",
+          "oklch(69.0% 0.023 34.3)",
+          "oklch(82.0% 0.023 34.3)",
+          "oklch(95.0% 0.023 34.3)"
+        ]
+      },
+      "night-paper": {
+        "role": "neutral",
+        "displayName": "Night Paper",
+        "canonical": "oklch(19.6% 0.004 84.6)",
+        "tonalRamp": [
+          "oklch(15.0% 0.004 84.6)",
+          "oklch(25.0% 0.004 84.6)",
+          "oklch(35.0% 0.004 84.6)",
+          "oklch(46.0% 0.004 84.6)",
+          "oklch(57.0% 0.004 84.6)",
+          "oklch(69.0% 0.004 84.6)",
+          "oklch(82.0% 0.004 84.6)",
+          "oklch(95.0% 0.004 84.6)"
+        ]
+      },
+      "night-surface": {
+        "role": "neutral",
+        "displayName": "Night Surface",
+        "canonical": "oklch(23.5% 0.006 91.6)",
+        "tonalRamp": [
+          "oklch(15.0% 0.006 91.6)",
+          "oklch(25.0% 0.006 91.6)",
+          "oklch(35.0% 0.006 91.6)",
+          "oklch(46.0% 0.006 91.6)",
+          "oklch(57.0% 0.006 91.6)",
+          "oklch(69.0% 0.006 91.6)",
+          "oklch(82.0% 0.006 91.6)",
+          "oklch(95.0% 0.006 91.6)"
+        ]
+      },
+      "night-muted": {
+        "role": "neutral",
+        "displayName": "Night Muted",
+        "canonical": "oklch(28.5% 0.007 95.3)",
+        "tonalRamp": [
+          "oklch(15.0% 0.007 95.3)",
+          "oklch(25.0% 0.007 95.3)",
+          "oklch(35.0% 0.007 95.3)",
+          "oklch(46.0% 0.007 95.3)",
+          "oklch(57.0% 0.007 95.3)",
+          "oklch(69.0% 0.007 95.3)",
+          "oklch(82.0% 0.007 95.3)",
+          "oklch(95.0% 0.007 95.3)"
+        ]
+      },
+      "night-rule": {
+        "role": "neutral",
+        "displayName": "Night Rule",
+        "canonical": "oklch(31.7% 0.009 88.7)",
+        "tonalRamp": [
+          "oklch(15.0% 0.009 88.7)",
+          "oklch(25.0% 0.009 88.7)",
+          "oklch(35.0% 0.009 88.7)",
+          "oklch(46.0% 0.009 88.7)",
+          "oklch(57.0% 0.009 88.7)",
+          "oklch(69.0% 0.009 88.7)",
+          "oklch(82.0% 0.009 88.7)",
+          "oklch(95.0% 0.009 88.7)"
+        ]
+      },
+      "night-text": {
+        "role": "neutral",
+        "displayName": "Night Text",
+        "canonical": "oklch(93.5% 0.013 86.8)",
+        "tonalRamp": [
+          "oklch(15.0% 0.013 86.8)",
+          "oklch(25.0% 0.013 86.8)",
+          "oklch(35.0% 0.013 86.8)",
+          "oklch(46.0% 0.013 86.8)",
+          "oklch(57.0% 0.013 86.8)",
+          "oklch(69.0% 0.013 86.8)",
+          "oklch(82.0% 0.013 86.8)",
+          "oklch(95.0% 0.013 86.8)"
+        ]
+      },
+      "night-text-secondary": {
+        "role": "neutral",
+        "displayName": "Night Text Secondary",
+        "canonical": "oklch(75.6% 0.018 84.6)",
+        "tonalRamp": [
+          "oklch(15.0% 0.018 84.6)",
+          "oklch(25.0% 0.018 84.6)",
+          "oklch(35.0% 0.018 84.6)",
+          "oklch(46.0% 0.018 84.6)",
+          "oklch(57.0% 0.018 84.6)",
+          "oklch(69.0% 0.018 84.6)",
+          "oklch(82.0% 0.018 84.6)",
+          "oklch(95.0% 0.018 84.6)"
+        ]
+      },
+      "night-text-muted": {
+        "role": "neutral",
+        "displayName": "Night Text Muted",
+        "canonical": "oklch(66.8% 0.020 86.2)",
+        "tonalRamp": [
+          "oklch(15.0% 0.020 86.2)",
+          "oklch(25.0% 0.020 86.2)",
+          "oklch(35.0% 0.020 86.2)",
+          "oklch(46.0% 0.020 86.2)",
+          "oklch(57.0% 0.020 86.2)",
+          "oklch(69.0% 0.020 86.2)",
+          "oklch(82.0% 0.020 86.2)",
+          "oklch(95.0% 0.020 86.2)"
+        ]
+      },
+      "night-ink": {
+        "role": "primary",
+        "displayName": "Night Ink",
+        "canonical": "oklch(76.7% 0.066 262.4)",
+        "tonalRamp": [
+          "oklch(15.0% 0.066 262.4)",
+          "oklch(25.0% 0.066 262.4)",
+          "oklch(35.0% 0.066 262.4)",
+          "oklch(46.0% 0.066 262.4)",
+          "oklch(57.0% 0.066 262.4)",
+          "oklch(69.0% 0.066 262.4)",
+          "oklch(82.0% 0.066 262.4)",
+          "oklch(95.0% 0.066 262.4)"
+        ]
+      },
+      "night-ink-fill": {
+        "role": "primary",
+        "displayName": "Night Ink Fill",
+        "canonical": "oklch(47.6% 0.090 260.5)",
+        "tonalRamp": [
+          "oklch(15.0% 0.090 260.5)",
+          "oklch(25.0% 0.090 260.5)",
+          "oklch(35.0% 0.090 260.5)",
+          "oklch(46.0% 0.090 260.5)",
+          "oklch(57.0% 0.090 260.5)",
+          "oklch(69.0% 0.090 260.5)",
+          "oklch(82.0% 0.090 260.5)",
+          "oklch(95.0% 0.090 260.5)"
+        ]
+      },
+      "night-moss": {
+        "role": "secondary",
+        "displayName": "Night Moss",
+        "canonical": "oklch(75.7% 0.082 147.9)",
+        "tonalRamp": [
+          "oklch(15.0% 0.082 147.9)",
+          "oklch(25.0% 0.082 147.9)",
+          "oklch(35.0% 0.082 147.9)",
+          "oklch(46.0% 0.082 147.9)",
+          "oklch(57.0% 0.082 147.9)",
+          "oklch(69.0% 0.082 147.9)",
+          "oklch(82.0% 0.082 147.9)",
+          "oklch(95.0% 0.082 147.9)"
+        ]
+      },
+      "night-ochre": {
+        "role": "secondary",
+        "displayName": "Night Ochre",
+        "canonical": "oklch(75.6% 0.119 78.3)",
+        "tonalRamp": [
+          "oklch(15.0% 0.119 78.3)",
+          "oklch(25.0% 0.119 78.3)",
+          "oklch(35.0% 0.119 78.3)",
+          "oklch(46.0% 0.119 78.3)",
+          "oklch(57.0% 0.119 78.3)",
+          "oklch(69.0% 0.119 78.3)",
+          "oklch(82.0% 0.119 78.3)",
+          "oklch(95.0% 0.119 78.3)"
+        ]
+      },
+      "night-brick": {
+        "role": "secondary",
+        "displayName": "Night Brick",
+        "canonical": "oklch(72.0% 0.108 29.9)",
+        "tonalRamp": [
+          "oklch(15.0% 0.108 29.9)",
+          "oklch(25.0% 0.108 29.9)",
+          "oklch(35.0% 0.108 29.9)",
+          "oklch(46.0% 0.108 29.9)",
+          "oklch(57.0% 0.108 29.9)",
+          "oklch(69.0% 0.108 29.9)",
+          "oklch(82.0% 0.108 29.9)",
+          "oklch(95.0% 0.108 29.9)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Reader dialog title, Newsreader 600 at 22px."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Card titles in serif; 17px at 720px and wider; ink and underlined on hover."
+      },
+      "reading": {
+        "displayName": "Reading",
+        "purpose": "Article text in the reader view, 18px, max 68ch."
+      },
+      "summary": {
+        "displayName": "Summary",
+        "purpose": "TL;DR and takeaways in serif; 15px at 720px and wider."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "All UI text in Plex Sans; 14px at 720px and wider."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Uppercase section headings and stat labels, 0.05em tracking."
+      },
+      "data": {
+        "displayName": "Data",
+        "purpose": "Domains, timestamps and count badges in Plex Mono."
+      }
+    },
+    "shadows": [
+      {
+        "name": "raised",
+        "value": "0 2px 8px rgb(29 28 25 / 0.08), 0 1px 2px rgb(29 28 25 / 0.06)",
+        "purpose": "Menus and popovers (--shadow-md)."
+      },
+      {
+        "name": "overlay",
+        "value": "0 12px 32px rgb(29 28 25 / 0.14), 0 2px 6px rgb(29 28 25 / 0.08)",
+        "purpose": "Dialogs and toasts (--shadow-lg)."
+      },
+      {
+        "name": "focus",
+        "value": "0 0 0 3px rgb(46 74 122 / 0.22)",
+        "purpose": "Focus halo (--focus-ring); 30% pale ink in dark mode."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease",
+        "value": "cubic-bezier(.2, .7, .2, 1)",
+        "purpose": "The single easing curve for every transition."
+      },
+      {
+        "name": "duration-fast",
+        "value": "120ms",
+        "purpose": "Colour and border changes."
+      },
+      {
+        "name": "duration-base",
+        "value": "200ms",
+        "purpose": "Entrances, chevrons and toasts."
+      },
+      {
+        "name": "duration-slow",
+        "value": "320ms",
+        "purpose": "Sidebar drawer slide."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "narrow",
+        "value": "<720px"
+      },
+      {
+        "name": "wide",
+        "value": ">=720px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Ink-filled action; deepens on hover, no shadow.",
+      "html": "<button class=\"ds-btn-primary\">Open reader</button>",
+      "css": ".ds-btn-primary { font-family: var(--font-sans); font-size: 12px; font-weight: 600; background: var(--accent-fill); color: var(--accent-contrast); border: 1px solid transparent; border-radius: var(--radius-sm); padding: 8px 12px; cursor: pointer; transition: color 120ms cubic-bezier(.2, .7, .2, 1), background-color 120ms cubic-bezier(.2, .7, .2, 1), border-color 120ms cubic-bezier(.2, .7, .2, 1), box-shadow 120ms cubic-bezier(.2, .7, .2, 1); } .ds-btn-primary:hover { background: var(--accent-fill-hover); } .ds-btn-primary:active { transform: scale(0.98); } .ds-btn-primary:focus-visible { outline: none; box-shadow: var(--focus-ring); }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Footer and copy actions: surface fill, hairline border; border turns ink on hover.",
+      "html": "<button class=\"ds-btn-secondary\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"9\" y=\"9\" width=\"13\" height=\"13\" rx=\"2\"/><path d=\"M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1\"/></svg><span>Copy</span></button>",
+      "css": ".ds-btn-secondary { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-sans); font-size: 12px; background: var(--bg-surface); color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 8px; cursor: pointer; transition: color 120ms cubic-bezier(.2, .7, .2, 1), background-color 120ms cubic-bezier(.2, .7, .2, 1), border-color 120ms cubic-bezier(.2, .7, .2, 1), box-shadow 120ms cubic-bezier(.2, .7, .2, 1); } .ds-btn-secondary:hover { color: var(--text-primary); border-color: var(--accent); } .ds-btn-secondary:active { transform: scale(0.98); } .ds-btn-secondary:focus-visible { outline: none; box-shadow: var(--focus-ring); }"
+    },
+    {
+      "name": "Icon Button",
+      "kind": "button",
+      "refersTo": "button-icon",
+      "description": "Transparent ghost button; paper-muted fill on hover.",
+      "html": "<button class=\"ds-btn-icon\" aria-label=\"Star\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z\"/></svg></button>",
+      "css": ".ds-btn-icon { display: inline-flex; background: transparent; color: var(--text-secondary); border: 1px solid transparent; border-radius: var(--radius-sm); padding: 6px; cursor: pointer; transition: color 120ms cubic-bezier(.2, .7, .2, 1), background-color 120ms cubic-bezier(.2, .7, .2, 1), border-color 120ms cubic-bezier(.2, .7, .2, 1), box-shadow 120ms cubic-bezier(.2, .7, .2, 1); } .ds-btn-icon:hover { background: var(--bg-muted); color: var(--text-primary); } .ds-btn-icon:active { transform: scale(0.96); } .ds-btn-icon:focus-visible { outline: none; box-shadow: var(--focus-ring); }"
+    },
+    {
+      "name": "Search Input",
+      "kind": "input",
+      "refersTo": "input-search",
+      "description": "Surface field with input-rule border; focus turns the border ink and adds the halo.",
+      "html": "<div class=\"ds-search\"><span class=\"ds-search-icon\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"11\" cy=\"11\" r=\"7\"/><path d=\"m21 21-4.3-4.3\"/></svg></span><input class=\"ds-input-search\" type=\"search\" placeholder=\"Search your tabs\"><kbd class=\"ds-search-hint\">/</kbd></div>",
+      "css": ".ds-search { position: relative; max-width: 320px; } .ds-search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-muted); display: inline-flex; } .ds-input-search { width: 100%; font-family: var(--font-sans); font-size: 13px; background: var(--bg-surface); color: var(--text-primary); border: 1px solid var(--border-input); border-radius: var(--radius-sm); padding: 8px 36px 8px 32px; transition: color 120ms cubic-bezier(.2, .7, .2, 1), background-color 120ms cubic-bezier(.2, .7, .2, 1), border-color 120ms cubic-bezier(.2, .7, .2, 1), box-shadow 120ms cubic-bezier(.2, .7, .2, 1); } .ds-input-search::placeholder { color: var(--text-muted); } .ds-input-search:hover { border-color: var(--text-muted); } .ds-input-search:focus-visible { outline: none; border-color: var(--accent); box-shadow: var(--focus-ring); } .ds-search-hint { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); }"
+    },
+    {
+      "name": "Nav Item",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "Sidebar filter row; active takes ink wash, ink text and 600 weight.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-item ds-nav-item-active\" href=\"#\" aria-current=\"page\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M3 12 12 3l9 9\"/><path d=\"M5 10v10h14V10\"/></svg><span>All tabs</span></a><a class=\"ds-nav-item\" href=\"#\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 6v6l4 2\"/><circle cx=\"12\" cy=\"12\" r=\"9\"/></svg><span>Sleeping</span></a></nav>",
+      "css": ".ds-nav { display: flex; flex-direction: column; gap: 2px; width: 220px; } .ds-nav-item { display: flex; align-items: center; gap: 8px; font-family: var(--font-sans); font-size: 13px; color: var(--text-secondary); text-decoration: none; border-radius: var(--radius-sm); padding: 7px 10px; transition: color 120ms cubic-bezier(.2, .7, .2, 1), background-color 120ms cubic-bezier(.2, .7, .2, 1), border-color 120ms cubic-bezier(.2, .7, .2, 1), box-shadow 120ms cubic-bezier(.2, .7, .2, 1); } .ds-nav-item:hover { background: var(--bg-muted); color: var(--text-primary); } .ds-nav-item-active, .ds-nav-item-active:hover { background: var(--accent-light); color: var(--accent-text); font-weight: 600; } .ds-nav-item:focus-visible { outline: none; box-shadow: var(--focus-ring); }"
+    },
+    {
+      "name": "Tag Chip",
+      "kind": "chip",
+      "refersTo": "chip-tag",
+      "description": "Clickable tag filter; takes ink wash on hover.",
+      "html": "<button class=\"ds-tag\">research</button>",
+      "css": ".ds-tag { font-family: var(--font-sans); font-size: 12px; background: var(--bg-muted); color: var(--text-secondary); border: 1px solid transparent; border-radius: 4px; padding: 2px 6px; cursor: pointer; transition: color 120ms cubic-bezier(.2, .7, .2, 1), background-color 120ms cubic-bezier(.2, .7, .2, 1), border-color 120ms cubic-bezier(.2, .7, .2, 1), box-shadow 120ms cubic-bezier(.2, .7, .2, 1); } .ds-tag:hover { background: var(--accent-light); color: var(--accent-text); } .ds-tag:focus-visible { outline: none; box-shadow: var(--focus-ring); }"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "description": "Hue at 12% fill, hue text, 25% border via the --chip rgb triplet; always an icon plus a word. Archived is neutral.",
+      "html": "<span class=\"ds-badge ds-badge-sleeping\"><svg width=\"12\" height=\"12\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 6v6l4 2\"/><circle cx=\"12\" cy=\"12\" r=\"9\"/></svg>Sleeping</span> <span class=\"ds-badge ds-badge-restored\"><svg width=\"12\" height=\"12\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M20 6 9 17l-5-5\"/></svg>Reopened</span> <span class=\"ds-badge ds-badge-captured\"><svg width=\"12\" height=\"12\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z\"/></svg>Saved</span> <span class=\"ds-badge ds-badge-archived\"><svg width=\"12\" height=\"12\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"3\" y=\"4\" width=\"18\" height=\"4\" rx=\"1\"/><path d=\"M5 8v12h14V8\"/></svg>Archived</span>",
+      "css": ".ds-badge { display: inline-flex; align-items: center; gap: 4px; font-family: var(--font-sans); font-size: 12px; font-weight: 600; letter-spacing: 0.02em; border: 1px solid transparent; border-radius: 4px; padding: 2px 6px; } .ds-badge-sleeping { background: rgb(var(--chip-accent) / 0.12); color: var(--accent-text); border-color: rgb(var(--chip-accent) / 0.25); } .ds-badge-restored { background: rgb(var(--chip-moss) / 0.12); color: var(--success); border-color: rgb(var(--chip-moss) / 0.25); } .ds-badge-captured { background: rgb(var(--chip-ochre) / 0.12); color: var(--star); border-color: rgb(var(--chip-ochre) / 0.25); } .ds-badge-archived { background: var(--bg-muted); color: var(--text-secondary); border-color: var(--border-color); }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Flat surface with a hairline rule (strong on hover): mono meta, serif title, TL;DR panel, ink bullets, tags, ruled footer.",
+      "html": "<article class=\"ds-card\"><div class=\"ds-card-head\"><span class=\"ds-card-domain\">example.com</span><span class=\"ds-card-time\">2d ago</span></div><h3 class=\"ds-card-title\">A slow history of the paper clip</h3><p class=\"ds-card-tldr\">The clip outlasted its patents because nothing simpler held paper together.</p><ul class=\"ds-card-points\"><li>Invented as a bent wire, never improved</li><li>Still sold by the billion</li></ul><div class=\"ds-card-foot\"><button class=\"ds-card-action\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M15 3h6v6\"/><path d=\"M10 14 21 3\"/><path d=\"M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6\"/></svg><span>Open</span></button></div></article>",
+      "css": ".ds-card { display: flex; flex-direction: column; gap: 8px; max-width: 360px; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 12px; box-shadow: var(--shadow-sm); transition: border-color 120ms cubic-bezier(.2, .7, .2, 1); } .ds-card:hover { border-color: var(--border-strong); } .ds-card-head { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); } .ds-card-title { font-family: var(--font-serif); font-size: 15px; font-weight: 600; line-height: 1.35; color: var(--text-primary); } .ds-card:hover .ds-card-title { color: var(--accent-text); text-decoration: underline; } .ds-card-tldr { font-family: var(--font-serif); font-size: 14px; line-height: 1.4; color: var(--text-secondary); background: var(--bg-muted); border-radius: 4px; padding: 6px 8px; } .ds-card-points { list-style: none; font-family: var(--font-serif); font-size: 14px; color: var(--text-secondary); } .ds-card-points li::before { content: \"\\2022\"; color: var(--accent); margin-right: 6px; } .ds-card-foot { border-top: 1px solid var(--border-color); padding-top: 8px; } .ds-card-action { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; background: transparent; color: var(--text-secondary); border: 1px solid transparent; border-radius: var(--radius-sm); padding: 4px 6px; cursor: pointer; transition: color 120ms cubic-bezier(.2, .7, .2, 1), background-color 120ms cubic-bezier(.2, .7, .2, 1), border-color 120ms cubic-bezier(.2, .7, .2, 1), box-shadow 120ms cubic-bezier(.2, .7, .2, 1); } .ds-card-action:hover { background: var(--bg-muted); color: var(--text-primary); } .ds-card-action:focus-visible { outline: none; box-shadow: var(--focus-ring); }"
+    },
+    {
+      "name": "Toast with Undo",
+      "kind": "custom",
+      "description": "Fixed-colour charcoal bar in both schemes with a pale-ink Undo pill and a 2px countdown bar.",
+      "html": "<div class=\"ds-toast\" role=\"status\"><span class=\"ds-toast-msg\">Tab archived</span><button class=\"ds-toast-undo\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M3 7v6h6\"/><path d=\"M21 17a9 9 0 0 0-15-6.7L3 13\"/></svg><span>Undo</span></button><span class=\"ds-toast-bar\"></span></div>",
+      "css": ".ds-toast { position: relative; overflow: hidden; display: inline-flex; align-items: center; gap: 12px; background: var(--toast-bg); color: var(--toast-ink); border: 1px solid var(--toast-border); border-radius: var(--radius-sm); padding: 8px 14px; box-shadow: var(--shadow-lg); font-family: var(--font-sans); font-size: 13px; } .ds-toast-undo { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; background: var(--toast-accent); color: var(--toast-accent-ink); border: 1px solid transparent; border-radius: 4px; padding: 4px 8px; cursor: pointer; transition: color 120ms cubic-bezier(.2, .7, .2, 1), background-color 120ms cubic-bezier(.2, .7, .2, 1), border-color 120ms cubic-bezier(.2, .7, .2, 1), box-shadow 120ms cubic-bezier(.2, .7, .2, 1); } .ds-toast-undo:hover { background: var(--toast-accent-hover); } .ds-toast-undo:focus-visible { outline: 2px solid var(--toast-accent); outline-offset: 2px; } .ds-toast-bar { position: absolute; left: 0; bottom: 0; height: 2px; width: 60%; background: var(--toast-bar); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Reading Room",
+    "overview": "Plainsong is a calm, warm, unhurried room you come back to for the things you set aside. Warm paper, charcoal ink and a single blue-black accent. Nothing in it competes for attention, because the tabs that were closed were already competing too much. The notebook is where a summary is read, not where the interface shows off.\n\nTwo type voices split the work. Newsreader, a reading serif, carries everything that was *kept*: titles, TL;DRs, takeaways and the article itself. IBM Plex Sans carries everything you *do*: navigation, buttons, filters and settings. IBM Plex Mono marks *data*: domains, timestamps and counts. All three are bundled locally, so the extension makes no font requests.\n\nDensity follows the surface. In the side panel it is compact (13px body, one column, filters in a drawer). In a full tab it opens up (14px body, a persistent sidebar and a card grid). Both are one page with one stylesheet.",
+    "keyCharacteristics": [
+      "Warm off-white paper and charcoal text. Never pure white or pure black.",
+      "One accent, ink blue, used for links, the active nav item, focus and the primary button.",
+      "Serif for content, sans for controls, mono for data.",
+      "Flat surfaces separated by hairline rules. Shadows only on things that float.",
+      "Status shown by a muted hue plus a word, never by colour alone.",
+      "A full dark scheme through `prefers-color-scheme`, with every token redefined."
+    ],
+    "rules": [
+      {
+        "name": "The One Ink Rule",
+        "body": "Ink blue is the only accent. Moss, ochre and brick appear only as status, never as decoration.",
+        "section": "colors"
+      },
+      {
+        "name": "The Archived Is Quiet Rule",
+        "body": "Archived is the default state, so its badge has no hue (paper-muted fill, secondary text). Colour is reserved for states that need attention.",
+        "section": "colors"
+      },
+      {
+        "name": "The Fixed Toast Rule",
+        "body": "Toasts use their own fixed-colour tokens in both schemes, so the contrast of the Undo button never depends on page tokens.",
+        "section": "colors"
+      },
+      {
+        "name": "The Three Voices Rule",
+        "body": "Serif means content, sans means controls, mono means data. A new element picks its font by what it *is*, not by how it should look.",
+        "section": "typography"
+      },
+      {
+        "name": "The No Faux Bold Rule",
+        "body": "Only the bundled weights exist: Newsreader 400, 400 italic and 600; Plex Sans 400 and 600; Plex Mono 400. Emphasis in mono comes from colour, not weight.",
+        "section": "typography"
+      },
+      {
+        "name": "The Only Floating Things Cast Shadows Rule",
+        "body": "If an element sits in the page flow, it gets a rule, not a shadow.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** take every colour from the tokens on `:root` and define its dark counterpart under `prefers-color-scheme: dark`.",
+      "**Do** set content in Newsreader, controls in Plex Sans and data in Plex Mono (the Three Voices Rule).",
+      "**Do** separate surfaces with 1px rules and tonal steps. Reserve shadows for menus, dialogs and toasts.",
+      "**Do** pair every status hue with a word and an icon, and keep Archived neutral.",
+      "**Do** keep filled ink buttons at `night-ink-fill` in dark mode, not the bright `night-ink`.",
+      "**Do** keep a visible focus halo and AA contrast in both schemes, and respect reduced motion."
+    ],
+    "donts": [
+      "**Don't** add a second accent colour, or use moss, ochre or brick decoratively.",
+      "**Don't** use pure white (#FFFFFF) or pure black (#000000) surfaces.",
+      "**Don't** put shadows on resting cards, inputs or the sidebar.",
+      "**Don't** use font weights that aren't bundled, or load fonts from a CDN.",
+      "**Don't** fork the token names between pages: `src/options/options.css` currently uses `--bg-page`, `--bg-card` and `--text-main` for the same values that `src/app/app.css` calls `--bg-primary`, `--bg-surface` and `--text-primary`."
+    ]
+  }
+}

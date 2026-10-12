@@ -21,6 +21,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
-    "fake-indexeddb": "^6.2.5"
+    "fake-indexeddb": "^6.2.5",
+    "impeccable": "^4.5.2"
   }
 }
