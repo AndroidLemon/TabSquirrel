@@ -704,6 +704,40 @@ async function runHybridTests() {
     assert.ok(removedOnReopen.after.deletedAt > 0, 'With the setting on, reopening soft-deletes the note');
     assert.strictEqual(removedOnReopen.listed, false, 'With the setting on, the note leaves the list');
     console.log('✓ Reopen keeps the note by default and removes it when removeOnReopen is on');
+
+    // 9b: reopening a TabSum-suspended tab in place must be handled once. Activating it fires
+    // tabs.onActivated, which would otherwise find the discarded mapping and handle the reopen a
+    // second time (and broadcast NOTE_REMOVED_ON_REOPEN -> a duplicate Undo toast).
+    const inPlacePage = await context.newPage();
+    await inPlacePage.goto(`http://localhost:${PORT}/reopen-inplace`);
+    await inPlacePage.waitForLoadState('networkidle');
+    const inPlaceRec = await seed('/reopen-inplace', 'suspended');
+    await activateHelperTab(background);
+    const inPlaceTabId = await background.evaluate(async (url) => {
+      const tab = (await chrome.tabs.query({})).find(t => t.url === url);
+      return tab.id;
+    }, inPlaceRec.url);
+    await background.evaluate(async ({ tabId, recordId }) => {
+      const { discardedRecords = {} } = await chrome.storage.session.get('discardedRecords');
+      discardedRecords[tabId] = recordId;
+      await chrome.storage.session.set({ discardedRecords });
+    }, { tabId: inPlaceTabId, recordId: inPlaceRec.id });
+    const inPlace = await helperPage.evaluate(async ({ rec, tabId }) => {
+      const { saveSettings, getTabById } = await import(chrome.runtime.getURL('src/storage/db.js'));
+      await saveSettings({ removeOnReopen: true });
+      let broadcasts = 0;
+      chrome.runtime.onMessage.addListener((m) => { if (m?.type === 'NOTE_REMOVED_ON_REOPEN') broadcasts++; });
+      const res = await chrome.runtime.sendMessage({ type: 'RESTORE_TAB', url: rec.url, recordId: rec.id, tabId });
+      await new Promise(r => setTimeout(r, 1500)); // let onActivated run to completion
+      await saveSettings({ removeOnReopen: false });
+      return { res, broadcasts, after: await getTabById(rec.id) };
+    }, { rec: inPlaceRec, tabId: inPlaceTabId });
+    assert.strictEqual(inPlace.res.restoredInPlace, true, 'The suspended tab is reactivated in place');
+    assert.strictEqual(inPlace.res.removed, true, 'RESTORE_TAB reports the note was removed so the app can offer Undo');
+    assert.ok(inPlace.after.deletedAt > 0, 'The note is soft-deleted');
+    assert.strictEqual(inPlace.broadcasts, 0, 'onActivated must not handle the reopen a second time (duplicate Undo toast)');
+    await inPlacePage.close();
+    console.log('✓ In-place reopen of a suspended tab is handled once, with no duplicate removal broadcast');
     await helperPage.evaluate(async () => {
       const { saveSettings } = await import(chrome.runtime.getURL('src/storage/db.js'));
       await saveSettings({ removeOnReopen: false });

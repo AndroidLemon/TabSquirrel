@@ -16,6 +16,7 @@ import {
   getStats,
   softDeleteTab,
   restoreDeletedTab,
+  markReopened,
   getTabById,
   toggleFavoriteTab,
   getSettings
@@ -76,6 +77,11 @@ if (typeof document !== 'undefined') {
   // happens. Must not call sendResponse or return true (no response expected here).
   chrome.runtime.onMessage.addListener((message) => {
     if (message?.type === 'TABS_CLOSED') refresh();
+    // A discarded tab was re-activated in the tab strip and its note was removed (Remove Notes When Reopened).
+    if (message?.type === 'NOTE_REMOVED_ON_REOPEN') {
+      refresh();
+      showRemovedOnReopenToast(message.recordId);
+    }
   });
 }
 
@@ -304,6 +310,7 @@ async function reopenTab(url, recordId) {
     if (!res?.success) throw new Error(res?.error || 'no response');
     showToast(res.restoredInPlace ? 'Focused existing sleeping tab!' : 'Tab reopened!');
     await refresh(); // status, inbox/reopened membership and Closed today all changed
+    if (res.removed) showRemovedOnReopenToast(recordId);
   } catch (err) {
     showToast('Error reopening tab: ' + err.message, true);
   }
@@ -375,15 +382,31 @@ async function deleteCard(tab, card) {
     if (!$('tabs-feed').querySelector('.tab-card')) renderFeed();
   }, 260);
 
-  showToast('Summary removed', false, async () => {
+  showUndoToast('Summary removed', tab.id, () => restoreDeletedTab(tab.id));
+}
+
+/**
+ * Undo toast for a note removed because it was reopened (Remove Notes When Reopened). Undo restores it
+ * the way it would have been with the setting off: back in the list, marked Reopened.
+ */
+function showRemovedOnReopenToast(recordId) {
+  showUndoToast('Note removed (reopened)', recordId, async () => {
+    await restoreDeletedTab(recordId);
+    await markReopened(recordId);
+  });
+}
+
+/** 5-second toast whose Undo runs `restore`, then refreshes and highlights the returned card. */
+function showUndoToast(message, id, restore) {
+  showToast(message, false, async () => {
     hideToast();
     try {
-      await restoreDeletedTab(tab.id);
+      await restore();
     } catch (err) {
       console.error('Error restoring tab:', err);
     }
     await refresh();
-    const restored = $('tabs-feed').querySelector(`.tab-card[data-id="${CSS.escape(String(tab.id))}"]`);
+    const restored = $('tabs-feed').querySelector(`.tab-card[data-id="${CSS.escape(String(id))}"]`);
     if (restored) {
       restored.classList.add('undo-restored');
       restored.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
