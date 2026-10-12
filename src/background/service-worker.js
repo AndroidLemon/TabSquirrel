@@ -9,6 +9,7 @@ import {
   markClosedByTabSum,
   markTabGone,
   markReopened,
+  softDeleteTab,
   markLeftOpen,
   markStaysSuspended,
   purgeDeletedTabs,
@@ -228,12 +229,21 @@ function takeDiscardedRecord(tabId) {
   });
 }
 
+/**
+ * A record's tab was reopened. With `removeOnReopen` the record leaves the list (soft-deleted,
+ * so purgeDeletedTabs clears it after the usual hour); otherwise it moves to Reopened.
+ */
+async function handleReopened(recordId) {
+  const settings = await getSettings();
+  await (settings.removeOnReopen ? softDeleteTab(recordId) : markReopened(recordId));
+}
+
 // Track tab activation; a tab TabSum discarded is back in use
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
   await setTimestamp(activeInfo.tabId, Date.now());
   const recordId = await takeDiscardedRecord(activeInfo.tabId);
   if (recordId) {
-    await markReopened(recordId).catch(console.error);
+    await handleReopened(recordId).catch(console.error);
   }
 });
 
@@ -540,7 +550,7 @@ async function processTabArchival(tab, settings, lastActiveTime) {
       await mapDiscardedRecord(discardedTab.id, record.id);
       // Activated while the mapping was being written? onActivated found nothing to restore.
       if (await userReopened(discardedTab.id) && await takeDiscardedRecord(discardedTab.id)) {
-        await markReopened(record.id);
+        await handleReopened(record.id);
       }
     }
 
@@ -659,7 +669,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               await chrome.windows.update(existingTab.windowId, { focused: true });
             }
             if (message.recordId) {
-              await markReopened(message.recordId);
+              await handleReopened(message.recordId);
             }
             sendResponse({ success: true, restoredInPlace: true, tabId: existingTab.id });
             return;
@@ -668,7 +678,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           // 2. Tab was closed, open fresh tab
           const newTab = await chrome.tabs.create({ url: message.url, active: true });
           if (message.recordId) {
-            await markReopened(message.recordId);
+            await handleReopened(message.recordId);
           }
           sendResponse({ success: true, restoredInPlace: false, tabId: newTab.id });
           return;

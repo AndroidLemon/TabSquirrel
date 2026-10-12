@@ -681,6 +681,34 @@ async function runHybridTests() {
     assert.strictEqual(hungStillOpen, false, 'A second sweep must not be refused by a stuck isSweeping flag');
     console.log('✓ Second sweep ran and archived the previously hung tab');
 
+    // --- Test 9: removeOnReopen decides whether reopening keeps the note in the list ---
+    console.log('\n--- Test 9: Remove notes when reopened ---');
+    const reopen = (rec, on) => helperPage.evaluate(async ({ rec, on }) => {
+      const { saveSettings, getTabById, getArchivedTabs } = await import(chrome.runtime.getURL('src/storage/db.js'));
+      await saveSettings({ removeOnReopen: on });
+      const res = await chrome.runtime.sendMessage({ type: 'RESTORE_TAB', url: rec.url, recordId: rec.id, tabId: undefined });
+      const after = await getTabById(rec.id);
+      const listed = (await getArchivedTabs({ limit: 100 })).some(r => r.id === rec.id);
+      return { res, after, listed };
+    }, { rec, on });
+    const seed = (path, disposition) => helperPage.evaluate(async ({ url, disposition }) => {
+      const { recordCapture } = await import(chrome.runtime.getURL('src/storage/db.js'));
+      return recordCapture({ url, title: 'Reopen test' }, disposition);
+    }, { url: `http://localhost:${PORT}${path}`, disposition });
+    const suspendedRec = await seed('/reopen-kept', 'suspended');
+    const closedRec = await seed('/reopen-removed', 'closed');
+    const keptOnReopen = await reopen(suspendedRec, false);
+    assert.strictEqual(keptOnReopen.after.status, 'restored');
+    assert.strictEqual(keptOnReopen.listed, true, 'Default: a reopened note stays listed');
+    const removedOnReopen = await reopen(closedRec, true);
+    assert.ok(removedOnReopen.after.deletedAt > 0, 'With the setting on, reopening soft-deletes the note');
+    assert.strictEqual(removedOnReopen.listed, false, 'With the setting on, the note leaves the list');
+    console.log('✓ Reopen keeps the note by default and removes it when removeOnReopen is on');
+    await helperPage.evaluate(async () => {
+      const { saveSettings } = await import(chrome.runtime.getURL('src/storage/db.js'));
+      await saveSettings({ removeOnReopen: false });
+    });
+
     // Clean up test tabs
     await bgUntouchedForm.close();
     await hubPage.close();

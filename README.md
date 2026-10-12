@@ -125,6 +125,7 @@ Right-click the extension icon and choose **Options**, or click **Settings** in 
 | Inactivity Threshold | 60 min | 15m, 30m, 1h, 2h, 4h, or 24h. Time away from the computer does not count. |
 | Ignore Pinned Tabs | On | Pinned tabs are never suspended or closed. |
 | Domain Whitelist / Trusted Sites | Default list | Never touch, or always close once summarized. Subdomains included. |
+| Remove Notes When Reopened | Off | Reopening a note deletes it (recoverable for about an hour) instead of moving it to Reopened. |
 | Notes Fade After | 30 / 7 days | Days after capture (never reopened) / after the last reopen. 0 = never. |
 | AI Provider | Auto | On-device model when downloaded, else heuristics. Or Gemini, or a local server. |
 

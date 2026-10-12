@@ -25,6 +25,7 @@ function populateForm(settings) {
   document.getElementById('ignore-pinned-toggle').checked = settings.ignorePinnedTabs !== undefined ? Boolean(settings.ignorePinnedTabs) : true;
 
   document.getElementById('ai-close-toggle').checked = settings.closeRequiresAiSummary !== false;
+  document.getElementById('remove-on-reopen-toggle').checked = Boolean(settings.removeOnReopen);
   document.getElementById('fade-unopened-input').value = settings.fadeUnopenedDays;
   document.getElementById('fade-reopened-input').value = settings.fadeReopenedDays;
   document.getElementById('ai-provider-select').value = settings.aiProvider || 'auto';
@@ -79,6 +80,12 @@ function setupListeners() {
     currentSettings.closeRequiresAiSummary = e.target.checked;
     await saveSettings(currentSettings);
     showToast('Closing preference saved');
+  });
+
+  document.getElementById('remove-on-reopen-toggle').addEventListener('change', async (e) => {
+    currentSettings.removeOnReopen = e.target.checked;
+    await saveSettings(currentSettings);
+    showToast('Reopen preference saved');
   });
 
   // Fade windows (days; 0 = never)

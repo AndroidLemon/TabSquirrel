@@ -54,6 +54,7 @@ assert.strictEqual(DEFAULT_SETTINGS.closeRequiresAiSummary, true);
 assert.strictEqual(DEFAULT_SETTINGS.ignorePinnedTabs, true);
 assert.strictEqual(DEFAULT_SETTINGS.fadeUnopenedDays, 30);
 assert.strictEqual(DEFAULT_SETTINGS.fadeReopenedDays, 7);
+assert.strictEqual(DEFAULT_SETTINGS.removeOnReopen, false);
 assert.ok(DEFAULT_SETTINGS.excludedDomains.includes('docs.google.com'));
 assert.ok(DEFAULT_SETTINGS.excludedDomains.includes('mail.google.com'));
 console.log('✓ Settings defaults passed');
