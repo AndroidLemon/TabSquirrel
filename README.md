@@ -69,7 +69,7 @@ If the chosen tier is unavailable, errors, or times out (20 seconds for cloud an
 The side panel and the full view are one page (`src/app/`), so every feature works in both. At side-panel width it is a single column of cards with a **Filters** drawer. In a wide tab it is a persistent sidebar and a multi-column grid. The side panel adds **Archive Current Tab** and **Open full view**, and closes itself when you open the full view.
 
 - **Search** covers titles, URLs, summaries, tags, and the saved page text, with matches highlighted on the cards.
-- **Inbox, Reopened, and fading.** The side panel opens on the Inbox: captures you have not dealt with. Reopening a tab moves its note to Reopened, still searchable. Unstarred notes delete themselves 30 days after capture if never reopened, or 7 days after the last reopen. Both are configurable, and 0 means never. Notes close to fading show a `Fades in Nd` chip. Star a note to keep it forever. Capturing the same page again puts it back in the Inbox with a fresh clock.
+- **Inbox, Reopened, and fading.** The side panel opens on the Inbox: captures you have not dealt with. Reopening a tab moves its note to Reopened, still searchable (unless Remove Notes When Reopened is on, which deletes it instead). Unstarred notes delete themselves 30 days after capture if never reopened, or 7 days after the last reopen. Both are configurable, and 0 means never. Notes close to fading show a `Fades in Nd` chip. Star a note to keep it forever. Capturing the same page again puts it back in the Inbox with a fresh clock.
 - **Undo.** Deleting a card shows a toast with a 5-second Undo button. Deleted notes are purged an hour later.
 - **Sorting.** Newest, oldest, quick reads first, deep dives first, title, domain, and expiring soon.
 - **Filters.** By tag, domain, favorites, or time (today, yesterday, past 7 days). Clicking a tag on a card filters by it.
@@ -125,7 +125,7 @@ Right-click the extension icon and choose **Options**, or click **Settings** in 
 | Inactivity Threshold | 60 min | 15m, 30m, 1h, 2h, 4h, or 24h. Time away from the computer does not count. |
 | Ignore Pinned Tabs | On | Pinned tabs are never suspended or closed. |
 | Domain Whitelist / Trusted Sites | Default list | Never touch, or always close once summarized. Subdomains included. |
-| Remove Notes When Reopened | Off | Reopening a note deletes it (recoverable for about an hour) instead of moving it to Reopened. |
+| Remove Notes When Reopened | Off | Reopening a note deletes it instead of moving it to Reopened. There is no Undo. |
 | Notes Fade After | 30 / 7 days | Days after capture (never reopened) / after the last reopen. 0 = never. |
 | AI Provider | Auto | On-device model when downloaded, else heuristics. Or Gemini, or a local server. |
 

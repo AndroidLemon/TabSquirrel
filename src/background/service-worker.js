@@ -230,8 +230,8 @@ function takeDiscardedRecord(tabId) {
 }
 
 /**
- * A record's tab was reopened. With `removeOnReopen` the record leaves the list (soft-deleted,
- * so purgeDeletedTabs clears it after the usual hour); otherwise it moves to Reopened.
+ * A record's tab was reopened. With `removeOnReopen` the record leaves the list (soft-deleted; the UI offers no
+ * undo for this, and purgeDeletedTabs hard-deletes it after an hour); otherwise it moves to Reopened.
  */
 async function handleReopened(recordId) {
   const settings = await getSettings();
