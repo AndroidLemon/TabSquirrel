@@ -20,7 +20,7 @@ import { buildTestExtension, extensionLaunchOptions, waitForServiceWorker } from
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
-const OUT_DIR = path.join(REPO_ROOT, 'docs', 'store');
+const OUT_DIR = process.env.OUT_DIR || path.join(REPO_ROOT, 'docs', 'store');
 const TMP_ROOT = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), 'tabsum-store-'));
 const USER_DATA_DIR = path.join(TMP_ROOT, 'profile');
 
@@ -524,7 +524,7 @@ async function main() {
   grantAllUrlsInTempManifest(EXTENSION_PATH);
   writeSidePanelWrapper(EXTENSION_PATH);
 
-  const baseLaunchOpts = { deviceScaleFactor: 1, viewport: WIDE, ...extensionLaunchOptions(EXTENSION_PATH, ['--no-first-run']) };
+  const baseLaunchOpts = { colorScheme: process.env.SCHEME || 'light', deviceScaleFactor: 1, viewport: WIDE, ...extensionLaunchOptions(EXTENSION_PATH, ['--no-first-run']) };
 
   // ---- Pass 1: screenshots + promo tile ----
   let context = await chromium.launchPersistentContext(USER_DATA_DIR, baseLaunchOpts);
@@ -548,6 +548,41 @@ async function main() {
     // 01: full notebook
     await page.screenshot({ path: path.join(OUT_DIR, '01-notebook.png') });
     console.log('Wrote 01-notebook.png');
+
+    // 06: toast states (normal + Undo, Undo hovered, error, error + Undo), cropped to the toast corner.
+    // Driven by DOM state rather than real actions so the seed data stays intact.
+    const toastShot = async (name) => {
+      const full = path.join(TMP_ROOT, 'toast-full.png');
+      await page.screenshot({ path: full }); // a clip option resets :hover, so crop afterwards
+      execFileSync('magick', [full, '-crop', `520x110+${WIDE.width - 520}+${WIDE.height - 110}`, '+repage', path.join(OUT_DIR, name)]);
+    };
+    const setToast = (msg, error, undo) => page.evaluate(([m, e, u]) => {
+      const t = document.getElementById('toast');
+      document.getElementById('toast-message').textContent = m;
+      t.classList.toggle('error', e);
+      document.getElementById('toast-undo-btn').hidden = !u;
+      const p = document.getElementById('toast-progress');
+      p.style.animation = 'none';
+      p.style.width = u ? '62%' : '0';
+      t.classList.remove('hidden');
+    }, [msg, error, undo]);
+    await setToast('Summary removed', false, true);
+    await page.mouse.move(10, 10);
+    await page.waitForTimeout(350);
+    await toastShot('06-toast.png');
+    await page.hover('#toast-undo-btn');
+    await page.waitForTimeout(250);
+    await toastShot('06-toast-undo-hover.png');
+    await setToast('Error reopening tab: no response', true, false);
+    await page.mouse.move(10, 10);
+    await page.waitForTimeout(350);
+    await toastShot('06-toast-error.png');
+    await setToast('Could not update favorite', true, true);
+    await page.mouse.move(10, 10);
+    await page.waitForTimeout(350);
+    await toastShot('06-toast-error-undo.png');
+    await page.evaluate(() => document.getElementById('toast').classList.add('hidden'));
+    await page.waitForTimeout(300);
 
     // 02: card expanded / reader view
     await page.click('.tab-card[data-id="n1"] .reader-btn');
@@ -607,6 +642,7 @@ async function main() {
     await context.close();
   }
 
+  if (process.env.SKIP_GIFS) { fs.rmSync(TMP_ROOT, { recursive: true, force: true }); return; }
   // ---- Pass 2: demo GIFs (separate context/pages so recordVideo has its own dir) ----
   console.log('Recording demo clips...');
   const videoDir = path.join(TMP_ROOT, 'videos');

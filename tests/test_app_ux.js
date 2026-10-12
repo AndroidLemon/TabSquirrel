@@ -336,9 +336,9 @@ async function runAppUXTests() {
     assert.strictEqual(await page.textContent('#results-count'), '2 summaries', 'Results count reflects the feed');
 
     const savedBadge = page.locator('.tab-card[data-id="test-tab-3"] .badge-status');
-    assert.strictEqual((await savedBadge.textContent()).trim(), '📑 Saved', 'captured status renders the 📑 Saved badge');
+    assert.strictEqual((await savedBadge.textContent()).trim(), 'Saved', 'captured status renders the Saved badge');
     assert.strictEqual(await savedBadge.getAttribute('title'), 'Saved manually; tab left open', 'Saved badge tooltip is the closureReason');
-    console.log('✓ Sidebar + multi-column grid; 📑 Saved badge with closureReason tooltip');
+    console.log('✓ Sidebar + multi-column grid; Saved badge with closureReason tooltip');
 
     // Favorites
     await page.click('.tab-card[data-id="test-tab-3"] .star-btn');
@@ -463,7 +463,7 @@ async function runAppUXTests() {
     await hub.waitForFunction(() => !document.querySelector('.tab-card[data-id="inbox-note"]'));
     const reopenedBadge = await hub.textContent('.tab-card[data-id="reopened-note"] .badge-status');
     assert.deepStrictEqual(await cardIds(hub), ['reopened-note'], 'Reopened view lists only reopened notes');
-    assert.strictEqual(reopenedBadge.trim(), '↩ Reopened', 'Reopened notes carry the ↩ Reopened badge');
+    assert.strictEqual(reopenedBadge.trim(), 'Reopened', 'Reopened notes carry the Reopened badge');
     console.log('✓ Reopened view lists only reopened notes');
 
     await hub.click('#view-all');

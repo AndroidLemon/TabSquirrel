@@ -42,7 +42,7 @@ const state = {
   density: 'comfortable' // 'comfortable' | 'compact'
 };
 
-const TIME_LABELS = { favorites: 'Favorites ⭐', today: 'Captured today', yesterday: 'Yesterday', week: 'Past 7 days' };
+const TIME_LABELS = { favorites: 'Favorites', today: 'Captured today', yesterday: 'Yesterday', week: 'Past 7 days' };
 const DENSITY_KEY = 'sidepanel_density'; // pre-merge storage key, kept so saved preferences survive
 
 let fadeSettings = null;
@@ -224,10 +224,10 @@ function emptyStateHtml() {
  */
 export function getStatusBadge(tab) {
   const [cls, label, fallback] = {
-    discarded: ['sleeping', '💤 Sleeping', 'Sleeping tab (RAM suspended)'],
-    restored: ['restored', '↩ Reopened', 'Tab was reopened'],
-    captured: ['captured', '📑 Saved', 'Summary saved; tab left open']
-  }[tab.status] || ['archived', '🗄️ Archived', 'Archived to knowledge base'];
+    discarded: ['sleeping', 'Sleeping', 'Sleeping tab (RAM suspended)'],
+    restored: ['restored', 'Reopened', 'Tab was reopened'],
+    captured: ['captured', 'Saved', 'Summary saved; tab left open']
+  }[tab.status] || ['archived', 'Archived', 'Archived to knowledge base'];
   return `<span class="badge-status ${cls}" title="${escapeHtml(tab.closureReason || fallback)}">${label}</span>`;
 }
 
@@ -246,11 +246,10 @@ function cardHtml(tab) {
         <div class="card-source">
           <img class="favicon" src="${escapeHtml(faviconUrl(tab.url))}" alt="">
           <span class="card-domain">${highlightSearch(tab.domain, q)}</span>
-          <span class="card-reading-time">${tab.readingTimeMinutes || 1}m read</span>
           ${getStatusBadge(tab)}
           ${fadeChipHtml(tab, fadeSettings, state.sortBy)}
         </div>
-        <span class="card-time">${formatTimeAgo(tab.capturedAt)}</span>
+        <span class="card-time" title="${tab.readingTimeMinutes || 1} min read">${tab.readingTimeMinutes || 1}m · ${formatTimeAgo(tab.capturedAt)}</span>
       </div>
       <h3 class="card-title" title="${escapeHtml(tab.title)}">${highlightSearch(tab.title, q)}</h3>
       ${tab.summary?.tldr ? `<div class="card-tldr">${highlightSearch(tab.summary.tldr, q)}</div>` : '<div class="card-tldr card-tldr-empty">No AI summary for this tab</div>'}

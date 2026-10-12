@@ -402,7 +402,7 @@ async function runHybridTests() {
     console.log('✓ Form page record verified: status = "discarded", tier = "suspend_only"');
 
     // --- Test 3: Status badges in both layouts of the Knowledge Hub page ---
-    console.log('\n--- Test 3: UI Badge Status Rendering (🗄️ Archived vs 💤 Sleeping) ---');
+    console.log('\n--- Test 3: UI Badge Status Rendering (Archived vs Sleeping) ---');
 
     // One page serves the side panel (narrow layout) and the full view (wide layout)
     const hubPage = await context.newPage();
@@ -416,9 +416,9 @@ async function runHybridTests() {
         text: b.textContent.trim()
       })));
 
-      assert.ok(badges.some(b => b.className.includes('archived') && b.text.includes('🗄️ Archived')), `${layout} layout must render 🗄️ Archived badge`);
-      assert.ok(badges.some(b => b.className.includes('sleeping') && b.text.includes('💤 Sleeping')), `${layout} layout must render 💤 Sleeping badge`);
-      console.log(`✓ ${layout} layout correctly displays "🗄️ Archived" and "💤 Sleeping" status badges`);
+      assert.ok(badges.some(b => b.className.includes('archived') && b.text.includes('Archived')), `${layout} layout must render Archived badge`);
+      assert.ok(badges.some(b => b.className.includes('sleeping') && b.text.includes('Sleeping')), `${layout} layout must render Sleeping badge`);
+      console.log(`✓ ${layout} layout correctly displays "Archived" and "Sleeping" status badges`);
     }
 
     // --- Test 4: Pinned Tab & Domain Whitelist Safety ---
