@@ -77,11 +77,6 @@ if (typeof document !== 'undefined') {
   // happens. Must not call sendResponse or return true (no response expected here).
   chrome.runtime.onMessage.addListener((message) => {
     if (message?.type === 'TABS_CLOSED') refresh();
-    // A discarded tab was re-activated in the tab strip and its note was removed (Remove Notes When Reopened).
-    if (message?.type === 'NOTE_REMOVED_ON_REOPEN') {
-      refresh();
-      showRemovedOnReopenToast(message.recordId);
-    }
   });
 }
 

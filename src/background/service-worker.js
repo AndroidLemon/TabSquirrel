@@ -230,8 +230,9 @@ function takeDiscardedRecord(tabId) {
 }
 
 /**
- * A record's tab was reopened. With `removeOnReopen` the record leaves the list (soft-deleted; purgeDeletedTabs
- * hard-deletes it after an hour); otherwise it moves to Reopened. Resolves true when the note was removed, so the
+ * A record was reopened from the notebook (RESTORE_TAB). Switching to a sleeping tab in the tab strip is not
+ * one of these and only marks it Reopened (see onActivated). With `removeOnReopen` the record leaves the list
+ * (soft-deleted; purgeDeletedTabs hard-deletes it after an hour); otherwise it moves to Reopened. Resolves true when the note was removed, so the
  * caller can offer Undo (the app UI shows a 5-second Undo toast).
  */
 async function handleReopened(recordId) {
@@ -249,9 +250,8 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
   await setTimestamp(activeInfo.tabId, Date.now());
   const recordId = await takeDiscardedRecord(activeInfo.tabId);
   if (recordId) {
-    const removed = await handleReopened(recordId).catch((err) => { console.error(err); return false; });
-    // No Undo surface in the tab strip; if the side panel or app page is open it shows the Undo toast.
-    if (removed) chrome.runtime.sendMessage({ type: 'NOTE_REMOVED_ON_REOPEN', recordId }).catch(() => {});
+    // Switching to a sleeping tab only marks the note Reopened; removeOnReopen applies to list-initiated reopens.
+    await markReopened(recordId).catch(console.error);
   }
 });
 
@@ -558,7 +558,7 @@ async function processTabArchival(tab, settings, lastActiveTime) {
       await mapDiscardedRecord(discardedTab.id, record.id);
       // Activated while the mapping was being written? onActivated found nothing to restore.
       if (await userReopened(discardedTab.id) && await takeDiscardedRecord(discardedTab.id)) {
-        await handleReopened(record.id);
+        await markReopened(record.id).catch(console.error);
       }
     }
 

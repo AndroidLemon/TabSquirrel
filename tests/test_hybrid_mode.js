@@ -707,7 +707,7 @@ async function runHybridTests() {
 
     // 9b: reopening a TabSum-suspended tab in place must be handled once. Activating it fires
     // tabs.onActivated, which would otherwise find the discarded mapping and handle the reopen a
-    // second time (and broadcast NOTE_REMOVED_ON_REOPEN -> a duplicate Undo toast).
+    // second time.
     const inPlacePage = await context.newPage();
     await inPlacePage.goto(`http://localhost:${PORT}/reopen-inplace`);
     await inPlacePage.waitForLoadState('networkidle');
@@ -725,19 +725,48 @@ async function runHybridTests() {
     const inPlace = await helperPage.evaluate(async ({ rec, tabId }) => {
       const { saveSettings, getTabById } = await import(chrome.runtime.getURL('src/storage/db.js'));
       await saveSettings({ removeOnReopen: true });
-      let broadcasts = 0;
-      chrome.runtime.onMessage.addListener((m) => { if (m?.type === 'NOTE_REMOVED_ON_REOPEN') broadcasts++; });
       const res = await chrome.runtime.sendMessage({ type: 'RESTORE_TAB', url: rec.url, recordId: rec.id, tabId });
       await new Promise(r => setTimeout(r, 1500)); // let onActivated run to completion
       await saveSettings({ removeOnReopen: false });
-      return { res, broadcasts, after: await getTabById(rec.id) };
+      return { res, after: await getTabById(rec.id) };
     }, { rec: inPlaceRec, tabId: inPlaceTabId });
     assert.strictEqual(inPlace.res.restoredInPlace, true, 'The suspended tab is reactivated in place');
     assert.strictEqual(inPlace.res.removed, true, 'RESTORE_TAB reports the note was removed so the app can offer Undo');
     assert.ok(inPlace.after.deletedAt > 0, 'The note is soft-deleted');
-    assert.strictEqual(inPlace.broadcasts, 0, 'onActivated must not handle the reopen a second time (duplicate Undo toast)');
+    assert.strictEqual(inPlace.after.status, 'discarded', 'onActivated must not handle the reopen a second time (it would mark the removed note Reopened)');
     await inPlacePage.close();
-    console.log('✓ In-place reopen of a suspended tab is handled once, with no duplicate removal broadcast');
+    console.log('✓ In-place reopen of a suspended tab is handled once');
+
+    // 9c: switching to a sleeping tab in the tab strip (onActivated, not RESTORE_TAB) is not a list reopen:
+    // even with removeOnReopen on, the note stays, marked Reopened.
+    const stripPage = await context.newPage();
+    await stripPage.goto(`http://localhost:${PORT}/reopen-strip`);
+    await stripPage.waitForLoadState('networkidle');
+    const stripRec = await seed('/reopen-strip', 'suspended');
+    await activateHelperTab(background);
+    const stripTabId = await background.evaluate(async (url) => {
+      const tab = (await chrome.tabs.query({})).find(t => t.url === url);
+      return tab.id;
+    }, stripRec.url);
+    await background.evaluate(async ({ tabId, recordId }) => {
+      const { discardedRecords = {} } = await chrome.storage.session.get('discardedRecords');
+      discardedRecords[tabId] = recordId;
+      await chrome.storage.session.set({ discardedRecords });
+    }, { tabId: stripTabId, recordId: stripRec.id });
+    const strip = await helperPage.evaluate(async ({ rec, tabId }) => {
+      const { saveSettings, getTabById, getArchivedTabs } = await import(chrome.runtime.getURL('src/storage/db.js'));
+      await saveSettings({ removeOnReopen: true });
+      await chrome.tabs.update(tabId, { active: true }); // fires tabs.onActivated, as clicking the tab would
+      await new Promise(r => setTimeout(r, 1500)); // let onActivated run to completion
+      await saveSettings({ removeOnReopen: false });
+      const listed = (await getArchivedTabs({ limit: 100 })).some(r => r.id === rec.id);
+      return { after: await getTabById(rec.id), listed };
+    }, { rec: stripRec, tabId: stripTabId });
+    assert.ok(!strip.after.deletedAt, 'Activating a sleeping tab in the tab strip must not delete the note');
+    assert.strictEqual(strip.after.status, 'restored', 'The note is marked Reopened');
+    assert.strictEqual(strip.listed, true, 'The note stays in the list');
+    await stripPage.close();
+    console.log('✓ Switching to a sleeping tab keeps the note (Reopened) even with removeOnReopen on');
     await helperPage.evaluate(async () => {
       const { saveSettings } = await import(chrome.runtime.getURL('src/storage/db.js'));
       await saveSettings({ removeOnReopen: false });
