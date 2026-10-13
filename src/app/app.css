@@ -16,9 +16,9 @@
   --accent-hover: #1F3458;
   --accent-light: #E4E9F2;
   --accent-text: #2E4A7A;
-  --accent-contrast: #FDFBF7;
   --accent-fill: #2E4A7A;        /* filled buttons; dark mode uses a quieter mid-tone, links keep --accent */
   --accent-fill-hover: #1F3458;
+  --accent-fill-ink: #FDFBF7;    /* text on --accent-fill */
   --border-input: #948B78;       /* >= 3:1 against surface */
   --danger: #A63D2F;
   --danger-contrast: #FDFBF7;
@@ -70,9 +70,9 @@
     --accent-hover: #B8C9E8;
     --accent-light: #232C3F;
     --accent-text: #B8C9E8;
-    --accent-contrast: #161513;
     --accent-fill: #3E5C8F;
     --accent-fill-hover: #476699;
+    --accent-fill-ink: #EDE9E0;
     --border-input: #7D7869;
     --danger: #E08A7C;
     --danger-contrast: #161513;
@@ -452,7 +452,7 @@ button {
 
 .primary-btn {
   background: var(--accent-fill);
-  color: var(--accent-contrast);
+  color: var(--accent-fill-ink);
   border: none;
   padding: 8px 12px;
   border-radius: var(--radius-sm);
@@ -496,7 +496,7 @@ button {
 
 .perm-btn {
   background: var(--accent-fill);
-  color: var(--accent-contrast);
+  color: var(--accent-fill-ink);
   border: none;
   padding: 6px 12px;
   border-radius: var(--radius-sm);

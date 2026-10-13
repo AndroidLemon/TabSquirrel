@@ -527,7 +527,7 @@
       "refersTo": "button-primary",
       "description": "Ink-filled action; deepens on hover, no shadow.",
       "html": "<button class=\"ds-btn-primary\">Open reader</button>",
-      "css": ".ds-btn-primary { font-family: var(--font-sans); font-size: 12px; font-weight: 600; background: var(--accent-fill); color: var(--accent-contrast); border: 1px solid transparent; border-radius: var(--radius-sm); padding: 8px 12px; cursor: pointer; transition: color 120ms cubic-bezier(.2, .7, .2, 1), background-color 120ms cubic-bezier(.2, .7, .2, 1), border-color 120ms cubic-bezier(.2, .7, .2, 1), box-shadow 120ms cubic-bezier(.2, .7, .2, 1); } .ds-btn-primary:hover { background: var(--accent-fill-hover); } .ds-btn-primary:active { transform: scale(0.98); } .ds-btn-primary:focus-visible { outline: none; box-shadow: var(--focus-ring); }"
+      "css": ".ds-btn-primary { font-family: var(--font-sans); font-size: 12px; font-weight: 600; background: var(--accent-fill); color: var(--accent-fill-ink); border: 1px solid transparent; border-radius: var(--radius-sm); padding: 8px 12px; cursor: pointer; transition: color 120ms cubic-bezier(.2, .7, .2, 1), background-color 120ms cubic-bezier(.2, .7, .2, 1), border-color 120ms cubic-bezier(.2, .7, .2, 1), box-shadow 120ms cubic-bezier(.2, .7, .2, 1); } .ds-btn-primary:hover { background: var(--accent-fill-hover); } .ds-btn-primary:active { transform: scale(0.98); } .ds-btn-primary:focus-visible { outline: none; box-shadow: var(--focus-ring); }"
     },
     {
       "name": "Secondary Button",

@@ -1,19 +1,19 @@
 :root {
   /* Plainsong tokens */
-  --bg-page: #F6F3EC;
-  --bg-card: #FDFBF7;
+  --bg-primary: #F6F3EC;
+  --bg-surface: #FDFBF7;
   --border-color: #E3DDD0;
   --border-strong: #CFC7B6;
-  --text-main: #1D1C19;
+  --text-primary: #1D1C19;
   --text-secondary: #4A4740;
   --text-muted: #6B675E;
   --accent: #2E4A7A;
   --accent-hover: #1F3458;
   --accent-light: #E4E9F2;
   --accent-text: #2E4A7A;
-  --accent-contrast: #FDFBF7;
   --accent-fill: #2E4A7A;        /* filled buttons; dark mode uses a quieter mid-tone, links keep --accent */
   --accent-fill-hover: #1F3458;
+  --accent-fill-ink: #FDFBF7;    /* text on --accent-fill */
   --border-input: #948B78;       /* >= 3:1 against the card */
   --success: #3F6B45;
   --danger: #A63D2F;
@@ -36,20 +36,20 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg-page: #161513;
-    --bg-card: #1F1E1B;
+    --bg-primary: #161513;
+    --bg-surface: #1F1E1B;
     --border-color: #34322D;
     --border-strong: #4A4740;
-    --text-main: #EDE9E0;
+    --text-primary: #EDE9E0;
     --text-secondary: #B5AFA3;
     --text-muted: #9A9487;
     --accent: #9DB4DE;
     --accent-hover: #B8C9E8;
     --accent-light: #232C3F;
     --accent-text: #B8C9E8;
-    --accent-contrast: #161513;
     --accent-fill: #3E5C8F;
     --accent-fill-hover: #476699;
+    --accent-fill-ink: #EDE9E0;
     --border-input: #7D7869;
     --success: #8DBF93;
     --danger: #E08A7C;
@@ -75,8 +75,8 @@
 
 body {
   font-family: var(--font-sans);
-  background-color: var(--bg-page);
-  color: var(--text-main);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
   line-height: 1.5;
   font-size: 14px;
 }
@@ -128,7 +128,7 @@ button {
 
 /* Cards */
 .settings-card {
-  background: var(--bg-card);
+  background: var(--bg-surface);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   padding: 20px 24px;
@@ -138,10 +138,10 @@ button {
   gap: 16px;
 }
 
-.settings-card h3 {
+.settings-card h2 {
   font-size: 15px;
   font-weight: 600;
-  color: var(--text-main);
+  color: var(--text-primary);
 }
 
 .section-desc {
@@ -168,7 +168,7 @@ button {
   flex: 1;
 }
 
-.card-content h3 {
+.card-content h2 {
   color: var(--accent-text);
   margin-bottom: 4px;
 }
@@ -187,7 +187,7 @@ button {
 }
 
 .permission-card.granted {
-  background: var(--bg-card);
+  background: var(--bg-surface);
   border-color: var(--border-color);
 }
 
@@ -239,8 +239,8 @@ button {
 .form-select {
   padding: 8px 12px;
   border: 1px solid var(--border-input);
-  background: var(--bg-card);
-  color: var(--text-main);
+  background: var(--bg-surface);
+  color: var(--text-primary);
   border-radius: var(--radius-sm);
   font-size: 13px;
   outline: none;
@@ -250,8 +250,8 @@ button {
 .form-input {
   padding: 8px 12px;
   border: 1px solid var(--border-input);
-  background: var(--bg-card);
-  color: var(--text-main);
+  background: var(--bg-surface);
+  color: var(--text-primary);
   border-radius: var(--radius-sm);
   font-size: 13px;
   outline: none;
@@ -264,7 +264,7 @@ button {
   flex-wrap: wrap;
   gap: 12px;
   font-size: 13px;
-  color: var(--text-main);
+  color: var(--text-primary);
 }
 
 .fade-inputs .form-input {
@@ -331,7 +331,7 @@ button {
   display: flex;
   align-items: center;
   gap: 6px;
-  background: var(--bg-page);
+  background: var(--bg-primary);
   border: 1px solid var(--border-color);
   padding: 4px 10px;
   border-radius: 4px;
@@ -355,7 +355,7 @@ button {
 /* Buttons */
 .primary-btn {
   background: var(--accent-fill);
-  color: var(--accent-contrast);
+  color: var(--accent-fill-ink);
   border: none;
   padding: 8px 16px;
   border-radius: var(--radius-sm);
@@ -371,7 +371,7 @@ button {
 }
 
 .secondary-btn {
-  background: var(--bg-card);
+  background: var(--bg-surface);
   border: 1px solid var(--border-color);
   color: var(--text-secondary);
   padding: 8px 14px;
@@ -386,8 +386,8 @@ button {
 }
 
 .secondary-btn:hover {
-  background: var(--bg-page);
-  color: var(--text-main);
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .danger-btn {
@@ -412,7 +412,7 @@ button {
 
 /* Storage Meter */
 .storage-meter-box {
-  background: var(--bg-page);
+  background: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   padding: 14px 16px;
@@ -424,7 +424,7 @@ button {
 .storage-meter-text {
   font-size: 14px;
   font-weight: 600;
-  color: var(--text-main);
+  color: var(--text-primary);
 }
 
 /* Toast */

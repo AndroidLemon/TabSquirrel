@@ -132,7 +132,7 @@ async function updateStats() {
 async function renderSidebarFilters() {
   const [tags, domains] = await Promise.all([getAllTags(), getAllDomains()]);
   const list = (items, key) => items.map(({ value, label, count }) =>
-    `<button class="filter-item-btn${state[key] === value ? ' active' : ''}" data-${key}="${escapeHtml(value)}"><span>${escapeHtml(label)}</span><span class="badge">${count}</span></button>`
+    `<button class="filter-item-btn${state[key] === value ? ' active' : ''}" aria-pressed="${state[key] === value}" data-${key}="${escapeHtml(value)}"><span>${escapeHtml(label)}</span><span class="badge">${count}</span></button>`
   ).join('') || '<p class="filter-empty">None yet</p>';
   $('sidebar-tags').innerHTML = list(tags.slice(0, 12).map(({ tag, count }) => ({ value: tag, label: `#${tag}`, count })), 'tag');
   $('sidebar-domains').innerHTML = list(domains.slice(0, 8).map(({ domain, count }) => ({ value: domain, label: domain, count })), 'domain');
@@ -429,12 +429,21 @@ function syncControls() {
       ? item.dataset.time === state.time
       : !state.time && item.dataset.view === state.view;
     item.classList.toggle('active', active);
+    item.setAttribute('aria-pressed', String(active));
   });
   document.querySelectorAll('.view-tab-btn').forEach(btn => {
     btn.setAttribute('aria-pressed', String(btn.dataset.view === state.view));
   });
-  document.querySelectorAll('#sidebar-tags [data-tag]').forEach(b => b.classList.toggle('active', b.dataset.tag === state.tag));
-  document.querySelectorAll('#sidebar-domains [data-domain]').forEach(b => b.classList.toggle('active', b.dataset.domain === state.domain));
+  document.querySelectorAll('#sidebar-tags [data-tag]').forEach(b => {
+    const on = b.dataset.tag === state.tag;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-pressed', String(on));
+  });
+  document.querySelectorAll('#sidebar-domains [data-domain]').forEach(b => {
+    const on = b.dataset.domain === state.domain;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-pressed', String(on));
+  });
 
   const label = state.tag ? `Filtered by topic: #${state.tag}`
     : state.domain ? `Filtered by domain: ${state.domain}`

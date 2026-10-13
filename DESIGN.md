@@ -19,6 +19,7 @@ colors:
   ochre: "#8A5A12"
   brick: "#A63D2F"
   brick-wash: "#F4E0DB"
+  brick-rule: "#D9A79E"
   night-paper: "#161513"
   night-surface: "#1F1E1B"
   night-muted: "#2B2A26"
@@ -27,11 +28,19 @@ colors:
   night-text-secondary: "#B5AFA3"
   night-text-muted: "#9A9487"
   night-ink: "#9DB4DE"
+  night-ink-text: "#B8C9E8"
+  night-ink-wash: "#232C3F"
   night-ink-fill: "#3E5C8F"
+  night-ink-fill-ink: "#EDE9E0"
   night-moss: "#8DBF93"
   night-ochre: "#D9A650"
   night-brick: "#E08A7C"
+  night-brick-rule: "#6E3A32"
 typography:
+  page-title:
+    fontFamily: "Newsreader, Georgia, 'Times New Roman', serif"
+    fontSize: "24px"
+    fontWeight: 600
   headline:
     fontFamily: "Newsreader, Georgia, 'Times New Roman', serif"
     fontSize: "22px"
@@ -42,16 +51,30 @@ typography:
     fontSize: "15px"
     fontWeight: 600
     lineHeight: 1.35
+  title-wide:
+    fontFamily: "Newsreader, Georgia, 'Times New Roman', serif"
+    fontSize: "17px"
+    fontWeight: 600
+    lineHeight: 1.35
   reading:
     fontFamily: "Newsreader, Georgia, 'Times New Roman', serif"
     fontSize: "18px"
     fontWeight: 400
     lineHeight: 1.6
+  reader-summary:
+    fontFamily: "Newsreader, Georgia, 'Times New Roman', serif"
+    fontSize: "16px"
+    fontWeight: 400
   summary:
     fontFamily: "Newsreader, Georgia, 'Times New Roman', serif"
     fontSize: "14px"
     fontWeight: 400
     lineHeight: 1.4
+  brand:
+    fontFamily: "'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+    fontSize: "16px"
+    fontWeight: 600
+    letterSpacing: "-0.02em"
   body:
     fontFamily: "'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
     fontSize: "13px"
@@ -69,6 +92,8 @@ typography:
     fontWeight: 400
     lineHeight: 1.4
 rounded:
+  favicon: "2px"
+  mark: "3px"
   chip: "4px"
   sm: "8px"
   md: "12px"
@@ -162,7 +187,7 @@ Density follows the surface. In the side panel it is compact (13px body, one col
 A paper-and-ink palette: warm neutrals do almost all the work, one ink-blue accent leads, and three muted earth hues carry status.
 
 ### Primary
-- **Ink Blue** (`ink`): links, the active nav item, search focus, the primary button fill and takeaway bullets. In dark mode it lightens to `night-ink` for text and links, and filled buttons switch to the quieter `night-ink-fill`, so a filled button never glows.
+- **Ink Blue** (`ink`): links, the active nav item, search focus, the primary button fill and takeaway bullets. In dark mode it lightens to `night-ink` for text and links, and filled buttons switch to the quieter `night-ink-fill` with light `night-ink-fill-ink` text, so a filled button never glows and still clears AA (5.5:1).
 - **Deep Ink** (`ink-deep`): hover state of filled ink controls.
 - **Ink Wash** (`ink-wash`): the background of the active nav or filter item, info banners and tag hover.
 
@@ -284,7 +309,7 @@ One easing curve, `cubic-bezier(.2, .7, .2, 1)`. Durations: 120ms for colour and
 - **Do** set content in Newsreader, controls in Plex Sans and data in Plex Mono (the Three Voices Rule).
 - **Do** separate surfaces with 1px rules and tonal steps. Reserve shadows for menus, dialogs and toasts.
 - **Do** pair every status hue with a word and an icon, and keep Archived neutral.
-- **Do** keep filled ink buttons at `night-ink-fill` in dark mode, not the bright `night-ink`.
+- **Do** keep filled ink buttons at `night-ink-fill` in dark mode, not the bright `night-ink`, and set their text in `--accent-fill-ink` (dark text on the quiet fill is only 2.7:1).
 - **Do** keep a visible focus halo and AA contrast in both schemes, and respect reduced motion.
 
 ### Don't:
@@ -292,4 +317,4 @@ One easing curve, `cubic-bezier(.2, .7, .2, 1)`. Durations: 120ms for colour and
 - **Don't** use pure white (#FFFFFF) or pure black (#000000) surfaces.
 - **Don't** put shadows on resting cards, inputs or the sidebar.
 - **Don't** use font weights that aren't bundled, or load fonts from a CDN.
-- **Don't** fork the token names between pages: `src/options/options.css` currently uses `--bg-page`, `--bg-card` and `--text-main` for the same values that `src/app/app.css` calls `--bg-primary`, `--bg-surface` and `--text-primary`.
+- **Don't** fork token names between pages. `src/app/app.css` and `src/options/options.css` define the same tokens under the same names, and a value changed in one changes in the other.
