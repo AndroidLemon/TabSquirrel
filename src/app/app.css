@@ -895,6 +895,11 @@ button {
   cursor: pointer;
 }
 
+.card-title:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .card-title:hover {
   color: var(--accent);
   text-decoration: underline;
@@ -1371,7 +1376,7 @@ dialog.reader-dialog[open] {
   align-items: center;
   gap: 10px;
   overflow: hidden;
-  transition: opacity 200ms cubic-bezier(.2, .7, .2, 1), transform 200ms cubic-bezier(.2, .7, .2, 1);
+  transition: opacity 200ms cubic-bezier(.2, .7, .2, 1), transform 200ms cubic-bezier(.2, .7, .2, 1), visibility 0s;
 }
 
 .toast.error {
@@ -1382,9 +1387,12 @@ dialog.reader-dialog[open] {
 
 .toast.hidden {
   opacity: 0;
+  visibility: hidden; /* leaves the tab order once the fade-out ends */
   pointer-events: none;
   transform: translate(-50%, 8px);
+  transition-delay: 0s, 0s, 200ms;
 }
+
 
 .toast-message {
   flex: 1;
@@ -1424,6 +1432,11 @@ dialog.reader-dialog[open] {
   height: 2px;
   width: 0;
   background: var(--toast-bar);
+}
+
+/* Timer held while hovered or focused: show the bar full instead of draining. */
+.toast.paused .toast-progress {
+  width: 100%;
 }
 
 @keyframes toastCountdown {

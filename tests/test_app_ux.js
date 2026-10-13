@@ -192,6 +192,48 @@ async function runAppUXTests() {
     assert.match(await page.textContent('#toast-message'), /Tab reopened/, 'Reopen confirms with a toast');
     console.log('✓ j / k selection and Enter-to-reopen verified\n');
 
+    // j / k move real focus onto the card title (screen readers announce it)
+    await page.evaluate(() => document.activeElement?.blur());
+    await page.keyboard.press('j');
+    assert.strictEqual(await page.evaluate(() => document.activeElement?.className), 'card-title', 'j focuses the selected card title');
+    assert.strictEqual(await page.evaluate(() => document.activeElement?.closest('.tab-card')?.dataset.id), 'test-tab-2', 'Focused title belongs to the selected card');
+    await page.evaluate(() => document.activeElement?.blur());
+    console.log('✓ j / k move focus to the card title\n');
+
+    // --- Toast: hover pauses the Undo timer; hidden toast leaves the tab order; failed Undo is honest ---
+    console.log('--- Toast: pause, tab order, honest Undo ---');
+    await page.locator('.tab-card[data-id="test-tab-3"] .delete-btn').click();
+    await page.waitForSelector('#toast-undo-btn:visible');
+    await page.hover('#toast');
+    await page.waitForTimeout(5500); // longer than the 5s Undo window
+    assert.strictEqual(await page.locator('#toast').evaluate(el => el.classList.contains('hidden')), false, 'Hovered Undo toast does not auto-dismiss');
+    await page.locator('#toast-undo-btn').click();
+    await page.waitForFunction(() => /Summary restored/.test(document.getElementById('toast-message').textContent));
+    await page.mouse.move(0, 0);
+    await page.waitForFunction(() => document.getElementById('toast').classList.contains('hidden'), null, { timeout: 8000 });
+    await page.waitForTimeout(400); // fade-out finishes, then visibility flips
+    assert.strictEqual(await page.locator('#toast-undo-btn').evaluate(el => getComputedStyle(el).visibility), 'hidden', 'Hidden toast Undo is out of the tab order');
+    assert.strictEqual(await page.locator('.tab-card[data-id="test-tab-3"]').count(), 1, 'Undo brought the card back');
+
+    // A failed restore (record purged before Undo) must not claim success.
+    await page.evaluate(async () => {
+      const { saveArchivedTab } = await import('/src/storage/db.js');
+      await saveArchivedTab({ id: 'tmp-undo', url: 'https://example.com/tmp', title: 'Temp', domain: 'example.com', capturedAt: Date.now(), summary: { tldr: 't', bullets: [], tags: [] }, status: 'archived' });
+    });
+    await page.reload();
+    await page.waitForSelector('.tab-card[data-id="tmp-undo"]');
+    await page.locator('.tab-card[data-id="tmp-undo"] .delete-btn').click();
+    await page.waitForSelector('#toast-undo-btn:visible');
+    await page.evaluate(async () => {
+      const { purgeDeletedTabs } = await import('/src/storage/db.js');
+      await purgeDeletedTabs(0);
+    });
+    await page.locator('#toast-undo-btn').click();
+    await page.waitForFunction(() => /Could not restore/.test(document.getElementById('toast-message').textContent));
+    assert.ok(!/Summary restored/.test(await page.textContent('#toast-message')), 'Failed Undo does not claim success');
+    assert.strictEqual(await page.locator('#toast').evaluate(el => el.classList.contains('error')), true, 'Failed Undo shows the error style');
+    console.log('✓ Toast pause, visibility and honest Undo verified\n');
+
     // --- TEST 6: Filters drawer (narrow layout) ---
     console.log('--- Test 6: Filters Drawer (narrow layout) ---');
     await page.click('#filters-btn');

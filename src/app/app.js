@@ -51,6 +51,7 @@ let renderSeq = 0;
 let selectedIndex = -1;
 let searchTimer = null;
 let toastTimer = null;
+let toastDuration = 2600;
 let readerTab = null;
 
 const ICONS = {
@@ -251,7 +252,7 @@ function cardHtml(tab) {
         </div>
         <span class="card-time" title="${tab.readingTimeMinutes || 1} min read">${tab.readingTimeMinutes || 1}m · ${formatTimeAgo(tab.capturedAt)}</span>
       </div>
-      <h3 class="card-title" title="${escapeHtml(tab.title)}">${highlightSearch(tab.title, q)}</h3>
+      <h3 class="card-title" tabindex="0" title="${escapeHtml(tab.title)}">${highlightSearch(tab.title, q)}</h3>
       ${tab.summary?.tldr ? `<div class="card-tldr">${highlightSearch(tab.summary.tldr, q)}</div>` : '<div class="card-tldr card-tldr-empty">No AI summary for this tab</div>'}
       ${bullets.length ? `
         <button class="takeaways-toggle" type="button" aria-expanded="false"><span class="takeaways-chevron">▶</span> Key Takeaways (${bullets.length})</button>
@@ -306,7 +307,8 @@ async function reopenTab(url, recordId) {
     await refresh(); // status, inbox/reopened membership and Closed today all changed
     if (res.removed) showRemovedOnReopenToast(recordId);
   } catch (err) {
-    showToast('Error reopening tab: ' + err.message, true);
+    console.error('Error reopening tab:', err);
+    showToast('Could not reopen that tab. Please try again.', true);
   }
 }
 
@@ -385,8 +387,9 @@ async function deleteCard(tab, card) {
  */
 function showRemovedOnReopenToast(recordId) {
   showUndoToast('Note removed (reopened)', recordId, async () => {
-    await restoreDeletedTab(recordId);
-    await markReopened(recordId);
+    const restored = await restoreDeletedTab(recordId);
+    if (!restored) return null;
+    return markReopened(recordId);
   });
 }
 
@@ -394,8 +397,9 @@ function showRemovedOnReopenToast(recordId) {
 function showUndoToast(message, id, restore) {
   showToast(message, false, async () => {
     hideToast();
+    let restoredOk = false;
     try {
-      await restore();
+      restoredOk = Boolean(await restore());
     } catch (err) {
       console.error('Error restoring tab:', err);
     }
@@ -406,7 +410,8 @@ function showUndoToast(message, id, restore) {
       restored.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       setTimeout(() => restored.classList.remove('undo-restored'), 1200);
     }
-    showToast('Summary restored');
+    if (restoredOk) showToast('Summary restored');
+    else showToast('Could not restore that summary. It may already be gone.', true);
   }, 5000);
 }
 
@@ -430,9 +435,14 @@ function syncControls() {
       : !state.time && item.dataset.view === state.view;
     item.classList.toggle('active', active);
     item.setAttribute('aria-pressed', String(active));
+    if (active) item.setAttribute('aria-current', 'page');
+    else item.removeAttribute('aria-current');
   });
   document.querySelectorAll('.view-tab-btn').forEach(btn => {
-    btn.setAttribute('aria-pressed', String(btn.dataset.view === state.view));
+    const active = btn.dataset.view === state.view;
+    btn.setAttribute('aria-pressed', String(active));
+    if (active) btn.setAttribute('aria-current', 'page');
+    else btn.removeAttribute('aria-current');
   });
   document.querySelectorAll('#sidebar-tags [data-tag]').forEach(b => {
     const on = b.dataset.tag === state.tag;
@@ -485,6 +495,8 @@ function selectCard(index) {
   selectedIndex = Math.max(0, Math.min(index, cards.length - 1));
   cards.forEach((card, i) => card.classList.toggle('keyboard-selected', i === selectedIndex));
   cards[selectedIndex].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  // Real focus on the title so screen readers announce the selected note.
+  cards[selectedIndex].querySelector('.card-title')?.focus({ preventScroll: true });
 }
 
 function clearSelection() {
@@ -622,10 +634,12 @@ async function archiveCurrentTab(btn) {
       showToast('Tab archived & summarized!');
       await refresh();
     } else {
-      showToast(response?.error || 'Could not archive tab', true);
+      console.error('Archive failed:', response?.error);
+      showToast('Could not archive this tab. Please try again.', true);
     }
   } catch (err) {
-    showToast('Error archiving tab: ' + err.message, true);
+    console.error('Error archiving tab:', err);
+    showToast('Could not archive this tab. Please try again.', true);
   } finally {
     btn.disabled = false;
     btn.innerHTML = label;
@@ -676,13 +690,33 @@ function showToast(message, isError = false, onUndo = null, duration = 2600) {
   progress.style.animation = 'none';
   void progress.offsetWidth;
   progress.style.animation = onUndo ? `toastCountdown ${duration}ms linear forwards` : 'none';
-  toast.classList.remove('hidden');
+  toast.classList.remove('hidden', 'paused');
+  toastDuration = duration;
   toastTimer = setTimeout(hideToast, duration);
+}
+
+/** Hold the auto-dismiss while the toast is hovered or focused (WCAG 2.2.1); restart it on leave. */
+function setToastPaused(paused) {
+  const toast = $('toast');
+  if (toast.classList.contains('hidden')) return;
+  clearTimeout(toastTimer);
+  toast.classList.toggle('paused', paused);
+  if (paused) $('toast-progress').style.animation = 'none';
+  if (paused || toast.matches(':hover, :focus-within')) return;
+  // Leaving restarts the full countdown, bar included, so the two stay in step.
+  const progress = $('toast-progress');
+  if (!$('toast-undo-btn').hidden) {
+    progress.style.animation = 'none';
+    void progress.offsetWidth;
+    progress.style.animation = `toastCountdown ${toastDuration}ms linear forwards`;
+  }
+  toastTimer = setTimeout(hideToast, toastDuration);
 }
 
 function hideToast() {
   clearTimeout(toastTimer);
   $('toast').classList.add('hidden');
+  $('toast').classList.remove('paused');
   $('toast-progress').style.animation = 'none';
 }
 
@@ -700,6 +734,11 @@ function setupEventListeners() {
   }, true);
 
   feed.addEventListener('click', onFeedClick);
+  const toastEl = $('toast');
+  toastEl.addEventListener('mouseenter', () => setToastPaused(true));
+  toastEl.addEventListener('mouseleave', () => setToastPaused(false));
+  toastEl.addEventListener('focusin', () => setToastPaused(true));
+  toastEl.addEventListener('focusout', () => setToastPaused(false));
   $('closed-today-list').addEventListener('click', (e) => {
     const btn = e.target.closest('.closed-today-reopen-btn');
     if (btn) reopenTab(btn.dataset.url, btn.dataset.id);
@@ -717,9 +756,12 @@ function setupEventListeners() {
       if (await chrome.permissions.request({ origins: ['<all_urls>'] })) {
         $('perm-banner').hidden = true;
         showToast('Extraction permissions enabled!');
+      } else {
+        showToast('Permission was not granted, so page text can\'t be read yet.', true);
       }
     } catch (err) {
       console.error('Permission request failed:', err);
+      showToast('Could not ask for permission. Please try again.', true);
     }
   });
 
@@ -858,6 +900,9 @@ function setupEventListeners() {
     } else if (e.key === 'k' || e.key === 'ArrowUp') {
       e.preventDefault();
       selectCard(selectedIndex - 1);
+    } else if (e.key === 'Enter' && el?.matches('.card-title')) {
+      e.preventDefault();
+      el.click();
     } else if (e.key === 'Enter' && selectedIndex >= 0 && !el?.closest('button, a, summary')) {
       e.preventDefault();
       liveCards()[selectedIndex]?.querySelector('.restore-btn')?.click();
