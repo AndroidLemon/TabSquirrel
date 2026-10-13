@@ -208,7 +208,7 @@ async function runAppUXTests() {
     await page.waitForTimeout(5500); // longer than the 5s Undo window
     assert.strictEqual(await page.locator('#toast').evaluate(el => el.classList.contains('hidden')), false, 'Hovered Undo toast does not auto-dismiss');
     await page.locator('#toast-undo-btn').click();
-    await page.waitForFunction(() => /Summary restored/.test(document.getElementById('toast-message').textContent));
+    await page.waitForFunction(() => /Note restored/.test(document.getElementById('toast-message').textContent));
     await page.mouse.move(0, 0);
     await page.waitForFunction(() => document.getElementById('toast').classList.contains('hidden'), null, { timeout: 8000 });
     await page.waitForTimeout(400); // fade-out finishes, then visibility flips
@@ -230,7 +230,7 @@ async function runAppUXTests() {
     });
     await page.locator('#toast-undo-btn').click();
     await page.waitForFunction(() => /Could not restore/.test(document.getElementById('toast-message').textContent));
-    assert.ok(!/Summary restored/.test(await page.textContent('#toast-message')), 'Failed Undo does not claim success');
+    assert.ok(!/Note restored/.test(await page.textContent('#toast-message')), 'Failed Undo does not claim success');
     assert.strictEqual(await page.locator('#toast').evaluate(el => el.classList.contains('error')), true, 'Failed Undo shows the error style');
     console.log('✓ Toast pause, visibility and honest Undo verified\n');
 
@@ -375,7 +375,7 @@ async function runAppUXTests() {
     ]);
     assert.ok(Math.abs(boxA.y - boxB.y) < 2 && boxB.x > boxA.x, 'Wide layout lays cards out in a multi-column grid');
     assert.strictEqual(await page.locator('.tab-card[data-id="test-tab-1"] .card-bullets').isVisible(), true, 'Wide cards show takeaways');
-    assert.strictEqual(await page.textContent('#results-count'), '2 summaries', 'Results count reflects the feed');
+    assert.strictEqual(await page.textContent('#results-count'), '2 notes', 'Results count reflects the feed');
 
     const savedBadge = page.locator('.tab-card[data-id="test-tab-3"] .badge-status');
     assert.strictEqual((await savedBadge.textContent()).trim(), 'Saved', 'captured status renders the Saved badge');
@@ -388,7 +388,7 @@ async function runAppUXTests() {
     await page.click('.nav-item[data-time="favorites"]');
     await page.waitForFunction(() => document.querySelectorAll('#tabs-feed .tab-card').length === 1);
     assert.deepStrictEqual(await cardIds(), ['test-tab-3'], 'Favorites lists starred notes');
-    assert.match(await page.textContent('#filter-label'), /Favorites/, 'Banner names the Favorites filter');
+    assert.match(await page.textContent('#filter-label'), /Starred/, 'Banner names the Starred filter');
     await page.click('.tab-card[data-id="test-tab-3"] .star-btn');
     await page.waitForFunction(() => !document.querySelector('.tab-card[data-id="test-tab-3"]'));
     console.log('✓ Star + Favorites filter (unstarring drops the card from Favorites)');
@@ -443,6 +443,59 @@ async function runAppUXTests() {
     await page.waitForSelector('.tab-card[data-id="closed-note"]', { timeout: 5000 });
     console.log('✓ TABS_CLOSED refreshes "Closed today" and the feed without a reload\n');
 
+    // --- TEST 10b: the receipt (open first, a reason per row, collapse once seen, Reopen all) ---
+    console.log('--- Test 10b: "Closed today" receipt ---');
+    const receiptOpen = () => page.locator('#closed-today').evaluate(el => el.open);
+    const closeNote = (note) => page.evaluate(async (n) => {
+      const { saveArchivedTab, markClosedByTabSquirrel } = await import('/src/storage/db.js');
+      await saveArchivedTab({ ...n, domain: 'closed.example', status: 'archived', summary: { tldr: `${n.id} gist`, bullets: [], tags: [] } });
+      await markClosedByTabSquirrel(n.id);
+    }, note);
+    const tellClosed = () => background.evaluate(() => chrome.runtime.sendMessage({ type: 'TABS_CLOSED' }).catch(() => {}));
+    assert.strictEqual(await receiptOpen(), true, 'Receipt is open by default when it holds closures not yet seen');
+    assert.match(await page.textContent('#closed-today > summary'), /Closed 1 tab for you today/, 'Receipt opens with one plain sentence');
+    await closeNote({ id: 'closed-slept', url: 'https://closed.example/slept', title: 'Slept First', closureTier: 'suspend_only', closureReason: 'Contains form or interactive input controls' });
+    await closeNote({ id: 'closed-trusted', url: 'https://closed.example/trusted', title: 'Trusted', closureTier: 'suspend_only', closureReason: 'Closed: trusted domain' });
+    await tellClosed();
+    await page.waitForFunction(() => document.getElementById('closed-today-count').textContent === '3');
+    assert.match(await page.textContent('#closed-today > summary'), /Closed 3 tabs for you today/, 'Receipt pluralises');
+    const reasons = await page.locator('#closed-today-list .closed-today-row .closed-today-reason').allTextContents();
+    assert.strictEqual(reasons.length, 3, 'Every row has a reason');
+    assert.ok(reasons.every(r => r.trim().length > 0), 'No row has an empty reason');
+    assert.ok(reasons.some(r => /Slept first/.test(r)) && reasons.some(r => /always-close list/.test(r)) && reasons.some(r => /idle/.test(r)), 'Reasons follow how each tab was closed');
+
+    // Seen once: a later open the same day starts collapsed, until something new is closed.
+    await page.reload();
+    await page.waitForSelector('#closed-today:not([hidden])');
+    await page.waitForSelector('.tab-card');
+    assert.strictEqual(await receiptOpen(), false, 'Receipt starts collapsed on a later open the same day');
+    await closeNote({ id: 'closed-later', url: 'https://closed.example/later', title: 'Later', closureTier: 'safe_to_close', closureReason: 'Pure stateless reading article' });
+    await tellClosed();
+    await page.waitForFunction(() => document.getElementById('closed-today-count').textContent === '4');
+    assert.strictEqual(await receiptOpen(), true, 'New closures since the last look open the receipt again');
+
+    // Reopen all reopens every row, then the receipt hides itself (nothing closed today any more).
+    const pagesBefore = new Set(context.pages());
+    await page.click('#closed-today-reopen-all');
+    await page.waitForSelector('#closed-today', { state: 'hidden', timeout: 15000 });
+    const afterReopenAll = await page.evaluate(async () => {
+      const { getTabById } = await import('/src/storage/db.js');
+      return Promise.all(['closed-note', 'closed-slept', 'closed-trusted', 'closed-later'].map(async id => (await getTabById(id))?.status));
+    });
+    assert.deepStrictEqual(afterReopenAll, ['restored', 'restored', 'restored', 'restored'], 'Reopen all reopened every row');
+    assert.match(await page.textContent('#toast-message'), /Reopened 4 tabs\./, 'Reopen all reports what it did');
+    assert.strictEqual(await page.locator('#closed-today').isHidden(), true, 'Receipt is hidden when nothing was closed today');
+    // Close the four tabs Reopen all opened; wait for all of them to register first so none
+    // lingers (a late one would be picked up by Test 11's waitForEvent('page')).
+    for (let i = 0; i < 50 && context.pages().filter(p => !pagesBefore.has(p)).length < 4; i++) await new Promise(r => setTimeout(r, 100));
+    for (const extra of context.pages()) if (!pagesBefore.has(extra)) await extra.close();
+    await page.evaluate(async () => { // later tests expect the original seed data
+      const { softDeleteTab, purgeDeletedTabs } = await import('/src/storage/db.js');
+      for (const id of ['closed-note', 'closed-slept', 'closed-trusted', 'closed-later']) await softDeleteTab(id);
+      await purgeDeletedTabs(0);
+    });
+    console.log('✓ Receipt: open with a reason per row, collapses once seen, reopens on new closures, Reopen all, hidden when empty\n');
+
     await page.evaluate(async () => {
       const { saveSettings, DEFAULT_SETTINGS } = await import('/src/storage/db.js');
       await saveSettings(DEFAULT_SETTINGS);
@@ -466,7 +519,7 @@ async function runAppUXTests() {
       panel.click('#open-full-btn')
     ]);
     await fullPage.waitForLoadState('domcontentloaded');
-    assert.ok(fullPage.url().endsWith('/src/app/index.html'), 'Open full view opens src/app/index.html in a tab');
+    assert.ok(fullPage.url().endsWith('/src/app/index.html'), 'Open full view opens src/app/index.html in a tab: ' + fullPage.url());
     await fullPage.waitForSelector('body[data-surface="tab"]');
     assert.strictEqual(await fullPage.locator('#archive-current-btn').isHidden(), true, 'The full view tab hides Archive Current Tab');
     await new Promise(r => setTimeout(r, 400));
@@ -498,7 +551,7 @@ async function runAppUXTests() {
     let ids = await cardIds(hub);
     assert.ok(ids.includes('fading-note') && !ids.includes('reopened-note'), `Inbox must hide reopened notes, got ${ids}`);
     const chip = await hub.textContent('.tab-card[data-id="fading-note"] .fade-chip');
-    assert.match(chip, /Fades (in 1d|today)/, 'Note near its fade date shows a chip');
+    assert.match(chip, /Fading soon · (1d left|today)/, 'Note near its fade date shows a chip');
     console.log(`✓ Inbox hides reopened notes; fading note shows "${chip}"`);
 
     await hub.click('#view-reopened');

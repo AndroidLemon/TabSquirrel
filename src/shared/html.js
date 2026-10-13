@@ -4,7 +4,7 @@
 
 import { fadeChipLabel } from './fade.js';
 
-/** "Fades in Nd" chip, or nothing when this note should not show one. */
+/** "Fading soon" chip, or nothing when this note should not show one. */
 export function fadeChipHtml(tab, settings, sortBy) {
   const label = fadeChipLabel(tab, settings, sortBy);
   return label ? `<span class="fade-chip">${label}</span>` : '';

@@ -8,7 +8,7 @@
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** A note shows its "Fades in Nd" chip once it is this close to going. */
+/** A note shows its "Fading soon" chip once it is this close to going. */
 export const FADE_WARNING_DAYS = 3;
 
 /**
@@ -37,5 +37,8 @@ export function fadeChipLabel(record, settings, sortBy, now = Date.now()) {
   if (expiry === null) return '';
   const daysLeft = (expiry - now) / DAY_MS;
   if (sortBy !== 'expiring-soon' && daysLeft > FADE_WARNING_DAYS) return '';
-  return daysLeft < 1 ? 'Fades today' : `Fades in ${Math.ceil(daysLeft)}d`;
+  if (daysLeft < 1) return 'Fading soon · today';
+  const days = Math.ceil(daysLeft);
+  // Inside the warning window it is "fading soon"; further out (expiring-soon sort only) it is a plain date.
+  return daysLeft <= FADE_WARNING_DAYS ? `Fading soon · ${days}d left` : `Fades in ${days}d`;
 }

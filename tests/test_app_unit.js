@@ -8,7 +8,7 @@ import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
 import { highlightSearch, escapeHtml } from '../src/shared/html.js';
-import { formatExtractedArticle, getStatusBadge } from '../src/app/app.js';
+import { formatExtractedArticle, getStatusBadge, closedReason } from '../src/app/app.js';
 
 console.log('--- Running Knowledge Hub Unit & Markup Verification Tests ---');
 
@@ -79,11 +79,18 @@ const badge = (status, closureReason) => getStatusBadge({ status, closureReason 
 assert.ok(badge('discarded').includes('class="badge-status sleeping"') && badge('discarded').includes('>Sleeping</span>'), 'discarded -> Sleeping');
 assert.ok(badge('restored').includes('class="badge-status restored"') && badge('restored').includes('>Reopened</span>'), 'restored -> Reopened');
 assert.ok(badge('captured').includes('class="badge-status captured"') && badge('captured').includes('>Saved</span>'), 'captured -> Saved');
-assert.ok(badge('archived').includes('class="badge-status archived"') && badge('archived').includes('>Archived</span>'), 'archived -> Archived');
-assert.ok(badge(undefined).includes('>Archived</span>'), 'Unknown status falls back to Archived');
+assert.ok(badge('archived').includes('class="badge-status archived"') && badge('archived').includes('>Closed</span>'), 'archived -> Closed');
+assert.ok(badge(undefined).includes('>Closed</span>'), 'Unknown status falls back to Closed');
 assert.ok(badge('captured', 'Chrome refused to close this tab; summary saved, tab left open').includes('title="Chrome refused to close this tab; summary saved, tab left open"'), 'Badge tooltip is the closureReason');
 assert.ok(!badge('captured', '"><img src=x>').includes('<img'), 'closureReason tooltip must be escaped');
-console.log('✓ Status badges verified (Sleeping, Reopened, Saved, Archived)');
+console.log('✓ Status badges verified (Sleeping, Reopened, Saved, Closed)');
+
+// Receipt reasons are derived from the record, never invented
+assert.match(closedReason({ closureTier: 'safe_to_close', closureReason: 'Pure stateless reading article' }), /idle/, 'a plain reading page closed after sitting idle');
+assert.match(closedReason({ closureTier: 'suspend_only', closureReason: 'Contains form or interactive input controls' }), /Slept first/, 'a tab that slept before closing says so');
+assert.match(closedReason({ closureTier: 'suspend_only', closureReason: 'Closed: trusted domain' }), /always-close list/, 'a trusted-domain close names the list');
+assert.match(closedReason({}), /idle/, 'a record with no closure data still gets an honest idle reason');
+console.log('✓ Closed-today reasons derived from closureTier / closureReason');
 
 // Test 9: Verify src/app/index.html markup (element ids the Playwright tests rely on)
 console.log('Verifying src/app/index.html markup...');
@@ -92,7 +99,7 @@ assert.ok(htmlContent.includes('<dialog id="reader-dialog" class="reader-dialog"
 for (const id of [
   'search-input', 'search-clear-btn', 'search-kbd-hint', 'modal-copy-btn', 'modal-close-btn', 'perm-banner',
   'enable-perm-btn', 'view-inbox', 'view-reopened', 'view-all', 'sort-select', 'density-toggle-btn',
-  'closed-today', 'tabs-feed', 'toast-undo-btn', 'toast-progress', 'filters-btn', 'sidebar', 'sidebar-tags',
+  'closed-today', 'closed-today-reopen-all', 'closed-today-list', 'tabs-feed', 'toast-undo-btn', 'toast-progress', 'filters-btn', 'sidebar', 'sidebar-tags',
   'sidebar-domains', 'filter-banner', 'clear-filter-btn', 'results-count', 'export-dropdown-btn', 'settings-btn',
   'stat-total', 'archive-current-btn', 'open-full-btn'
 ]) {

@@ -577,7 +577,7 @@ async function main() {
     await page.hover('#toast-undo-btn');
     await page.waitForTimeout(250);
     await toastShot('06-toast-undo-hover.png');
-    await setToast('Error reopening tab: no response', true, false);
+    await setToast('Could not reopen that tab. Please try again.', true, false);
     await page.mouse.move(10, 10);
     await page.waitForTimeout(350);
     await toastShot('06-toast-error.png');

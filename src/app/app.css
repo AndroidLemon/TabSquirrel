@@ -1,4 +1,4 @@
-/* Tab Squirrel Knowledge Hub — one stylesheet for the side panel and the full view.
+/* Tab Squirrel notebook — one stylesheet for the side panel and the full view.
    Narrow (< 720px): single column + Filters drawer. Wide: persistent sidebar + card grid. */
 
 :root {
@@ -760,7 +760,24 @@ button {
   flex-shrink: 0;
 }
 
+.closed-today-reason {
+  color: var(--text-secondary);
+  min-width: 0;
+}
+
+.closed-today-intro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 12px;
+  border-top: 1px solid var(--border-color);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
 .closed-today-tldr {
+  font-size: 12px;
   color: var(--text-secondary);
   min-width: 0;
 }

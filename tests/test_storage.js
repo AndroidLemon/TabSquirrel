@@ -278,8 +278,8 @@ const chipNote = { capturedAt: chipNow, isFavorite: false };
 const chipAt = (daysLeft, sortBy) =>
   fadeChipLabel({ ...chipNote, capturedAt: chipNow - (30 - daysLeft) * DAY }, { ...fade }, sortBy, chipNow);
 assert.strictEqual(chipAt(FADE_WARNING_DAYS + 1), '', 'outside the warning window a fading note is silent');
-assert.strictEqual(chipAt(FADE_WARNING_DAYS), 'Fades in 3d', 'at the window edge the chip appears');
-assert.strictEqual(chipAt(0.5), 'Fades today', 'under a day it says today');
+assert.strictEqual(chipAt(FADE_WARNING_DAYS), 'Fading soon · 3d left', 'at the window edge the chip appears');
+assert.strictEqual(chipAt(0.5), 'Fading soon · today', 'under a day it says today');
 assert.strictEqual(chipAt(FADE_WARNING_DAYS + 1, 'expiring-soon'), 'Fades in 4d',
   'the expiring-soon sort shows every fading note regardless of the window');
 assert.strictEqual(fadeChipLabel({ ...chipNote, isFavorite: true }, fade, 'newest', chipNow), '',

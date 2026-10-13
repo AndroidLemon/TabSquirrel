@@ -11,7 +11,7 @@
     "128": "src/assets/icons/icon-128.png"
   },
   "action": {
-    "default_title": "Tab Squirrel: Knowledge Hub",
+    "default_title": "Tab Squirrel: Notebook",
     "default_icon": {
       "16": "src/assets/icons/icon-16.png",
       "48": "src/assets/icons/icon-48.png",
@@ -24,7 +24,7 @@
         "default": "Ctrl+Shift+S",
         "mac": "Command+Shift+S"
       },
-      "description": "Open Side Panel / Knowledge Hub"
+      "description": "Open Side Panel / Notebook"
     },
     "archive_active_tab": {
       "suggested_key": {

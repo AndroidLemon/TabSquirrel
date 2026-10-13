@@ -1,9 +1,9 @@
 /**
- * Tab Squirrel - Knowledge Hub controller.
+ * Tab Squirrel - notebook controller.
  *
  * One page serves both Chrome's side panel and the full view in a tab. Layout adapts to
  * width in app.css (narrow: single column + Filters drawer; wide: sidebar + card grid).
- * Only a few controls depend on the surface: "Archive current tab" and "Open full view"
+ * Only a few controls depend on the surface: "Save current tab" and "Open full view"
  * exist in the side panel only (in a tab, the current tab is Tab Squirrel itself).
  *
  * Importable in Node for unit tests: all DOM/chrome access is behind the document guard.
@@ -42,8 +42,9 @@ const state = {
   density: 'comfortable' // 'comfortable' | 'compact'
 };
 
-const TIME_LABELS = { favorites: 'Favorites', today: 'Captured today', yesterday: 'Yesterday', week: 'Past 7 days' };
+const TIME_LABELS = { favorites: 'Starred', today: 'Captured today', yesterday: 'Yesterday', week: 'Past 7 days' };
 const DENSITY_KEY = 'sidepanel_density'; // pre-merge storage key, kept so saved preferences survive
+const RECEIPT_SEEN_KEY = 'closed_today_seen'; // { day, upTo }: today's receipt was shown up to this closedAt
 
 let fadeSettings = null;
 let tabsById = new Map();
@@ -53,6 +54,7 @@ let searchTimer = null;
 let toastTimer = null;
 let toastDuration = 2600;
 let readerTab = null;
+let receiptSeenUpTo = null; // newest closedAt already shown today; null until read from storage
 
 const ICONS = {
   reopen: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>',
@@ -145,6 +147,37 @@ function startOfLocalDay() {
   return d.getTime();
 }
 
+function localDayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
+async function loadReceiptSeen() {
+  try {
+    const seen = (await chrome.storage.local.get(RECEIPT_SEEN_KEY))[RECEIPT_SEEN_KEY];
+    return seen?.day === localDayKey() && Number.isFinite(seen.upTo) ? seen.upTo : 0;
+  } catch (err) {
+    console.debug('Failed to load receipt state:', err);
+    return 0;
+  }
+}
+
+/**
+ * Plain reason a tab was closed, from what the record holds. Records in "Closed today" were all
+ * closed by Tab Squirrel's idle sweep (a manual save leaves the tab open), so the reason is
+ * which path closed it: a trusted domain, a tab that slept first and then sat idle twice as
+ * long (hybrid mode: its suspend-time closureReason is still set), or plain idleness.
+ */
+export function closedReason(tab) {
+  if (tab.closureReason === 'Closed: trusted domain') return 'On your always-close list';
+  if (tab.closureTier === 'suspend_only' && tab.closureReason) return 'Slept first, then closed after sitting idle longer';
+  return 'Sat idle, so it was closed';
+}
+
+/**
+ * The receipt: what Tab Squirrel closed today. Open when it holds closures not yet shown today
+ * (so first open of the day, or new closures since), collapsed on later opens, hidden when empty.
+ */
 async function renderClosedToday() {
   let tabs = [];
   try {
@@ -152,8 +185,17 @@ async function renderClosedToday() {
   } catch (err) {
     console.debug('Failed to load closed-today tabs:', err);
   }
+  if (receiptSeenUpTo === null) receiptSeenUpTo = await loadReceiptSeen();
   $('closed-today-count').textContent = tabs.length;
+  $('closed-today-noun').textContent = tabs.length === 1 ? 'tab' : 'tabs';
   $('closed-today').hidden = tabs.length === 0;
+  const newest = Math.max(0, ...tabs.map(tab => tab.closedAt || 0));
+  if (tabs.length && newest > receiptSeenUpTo) {
+    $('closed-today').open = true;
+    receiptSeenUpTo = newest;
+    chrome.storage.local.set({ [RECEIPT_SEEN_KEY]: { day: localDayKey(), upTo: newest } })
+      .catch(err => console.debug('Failed to save receipt state:', err));
+  }
   $('closed-today-list').innerHTML = tabs.map(tab => `
     <div class="closed-today-row">
       <img class="favicon" src="${escapeHtml(faviconUrl(tab.url))}" alt="">
@@ -161,11 +203,33 @@ async function renderClosedToday() {
         <div class="closed-today-title" title="${escapeHtml(tab.title)}">${escapeHtml(tab.title)}</div>
         <div class="closed-today-meta">
           <span class="closed-today-domain">${escapeHtml(tab.domain)}</span>
-          ${tab.summary?.tldr ? `<span class="closed-today-tldr">${escapeHtml(tab.summary.tldr)}</span>` : ''}
+          <span class="closed-today-reason">${closedReason(tab)}</span>
         </div>
+        ${tab.summary?.tldr ? `<div class="closed-today-tldr">${escapeHtml(tab.summary.tldr)}</div>` : ''}
       </div>
       <button class="closed-today-reopen-btn" data-url="${escapeHtml(tab.url)}" data-id="${escapeHtml(tab.id)}">Reopen</button>
     </div>`).join('');
+}
+
+/** Reopen every row of the receipt, then refresh once and report plainly how it went. */
+async function reopenAllClosedToday() {
+  const rows = Array.from(document.querySelectorAll('#closed-today-list .closed-today-reopen-btn'));
+  const button = $('closed-today-reopen-all');
+  button.disabled = true;
+  let reopened = 0;
+  for (const { dataset } of rows) {
+    try {
+      const res = await chrome.runtime.sendMessage({ type: 'RESTORE_TAB', url: dataset.url, recordId: dataset.id });
+      if (res?.success) reopened++;
+    } catch (err) {
+      console.error('Error reopening tab:', err);
+    }
+  }
+  button.disabled = false;
+  await refresh();
+  const failed = rows.length - reopened;
+  const done = `Reopened ${reopened} ${reopened === 1 ? 'tab' : 'tabs'}.`;
+  showToast(failed ? `${done} ${failed} could not be reopened.` : done, failed > 0);
 }
 
 async function renderFeed(showSkeletons = false) {
@@ -195,19 +259,19 @@ async function renderFeed(showSkeletons = false) {
 }
 
 function setResultsCount(n) {
-  $('results-count').textContent = `${n} ${n === 1 ? 'summary' : 'summaries'}`;
+  $('results-count').textContent = `${n} ${n === 1 ? 'note' : 'notes'}`;
 }
 
 function emptyStateHtml() {
   const hasFilter = Boolean(state.query || state.tag || state.domain || state.time);
-  let title = 'Your knowledge wiki is ready';
-  let desc = 'Tabs you leave open will be automatically distilled here' +
-    (state.surface === 'panel' ? ', or click "Archive Current Tab" to save this page now.' : '.');
+  let title = 'Your notebook is ready';
+  let desc = 'Tabs you leave idle will be closed and kept here as notes' +
+    (state.surface === 'panel' ? ', or click "Save current tab" to keep this page now.' : '.');
   if (state.view === 'inbox' && !hasFilter) {
     title = 'Inbox zero — nothing waiting.';
     desc = 'New captures land here until you reopen, star, or delete them.';
   } else if (hasFilter || state.view) {
-    title = 'No matching summaries';
+    title = 'No matching notes';
     desc = 'Try adjusting your search terms or filters.';
   }
   return `<div class="empty-state">${ICONS.empty}<div class="empty-title">${title}</div><div class="empty-desc">${desc}</div></div>`;
@@ -219,7 +283,7 @@ function emptyStateHtml() {
 
 /**
  * Status badge for a record: sleeping (discarded), reopened (restored), saved (captured:
- * summary saved but the tab is still open), otherwise archived. Tooltip = closureReason.
+ * summary saved but the tab is still open), otherwise closed. Tooltip = closureReason.
  * @param {Object} tab
  * @returns {string}
  */
@@ -227,13 +291,13 @@ export function getStatusBadge(tab) {
   const [cls, label, fallback] = {
     discarded: ['sleeping', 'Sleeping', 'Sleeping tab (RAM suspended)'],
     restored: ['restored', 'Reopened', 'Tab was reopened'],
-    captured: ['captured', 'Saved', 'Summary saved; tab left open']
-  }[tab.status] || ['archived', 'Archived', 'Archived to knowledge base'];
+    captured: ['captured', 'Saved', 'Note saved; tab left open']
+  }[tab.status] || ['archived', 'Closed', 'Tab closed; note kept'];
   return `<span class="badge-status ${cls}" title="${escapeHtml(tab.closureReason || fallback)}">${label}</span>`;
 }
 
 function starLabel(isFavorite) {
-  return isFavorite ? 'Unstar' : 'Keep (never fades)';
+  return isFavorite ? 'Unstar' : 'Star (never fades)';
 }
 
 function cardHtml(tab) {
@@ -250,10 +314,10 @@ function cardHtml(tab) {
           ${getStatusBadge(tab)}
           ${fadeChipHtml(tab, fadeSettings, state.sortBy)}
         </div>
-        <span class="card-time" title="${tab.readingTimeMinutes || 1} min read">${tab.readingTimeMinutes || 1}m · ${formatTimeAgo(tab.capturedAt)}</span>
+        <span class="card-time" title="Saved ${escapeHtml(new Date(tab.capturedAt).toLocaleString())}">${tab.readingTimeMinutes || 1} min read · saved ${formatTimeAgo(tab.capturedAt)}</span>
       </div>
       <h3 class="card-title" tabindex="0" title="${escapeHtml(tab.title)}">${highlightSearch(tab.title, q)}</h3>
-      ${tab.summary?.tldr ? `<div class="card-tldr">${highlightSearch(tab.summary.tldr, q)}</div>` : '<div class="card-tldr card-tldr-empty">No AI summary for this tab</div>'}
+      ${tab.summary?.tldr ? `<div class="card-tldr">${highlightSearch(tab.summary.tldr, q)}</div>` : '<div class="card-tldr card-tldr-empty">No AI note for this tab</div>'}
       ${bullets.length ? `
         <button class="takeaways-toggle" type="button" aria-expanded="false"><span class="takeaways-chevron">▶</span> Key Takeaways (${bullets.length})</button>
         <ul class="card-bullets collapsed">${bullets.map(b => `<li>${highlightSearch(b, q)}</li>`).join('')}</ul>` : ''}
@@ -263,8 +327,8 @@ function cardHtml(tab) {
         <div class="card-actions">
           <button class="action-icon-btn star-btn${tab.isFavorite ? ' active' : ''}" title="${star}" aria-label="${star}">${ICONS.star}</button>
           <button class="action-icon-btn reader-btn" title="Reader view (full text)" aria-label="Reader view">${ICONS.reader}</button>
-          <button class="action-icon-btn copy-btn" title="Copy summary (Markdown)" aria-label="Copy summary">${ICONS.copy}</button>
-          <button class="action-icon-btn delete-btn" title="Delete summary" aria-label="Delete summary">${ICONS.trash}</button>
+          <button class="action-icon-btn copy-btn" title="Copy note (Markdown)" aria-label="Copy note">${ICONS.copy}</button>
+          <button class="action-icon-btn delete-btn" title="Delete note" aria-label="Delete note">${ICONS.trash}</button>
         </div>
       </div>
     </article>`;
@@ -287,7 +351,7 @@ async function onFeedClick(e) {
   } else if (target.matches('.reader-btn')) {
     await openReader(tab);
   } else if (target.matches('.copy-btn')) {
-    await copyText(formatNoteSection(tab), 'Copied summary Markdown!', target);
+    await copyText(formatNoteSection(tab), 'Copied the note as Markdown.', target);
   } else if (target.matches('.delete-btn')) {
     await deleteCard(tab, card);
   } else if (target.matches('.card-tag')) {
@@ -303,7 +367,7 @@ async function reopenTab(url, recordId) {
   try {
     const res = await chrome.runtime.sendMessage({ type: 'RESTORE_TAB', url, recordId });
     if (!res?.success) throw new Error(res?.error || 'no response');
-    showToast(res.restoredInPlace ? 'Focused existing sleeping tab!' : 'Tab reopened!');
+    showToast(res.restoredInPlace ? 'Switched to the sleeping tab.' : 'Tab reopened.');
     await refresh(); // status, inbox/reopened membership and Closed today all changed
     if (res.removed) showRemovedOnReopenToast(recordId);
   } catch (err) {
@@ -318,13 +382,13 @@ async function toggleStar(tab, card, btn) {
     tab.isFavorite = updated ? updated.isFavorite : !tab.isFavorite;
   } catch (err) {
     console.error('Error toggling favorite:', err);
-    showToast('Could not update favorite', true);
+    showToast('Could not update the star', true);
     return;
   }
   btn.classList.toggle('active', tab.isFavorite);
   btn.title = starLabel(tab.isFavorite);
   btn.setAttribute('aria-label', btn.title);
-  showToast(tab.isFavorite ? 'Starred — kept forever' : 'Unstarred');
+  showToast(tab.isFavorite ? 'Starred. This note will not fade.' : 'Unstarred');
   updateStats();
   if (state.time === 'favorites' && !tab.isFavorite) {
     await renderFeed();
@@ -366,7 +430,7 @@ async function deleteCard(tab, card) {
   } catch (err) {
     console.error('Error deleting tab:', err);
     card.classList.remove('removing');
-    showToast('Error deleting summary', true);
+    showToast('Could not delete that note.', true);
     return;
   }
   clearSelection();
@@ -378,7 +442,7 @@ async function deleteCard(tab, card) {
     if (!$('tabs-feed').querySelector('.tab-card')) renderFeed();
   }, 260);
 
-  showUndoToast('Summary removed', tab.id, () => restoreDeletedTab(tab.id));
+  showUndoToast('Note deleted', tab.id, () => restoreDeletedTab(tab.id));
 }
 
 /**
@@ -410,8 +474,8 @@ function showUndoToast(message, id, restore) {
       restored.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       setTimeout(() => restored.classList.remove('undo-restored'), 1200);
     }
-    if (restoredOk) showToast('Summary restored');
-    else showToast('Could not restore that summary. It may already be gone.', true);
+    if (restoredOk) showToast('Note restored');
+    else showToast('Could not restore that note. It may already be gone.', true);
   }, 5000);
 }
 
@@ -537,19 +601,19 @@ export async function performExport(format = 'markdown') {
 
   if (!tabs.length) {
     const filtered = Boolean(state.query || state.tag || state.domain || state.time || state.view);
-    showToast(filtered && format !== 'json' ? 'No summaries match the active filter to export.' : 'No summaries to export yet.');
+    showToast(filtered && format !== 'json' ? 'No notes match the active filter to export.' : 'No notes to export yet.');
     return;
   }
   const stamp = Date.now();
   if (format === 'json') {
     triggerDownload(exportToJSON(tabs), `tab-squirrel-wiki-export-${stamp}.json`, 'application/json;charset=utf-8');
-    showToast('Exported Wiki Backup (JSON)!');
+    showToast('Exported a JSON backup.');
   } else if (format === 'obsidian') {
     triggerDownload(exportToObsidianZip(tabs), `tab-squirrel-obsidian-vault-${stamp}.zip`, 'application/zip');
-    showToast('Exported Obsidian vault (.zip)!');
+    showToast('Exported an Obsidian vault.');
   } else {
     triggerDownload(exportToMarkdown(tabs), `tab-squirrel-wiki-export-${stamp}.md`, 'text/markdown;charset=utf-8');
-    showToast('Exported Wiki to Markdown!');
+    showToast('Exported notes as Markdown.');
   }
 }
 
@@ -565,7 +629,7 @@ async function openReader(tab) {
   link.textContent = tab.url || '';
   if (/^https?:\/\//i.test(tab.url)) link.href = tab.url; // only http(s) links are clickable
   else link.removeAttribute('href');
-  $('modal-summary-box').innerHTML = `<strong>Summary Overview</strong><p>${escapeHtml(tab.summary?.tldr || 'No overview available')}</p>`;
+  $('modal-summary-box').innerHTML = `<strong>Note overview</strong><p>${escapeHtml(tab.summary?.tldr || 'No overview available')}</p>`;
   $('modal-text-content').innerHTML = '<p class="empty-article-text">Loading article text…</p>';
   dialog.showModal();
 
@@ -627,19 +691,19 @@ async function closeSidePanel() {
 async function archiveCurrentTab(btn) {
   const label = btn.innerHTML;
   btn.disabled = true;
-  btn.textContent = 'Archiving...';
+  btn.textContent = 'Saving...';
   try {
     const response = await chrome.runtime.sendMessage({ type: 'ARCHIVE_ACTIVE_TAB' });
     if (response?.success) {
-      showToast('Tab archived & summarized!');
+      showToast('Saved a note. The tab is still open.');
       await refresh();
     } else {
       console.error('Archive failed:', response?.error);
-      showToast('Could not archive this tab. Please try again.', true);
+      showToast('Could not save this tab. Please try again.', true);
     }
   } catch (err) {
     console.error('Error archiving tab:', err);
-    showToast('Could not archive this tab. Please try again.', true);
+    showToast('Could not save this tab. Please try again.', true);
   } finally {
     btn.disabled = false;
     btn.innerHTML = label;
@@ -739,6 +803,7 @@ function setupEventListeners() {
   toastEl.addEventListener('mouseleave', () => setToastPaused(false));
   toastEl.addEventListener('focusin', () => setToastPaused(true));
   toastEl.addEventListener('focusout', () => setToastPaused(false));
+  $('closed-today-reopen-all').addEventListener('click', reopenAllClosedToday);
   $('closed-today-list').addEventListener('click', (e) => {
     const btn = e.target.closest('.closed-today-reopen-btn');
     if (btn) reopenTab(btn.dataset.url, btn.dataset.id);
@@ -755,7 +820,7 @@ function setupEventListeners() {
     try {
       if (await chrome.permissions.request({ origins: ['<all_urls>'] })) {
         $('perm-banner').hidden = true;
-        showToast('Extraction permissions enabled!');
+        showToast('Permission granted.');
       } else {
         showToast('Permission was not granted, so page text can\'t be read yet.', true);
       }
@@ -864,7 +929,7 @@ function setupEventListeners() {
     if (!inside) dialog.close();
   });
   $('modal-copy-btn').addEventListener('click', (e) => {
-    if (readerTab) copyText(formatStandaloneNote(readerTab), 'Copied full note Markdown!', e.currentTarget);
+    if (readerTab) copyText(formatStandaloneNote(readerTab), 'Copied the note as Markdown.', e.currentTarget);
   });
 
   // Global keyboard shortcuts
