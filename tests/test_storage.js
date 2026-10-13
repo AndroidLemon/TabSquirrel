@@ -6,7 +6,7 @@
 
 import assert from 'node:assert';
 import 'fake-indexeddb/auto';
-import { getExpiry, fadeChipLabel, FADE_WARNING_DAYS } from '../src/shared/fade.js';
+import { getExpiry, fadeChipLabel, fadeDateLabel, fadeExplanation, FADE_WARNING_DAYS } from '../src/shared/fade.js';
 
 console.log('--- Running Tab Squirrel Storage Unit Tests ---');
 
@@ -288,6 +288,23 @@ assert.strictEqual(fadeChipLabel(chipNote, null, 'newest', chipNow), '', 'no set
 // Regression: getArchivedTabs defaults fadeSettings to null and app.js can pass null when the
 // settings read fails. That must not throw mid-render.
 assert.strictEqual(getExpiry({ capturedAt: chipNow }, null), null, 'null settings means never fades, not a crash');
+
+// Fade date and the one-line explanation: both read the user's real windows.
+const dateNote = { capturedAt: new Date(2026, 9, 1, 12).getTime(), isFavorite: false };
+const dateNow = new Date(2026, 9, 13, 12).getTime();
+assert.strictEqual(fadeDateLabel(dateNote, fade, dateNow), 'fades Oct 31', 'unopened note: capture date + 30 days');
+assert.strictEqual(fadeDateLabel({ ...dateNote, restoredAt: new Date(2026, 9, 10, 12).getTime() }, fade, dateNow), 'fades Oct 17',
+  'reopened note: last reopen + 7 days');
+assert.strictEqual(fadeDateLabel({ ...dateNote, isFavorite: true }, fade, dateNow), '', 'starred notes show no fade date');
+assert.strictEqual(fadeDateLabel(dateNote, { ...fade, fadeUnopenedDays: 0 }, dateNow), '', '0 days = no fade date');
+assert.strictEqual(fadeDateLabel(dateNote, null, dateNow), '', 'no settings = no fade date');
+assert.match(fadeDateLabel(dateNote, { ...fade, fadeUnopenedDays: 120 }, dateNow), /2027/, 'a date in another year names the year');
+assert.strictEqual(fadeExplanation(fade), 'Notes fade after 30 days, or 7 days after a reopen, unless you star them.');
+assert.strictEqual(fadeExplanation({ fadeUnopenedDays: 14, fadeReopenedDays: 14 }), 'Notes fade after 14 days unless you star them.');
+assert.match(fadeExplanation({ fadeUnopenedDays: 0, fadeReopenedDays: 0 }), /Fading is off/);
+assert.match(fadeExplanation({ fadeUnopenedDays: 0, fadeReopenedDays: 7 }), /7 days after you reopen/);
+assert.match(fadeExplanation({ fadeUnopenedDays: 30, fadeReopenedDays: 0 }), /Reopened notes stay/);
+assert.strictEqual(fadeExplanation(null), '', 'no settings = no explanation');
 assert.strictEqual(getExpiry({ capturedAt: chipNow }, undefined), null, 'undefined settings likewise');
 await assert.doesNotReject(() => getArchivedTabs({ sortBy: 'expiring-soon' }),
   'the expiring-soon sort survives a missing fadeSettings');

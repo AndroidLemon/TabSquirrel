@@ -183,19 +183,23 @@ async function runShortcutsTests() {
     assert.ok(inputVal.includes('/'), 'Slash should be typed normally when already in input');
     console.log(`✓ Slash key typed into input without interception: "${inputVal}"`);
 
-    // 3c. Pressing 'Escape' clears search and blurs input
-    console.log('Testing "Escape" key to clear search and blur...');
+    // 3c. First 'Escape' leaves the search box but keeps the query; a second one clears it
+    console.log('Testing "Escape" key to leave search, then clear it...');
     await helperPage.keyboard.press('Escape');
     await helperPage.waitForTimeout(200);
 
-    const clearedVal = await helperPage.inputValue('#search-input');
+    let keptVal = await helperPage.inputValue('#search-input');
     const isBlurred = await helperPage.evaluate(() => document.activeElement.id !== 'search-input');
-    assert.strictEqual(clearedVal, '', 'Pressing Escape must clear #search-input');
-    assert.strictEqual(isBlurred, true, 'Pressing Escape must blur #search-input');
-    console.log('✓ Pressing "Escape" successfully cleared value and blurred #search-input');
+    assert.strictEqual(keptVal, inputVal, 'The first Escape must keep the #search-input query');
+    assert.strictEqual(isBlurred, true, 'The first Escape must blur #search-input');
+    await helperPage.keyboard.press('Escape');
+    await helperPage.waitForTimeout(200);
+    const clearedVal = await helperPage.inputValue('#search-input');
+    assert.strictEqual(clearedVal, '', 'A second Escape must clear #search-input');
+    console.log('✓ First "Escape" blurred #search-input and kept the query; the second cleared it');
 
-    // 3d. Pressing 'Enter' in search bar restores the top filtered result
-    console.log('Testing "Enter" key in search bar to restore top result...');
+    // 3d. Pressing 'Enter' in search bar moves focus to the first result without reopening it
+    console.log('Testing "Enter" key in search bar to focus the top result...');
     await helperPage.keyboard.press('/');
     await helperPage.fill('#search-input', 'Shortcuts');
 
@@ -203,11 +207,11 @@ async function runShortcutsTests() {
     await helperPage.keyboard.press('Enter');
     await helperPage.waitForTimeout(600);
 
-    // Toast should appear and restore action triggered
-    const toastText = await helperPage.locator('#toast').textContent();
-    console.log(`✓ Action triggered on Enter. Toast message: "${toastText}"`);
-    assert.ok(toastText.includes('tab') || toastText.includes('Tab') || toastText.includes('sleeping'), 'Toast should confirm tab restoration');
-
+    const focusedTitle = await helperPage.evaluate(() => document.activeElement.matches('.tab-card .card-title'));
+    assert.strictEqual(focusedTitle, true, 'Enter must move focus to the first result');
+    const toastShown = await helperPage.locator('#toast').evaluate(el => !el.classList.contains('hidden'));
+    assert.strictEqual(toastShown, false, 'Enter in search must not reopen the note (no toast)');
+    console.log('✓ Enter focused the first result without reopening it');
     console.log('\n========================================================');
     console.log('🎉 ALL KEYBOARD SHORTCUTS & NAVIGATION TESTS PASSED! 🎉');
     console.log('========================================================\n');

@@ -1693,3 +1693,99 @@ dialog.reader-dialog[open] {
     transition: opacity 200ms cubic-bezier(.2, .7, .2, 1);
   }
 }
+
+/* ---------- Fade explanation, fade date, reader actions, shortcuts legend ---------- */
+
+.fade-note {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.fade-date {
+  color: var(--text-muted);
+}
+
+.modal-fade {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.modal-fade:empty {
+  display: none;
+}
+
+.shortcuts-btn {
+  width: auto;
+  flex: none;
+  padding: 8px 12px;
+}
+
+dialog.shortcuts-dialog {
+  border: none;
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  width: min(90vw, 420px);
+  padding: 0;
+  box-shadow: var(--shadow-lg);
+  margin: auto;
+}
+
+dialog.shortcuts-dialog::backdrop {
+  background: var(--scrim);
+}
+
+.shortcuts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.shortcuts-title {
+  font-family: var(--font-serif);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.shortcuts-list {
+  margin: 0;
+  padding: 8px 16px 14px;
+  font-size: 13px;
+}
+
+.shortcuts-list > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 5px 0;
+}
+
+.shortcuts-list dt {
+  flex-shrink: 0;
+  display: flex;
+  gap: 4px;
+}
+
+.shortcuts-list dd {
+  margin: 0;
+  color: var(--text-secondary);
+  text-align: right;
+}
+
+.shortcuts-list kbd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 1px 5px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-muted);
+  color: var(--text-secondary);
+}
+
+.modal-header-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}

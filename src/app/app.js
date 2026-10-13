@@ -21,7 +21,8 @@ import {
   toggleFavoriteTab,
   getSettings
 } from '../storage/db.js';
-import { escapeHtml, highlightSearch, faviconUrl, fadeChipHtml } from '../shared/html.js';
+import { escapeHtml, highlightSearch, faviconUrl, fadeChipHtml, fadeDateHtml } from '../shared/html.js';
+import { fadeChipLabel, fadeDateLabel, fadeExplanation } from '../shared/fade.js';
 import {
   exportToMarkdown,
   exportToObsidianZip,
@@ -262,6 +263,9 @@ async function renderFeed(showSkeletons = false) {
   fadeSettings = settings;
   tabsById = new Map(tabs.map(tab => [String(tab.id), tab]));
   setResultsCount(tabs.length);
+  const fadeNote = fadeExplanation(settings);
+  $('fade-note').textContent = fadeNote;
+  $('fade-note').hidden = !fadeNote || tabs.length === 0;
 
   if (tabs.length === 0) {
     feed.innerHTML = emptyStateHtml();
@@ -313,7 +317,7 @@ export function getStatusBadge(tab) {
 }
 
 function starLabel(isFavorite) {
-  return isFavorite ? 'Unstar' : 'Star (never fades)';
+  return isFavorite ? 'Unstar: let this note fade again' : 'Star: keep this note; it won\'t fade';
 }
 
 function cardHtml(tab) {
@@ -330,7 +334,7 @@ function cardHtml(tab) {
           ${getStatusBadge(tab)}
           ${fadeChipHtml(tab, fadeSettings, state.sortBy)}
         </div>
-        <span class="card-time" title="Saved ${escapeHtml(new Date(tab.capturedAt).toLocaleString())}">${tab.readingTimeMinutes || 1} min read · saved ${formatTimeAgo(tab.capturedAt)}</span>
+        <span class="card-time" title="Saved ${escapeHtml(new Date(tab.capturedAt).toLocaleString())}">${tab.readingTimeMinutes || 1} min read · saved ${formatTimeAgo(tab.capturedAt)}${fadeDateHtml(tab, fadeSettings, state.sortBy)}</span>
       </div>
       <h3 class="card-title" tabindex="0" title="${escapeHtml(tab.title)}">${highlightSearch(tab.title, q)}</h3>
       ${tab.summary?.tldr ? `<div class="card-tldr">${highlightSearch(tab.summary.tldr, q)}</div>` : '<div class="card-tldr card-tldr-empty">No AI note for this tab</div>'}
@@ -410,9 +414,11 @@ async function toggleStar(tab, card, btn) {
     await renderFeed();
     return;
   }
-  // The fade chip depends on isFavorite; refresh it without a full re-render.
+  // The fade chip and date depend on isFavorite; refresh them without a full re-render.
   card.querySelector('.fade-chip')?.remove();
+  card.querySelector('.fade-date')?.remove();
   card.querySelector('.card-source').insertAdjacentHTML('beforeend', fadeChipHtml(tab, fadeSettings, state.sortBy));
+  card.querySelector('.card-time').insertAdjacentHTML('beforeend', fadeDateHtml(tab, fadeSettings, state.sortBy));
 }
 
 async function copyText(text, message, btn) {
@@ -601,7 +607,7 @@ function toggleExportMenu(open) {
 
 /**
  * Export in the chosen format. Markdown / Obsidian respect the active search, view, tag,
- * domain and time filters; JSON is always a full backup. Formatting lives in shared/export.js.
+ * domain and time filters; JSON is always a full backup of every note (the control says so). Formatting lives in shared/export.js.
  * @param {'markdown'|'obsidian'|'json'} format
  */
 export async function performExport(format = 'markdown') {
@@ -639,6 +645,7 @@ async function openReader(tab) {
   link.textContent = tab.url || '';
   if (/^https?:\/\//i.test(tab.url)) link.href = tab.url; // only http(s) links are clickable
   else link.removeAttribute('href');
+  updateReaderActions();
   $('modal-summary-box').innerHTML = `<strong>Note overview</strong><p>${escapeHtml(tab.summary?.tldr || 'No overview available')}</p>`;
   $('modal-text-content').innerHTML = '<p class="empty-article-text">Loading article text…</p>';
   dialog.showModal();
@@ -653,6 +660,33 @@ async function openReader(tab) {
     console.error('Failed to load full article text:', err);
     if (readerTab === tab) $('modal-text-content').innerHTML = formatExtractedArticle('');
   }
+}
+
+/** Reader header: the fade line and the Star button's label follow the note's current star state. */
+function updateReaderActions() {
+  if (!readerTab) return;
+  $('modal-fade').textContent = fadeChipLabel(readerTab, fadeSettings, state.sortBy) || fadeDateLabel(readerTab, fadeSettings);
+  const star = starLabel(readerTab.isFavorite);
+  const btn = $('modal-star-btn');
+  btn.title = star;
+  btn.setAttribute('aria-label', star);
+  btn.querySelector('.btn-label').textContent = readerTab.isFavorite ? 'Unstar' : 'Star';
+}
+
+/** Reader Reopen / Star / Delete reuse the card's handlers on the note's card in the feed. */
+async function onReaderAction(action) {
+  const tab = readerTab && tabsById.get(String(readerTab.id));
+  const card = tab && document.querySelector(`#tabs-feed .tab-card[data-id="${CSS.escape(String(tab.id))}"]`);
+  if (!tab || !card || card.classList.contains('removing')) return;
+  if (action === 'star') {
+    await toggleStar(tab, card, card.querySelector('.star-btn'));
+    readerTab.isFavorite = tab.isFavorite;
+    updateReaderActions();
+    return;
+  }
+  $('reader-dialog').close();
+  if (action === 'reopen') await reopenTab(tab.url, tab.id);
+  else await deleteCard(tab, card);
 }
 
 /**
@@ -906,11 +940,12 @@ function setupEventListeners() {
   });
   searchInput.addEventListener('keydown', async (e) => {
     if (e.key === 'Enter') {
-      // Reopen the top filtered result
+      // Jump to the first result; reopening stays a deliberate second step
       e.preventDefault();
       clearTimeout(searchTimer);
       await applyFilters({ query: searchInput.value });
-      feed.querySelector('.restore-btn')?.click();
+      searchInput.blur();
+      selectCard(0);
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
       searchInput.blur();
@@ -958,13 +993,22 @@ function setupEventListeners() {
     const inside = r.top <= e.clientY && e.clientY <= r.bottom && r.left <= e.clientX && e.clientX <= r.right;
     if (!inside) dialog.close();
   });
+  $('modal-reopen-btn').addEventListener('click', () => onReaderAction('reopen'));
+  $('modal-star-btn').addEventListener('click', () => onReaderAction('star'));
+  $('modal-delete-btn').addEventListener('click', () => onReaderAction('delete'));
   $('modal-copy-btn').addEventListener('click', (e) => {
     if (readerTab) copyText(formatStandaloneNote(readerTab), 'Copied the note as Markdown.', e.currentTarget);
   });
 
+  // Shortcuts legend: native <dialog>, so Escape closes it and focus returns to the opener
+  const legend = $('shortcuts-dialog');
+  $('shortcuts-btn').addEventListener('click', () => { closeDrawer(); legend.showModal(); });
+  $('shortcuts-close-btn').addEventListener('click', () => legend.close());
+  legend.addEventListener('click', (e) => { if (e.target === legend) legend.close(); });
+
   // Global keyboard shortcuts
   document.addEventListener('keydown', async (e) => {
-    if (dialog.open) return; // the <dialog> closes itself on Escape
+    if (dialog.open || legend.open) return; // a <dialog> closes itself on Escape
     const el = document.activeElement;
     const typing = el && (['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) || el.isContentEditable);
     const drawerOpen = document.body.classList.contains('drawer-open');
@@ -972,7 +1016,11 @@ function setupEventListeners() {
     if (e.key === 'Escape') {
       if (exportMenu.matches(':popover-open')) return; // the popover closes itself on Escape
       if (drawerOpen) return closeDrawer();
-      searchInput.blur();
+      // First Escape in the search box only leaves it (the query stays); the next one clears it.
+      if (el === searchInput) {
+        searchInput.blur();
+        return;
+      }
       clearSelection();
       await clearSearch();
       return;
@@ -985,6 +1033,12 @@ function setupEventListeners() {
         searchInput.focus();
         searchInput.select();
       }
+      return;
+    }
+    if (e.key === '?' && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      closeDrawer();
+      legend.showModal();
       return;
     }
     if (typing || drawerOpen) return;

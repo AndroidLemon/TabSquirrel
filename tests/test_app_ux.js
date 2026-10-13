@@ -632,6 +632,90 @@ async function runAppUXTests() {
     assert.strictEqual(ids[0], 'reopened-note', 'Soonest-fading note first (reopened: 7-day window)');
     assert.strictEqual(ids[ids.length - 1], 'fading-note', 'Starred note never fades, so it sorts last');
     console.log('✓ Expiring-soon sort orders by fade date, starred last\n');
+
+    // --- TEST 13: Fade explanation, fade dates, reader actions, shortcuts legend, search keys ---
+    console.log('--- Test 13: Onboarding Copy, Reader Actions, Legend & Search Keys ---');
+    await hub.selectOption('#sort-select', 'newest');
+    await hub.waitForFunction(() => document.querySelector('#sort-select').value === 'newest'
+      && ![...document.querySelectorAll('.fade-chip')].some(c => c.textContent.startsWith('Fades in')));
+    assert.match(await hub.textContent('#fade-note'), /^Notes fade after \d+ days.*unless you star them\.$/, 'One quiet line explains fading');
+    const dateOf = (id) => hub.locator(`.tab-card[data-id="${id}"] .fade-date`);
+    assert.match(await dateOf('inbox-note').textContent(), /fades [A-Z][a-z]{2} \d{1,2}/, 'An unstarred note shows when it fades');
+    assert.match(await dateOf('reopened-note').textContent(), /fades [A-Z][a-z]{2} \d{1,2}/, 'A reopened note shows its fade date too');
+    assert.strictEqual(await dateOf('fading-note').count(), 0, 'A starred note shows no fade date');
+    assert.strictEqual(await hub.locator('.tab-card[data-id="fading-note"] .fade-chip').count(), 0, 'A starred note shows no chip either');
+    assert.match(await hub.getAttribute('.tab-card[data-id="inbox-note"] .star-btn', 'aria-label'), /^Star: keep this note; it won't fade$/, 'Star says what it does');
+    // Unstarring brings the fade back inside the 3-day window as the chip, never both
+    await hub.click('.tab-card[data-id="fading-note"] .star-btn');
+    await hub.waitForSelector('.tab-card[data-id="fading-note"] .fade-chip');
+    assert.strictEqual(await dateOf('fading-note').count(), 0, 'Inside the warning window the chip replaces the date');
+    await hub.click('.tab-card[data-id="fading-note"] .star-btn'); // re-star
+    await hub.waitForFunction(() => !document.querySelector('.tab-card[data-id="fading-note"] .fade-chip'));
+    console.log('✓ Fade explanation, per-card fade date (none when starred, chip takes over near the end), star label');
+
+    // Reader: fade line plus Reopen / Star / Delete
+    await hub.click('.tab-card[data-id="inbox-note"] .reader-btn');
+    await hub.waitForSelector('#reader-dialog[open]');
+    assert.match(await hub.textContent('#modal-fade'), /fades [A-Z][a-z]{2} \d{1,2}/, 'Reader shows the fade date');
+    await hub.click('#modal-star-btn');
+    await hub.waitForSelector('.tab-card[data-id="inbox-note"] .star-btn.active');
+    assert.strictEqual((await hub.textContent('#modal-star-btn')).trim(), 'Unstar', 'Reader Star button follows the star');
+    assert.strictEqual(await hub.textContent('#modal-fade'), '', 'A starred note has no fade line in the reader');
+    await hub.click('#modal-star-btn');
+    await hub.waitForFunction(() => !document.querySelector('.tab-card[data-id="inbox-note"] .star-btn.active'));
+    assert.strictEqual((await hub.textContent('#modal-star-btn')).trim(), 'Star');
+    await hub.evaluate(() => {
+      window.__realSend = chrome.runtime.sendMessage;
+      chrome.runtime.sendMessage = async (msg) => { window.__sent = msg; return { success: true }; };
+    });
+    await hub.click('#modal-reopen-btn');
+    await hub.waitForFunction(() => window.__sent);
+    const readerSent = await hub.evaluate(() => { chrome.runtime.sendMessage = window.__realSend; return window.__sent; });
+    assert.strictEqual(readerSent.type, 'RESTORE_TAB');
+    assert.strictEqual(readerSent.recordId, 'inbox-note', 'Reader Reopen reopens this note');
+    assert.strictEqual(await hub.evaluate(() => document.getElementById('reader-dialog').open), false, 'Reopen closes the reader');
+    await hub.click('.tab-card[data-id="inbox-note"] .reader-btn');
+    await hub.waitForSelector('#reader-dialog[open]');
+    await hub.click('#modal-delete-btn');
+    assert.strictEqual(await hub.evaluate(() => document.getElementById('reader-dialog').open), false, 'Delete closes the reader');
+    await hub.locator('#toast-undo-btn').waitFor({ state: 'visible', timeout: 2000 });
+    assert.match(await hub.textContent('#toast-message'), /Note deleted/, 'Reader Delete offers the same Undo toast');
+    await hub.click('#toast-undo-btn');
+    await hub.waitForSelector('.tab-card[data-id="inbox-note"]:not(.removing)');
+    console.log('✓ Reader Reopen, Star and Delete (with Undo) verified');
+
+    // Shortcuts legend: ? opens, Escape closes, focus returns
+    await hub.focus('.tab-card[data-id="inbox-note"] .card-title');
+    await hub.keyboard.press('?');
+    await hub.waitForSelector('#shortcuts-dialog[open]');
+    assert.match(await hub.textContent('#shortcuts-dialog'), /Keyboard shortcuts[\s\S]*Reopen[\s\S]*Search/, 'Legend lists the shortcuts');
+    await hub.keyboard.press('Escape');
+    assert.strictEqual(await hub.evaluate(() => document.getElementById('shortcuts-dialog').open), false, 'Escape closes the legend');
+    assert.strictEqual(await hub.evaluate(() => document.activeElement.matches('.tab-card[data-id="inbox-note"] .card-title')), true, 'Focus returns to where it was');
+    console.log('✓ ? opens the legend; Escape closes it and focus returns');
+
+    // Enter in search focuses the first result without reopening it
+    await hub.evaluate(() => {
+      window.__sent = null;
+      window.__realSend = chrome.runtime.sendMessage;
+      chrome.runtime.sendMessage = async (msg) => { window.__sent = msg; return { success: true }; };
+    });
+    await hub.keyboard.press('/');
+    await hub.fill('#search-input', 'summary');
+    await hub.keyboard.press('Enter');
+    await hub.waitForFunction(() => document.activeElement?.matches('.tab-card .card-title'));
+    const firstId = await hub.evaluate(() => document.querySelector('#tabs-feed .tab-card').dataset.id);
+    assert.strictEqual(await hub.evaluate(() => document.activeElement.closest('.tab-card').dataset.id), firstId, 'Enter focuses the first result');
+    assert.strictEqual(await hub.evaluate(() => window.__sent), null, 'Enter in search does not reopen anything');
+    // Escape: first leaves the search and keeps the query, second clears it
+    await hub.keyboard.press('/');
+    await hub.keyboard.press('Escape');
+    assert.strictEqual(await hub.inputValue('#search-input'), 'summary', 'First Escape keeps the query');
+    assert.strictEqual(await hub.evaluate(() => document.activeElement.id !== 'search-input'), true, 'First Escape blurs the search');
+    await hub.keyboard.press('Escape');
+    await hub.waitForFunction(() => document.getElementById('search-input').value === '');
+    await hub.evaluate(() => { chrome.runtime.sendMessage = window.__realSend; });
+    console.log('✓ Enter in search focuses the first result; Escape keeps the query, a second one clears it\n');
     await hub.close();
 
     console.log('========================================================');
