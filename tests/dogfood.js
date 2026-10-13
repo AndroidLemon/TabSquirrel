@@ -314,6 +314,7 @@ async function runDogfood() {
     // Close the target tab and verify fallback restore opens a fresh tab
     await techPage.close();
     const afterClosePages = context.pages().length;
+    await wikiPage.locator('.nav-item[data-view=""]').click(); // the first restore moved the note from the Inbox (the default view) to Reopened
     await wikiPage.locator('.restore-btn').first().click();
     await wikiPage.waitForTimeout(600);
 

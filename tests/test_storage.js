@@ -6,7 +6,7 @@
 
 import assert from 'node:assert';
 import 'fake-indexeddb/auto';
-import { getExpiry, fadeChipLabel, fadeDateLabel, fadeExplanation, FADE_WARNING_DAYS } from '../src/shared/fade.js';
+import { getExpiry, fadeChipLabel, fadeDateLabel, fadeExplanation, FADE_WARNING_DAYS, FADE_DATE_DAYS } from '../src/shared/fade.js';
 
 console.log('--- Running Tab Squirrel Storage Unit Tests ---');
 
@@ -169,6 +169,12 @@ const stats = await getStats();
 assert.strictEqual(stats.total, 2);
 assert.strictEqual(stats.today, 1, 'Only records since local midnight count as today');
 assert.strictEqual(stats.favorites, 1);
+assert.strictEqual(stats.inbox, 2, 'Never-reopened notes make up the Inbox count');
+assert.strictEqual(stats.reopened, 0);
+await saveArchivedTab({ id: 'd-reopened', url: 'https://d.example/reopened', status: 'restored', restoredAt: Date.now(), capturedAt: midnight.getTime() - 2000 });
+const stats2 = await getStats();
+assert.deepStrictEqual([stats2.total, stats2.inbox, stats2.reopened], [3, 2, 1], 'Inbox and Reopened counts split the notes by restoredAt');
+await softDeleteTab('d-reopened');
 assert.ok(stats.totalReadingMinutes >= 2);
 assert.deepStrictEqual((await getArchivedTabs({ timeRange: 'today' })).map(t => t.id), ['d-today']);
 assert.deepStrictEqual((await getArchivedTabs({ timeRange: 'yesterday' })).map(t => t.id), ['d-yesterday']);
@@ -311,6 +317,10 @@ assert.strictEqual(fadeDateLabel({ ...dateNote, isFavorite: true }, fade, dateNo
 assert.strictEqual(fadeDateLabel(dateNote, { ...fade, fadeUnopenedDays: 0 }, dateNow), '', '0 days = no fade date');
 assert.strictEqual(fadeDateLabel(dateNote, null, dateNow), '', 'no settings = no fade date');
 assert.match(fadeDateLabel(dateNote, { ...fade, fadeUnopenedDays: 120 }, dateNow), /2027/, 'a date in another year names the year');
+assert.strictEqual(fadeDateLabel(dateNote, fade, dateNow, FADE_DATE_DAYS), '', 'a note 18 days from fading shows no date on a card');
+assert.strictEqual(fadeDateLabel({ ...dateNote, restoredAt: new Date(2026, 9, 10, 12).getTime() }, fade, dateNow, FADE_DATE_DAYS), 'fades Oct 17', 'a note 4 days out does');
+assert.strictEqual(fadeDateLabel({ ...dateNote, restoredAt: new Date(2026, 9, 13, 12).getTime() }, fade, dateNow, FADE_DATE_DAYS), 'fades Oct 20', 'exactly 7 days out still shows');
+assert.strictEqual(fadeDateLabel({ ...dateNote, restoredAt: new Date(2026, 9, 14, 12).getTime() }, fade, dateNow, FADE_DATE_DAYS), '', 'more than 7 days out does not');
 assert.strictEqual(fadeExplanation(fade), 'Notes fade after 30 days, or 7 days after a reopen, unless you star them.');
 assert.strictEqual(fadeExplanation({ fadeUnopenedDays: 14, fadeReopenedDays: 14 }), 'Notes fade after 14 days unless you star them.');
 assert.match(fadeExplanation({ fadeUnopenedDays: 0, fadeReopenedDays: 0 }), /Fading is off/);

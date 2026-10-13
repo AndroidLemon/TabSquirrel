@@ -28,10 +28,12 @@
         <button class="nav-item" data-view="inbox">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-6l-2 3h-4l-2-3H2"></path><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg>
           Inbox
+          <span class="badge" id="count-inbox">0</span>
         </button>
         <button class="nav-item" data-view="reopened">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
           Reopened
+          <span class="badge" id="count-reopened">0</span>
         </button>
         <button class="nav-item" data-view="">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
@@ -76,15 +78,15 @@
           <div id="export-dropdown-menu" class="export-dropdown-menu" role="menu" aria-label="Export options" popover>
             <button class="export-option-btn" role="menuitem" data-format="markdown">
               <span class="option-title">Markdown (.md)</span>
-              <span class="option-desc">One consolidated note (respects active filters)</span>
+              <span class="option-desc">One note with everything you are viewing</span>
             </button>
             <button class="export-option-btn" role="menuitem" data-format="obsidian">
               <span class="option-title">Obsidian vault (.zip)</span>
-              <span class="option-desc">One file per note (respects active filters)</span>
+              <span class="option-desc">One file per note you are viewing</span>
             </button>
             <button class="export-option-btn" role="menuitem" data-format="json">
-              <span class="option-title">JSON Backup (.json)</span>
-              <span class="option-desc">Every note, ignoring active filters; can be re-imported</span>
+              <span class="option-title">JSON backup (.json)</span>
+              <span class="option-desc">Every note, ignoring filters; can be re-imported</span>
             </button>
           </div>
         </div>
@@ -106,6 +108,10 @@
             <span class="brand-subtitle">Notebook</span>
           </div>
         </div>
+        <!-- In a tab, the "current tab" is Tab Squirrel itself, so this only makes sense in the side panel -->
+        <button id="archive-current-btn" class="icon-btn panel-only" hidden title="Save current tab" aria-label="Save current tab">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
+        </button>
         <button id="open-full-btn" class="icon-btn panel-only" title="Open full view in a tab" aria-label="Open full view in a tab" hidden>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
         </button>
@@ -130,19 +136,15 @@
         </details>
       </details>
 
+      <!-- Loud until the first note exists; after that a hairline note the user can dismiss (app.js) -->
       <div id="perm-banner" class="perm-banner" hidden>
         <div>
           <strong>Let Tab Squirrel read pages</strong>
-          <p>Grant permission to read and summarize background tabs.</p>
+          <p>Without it, tabs from sites you haven't allowed stay open and get no note.</p>
         </div>
         <button id="enable-perm-btn" class="perm-btn">Enable</button>
+        <button id="perm-dismiss-btn" class="icon-btn perm-dismiss-btn" title="Dismiss" aria-label="Dismiss" hidden>✕</button>
       </div>
-
-      <!-- In a tab, the "current tab" is Tab Squirrel itself, so this only makes sense in the side panel -->
-      <button id="archive-current-btn" class="quiet-btn panel-only" hidden>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
-        Save current tab
-      </button>
 
       <div class="search-row">
         <div class="search-box">
@@ -166,7 +168,10 @@
         <div class="feed-controls">
           <span id="results-count" class="results-count"></span>
           <details id="view-options" class="view-options">
-            <summary>Sort and view</summary>
+            <summary>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
+              <span class="view-options-label">Sort and view</span>
+            </summary>
             <div class="view-options-body">
             <select id="sort-select" class="sort-select" aria-label="Sort notes" title="Sort notes">
               <option value="newest">Newest</option>
@@ -188,8 +193,6 @@
         <span id="filter-label"></span>
         <button id="clear-filter-btn" class="clear-filter-btn">✕ Clear</button>
       </div>
-
-      <p id="fade-note" class="fade-note" hidden></p>
 
       <div id="tabs-feed" class="feed"></div>
     </main>
@@ -234,7 +237,10 @@
     <dl class="shortcuts-list">
       <div><dt><kbd>j</kbd> <kbd>↓</kbd></dt><dd>Next note</dd></div>
       <div><dt><kbd>k</kbd> <kbd>↑</kbd></dt><dd>Previous note</dd></div>
-      <div><dt><kbd>Enter</kbd></dt><dd>Reopen the selected note</dd></div>
+      <div><dt><kbd>Enter</kbd></dt><dd>Reopen the selected note (or go to its tab, if it is still open)</dd></div>
+      <div><dt><kbd>o</kbd></dt><dd>Open the selected note in the reader</dd></div>
+      <div><dt><kbd>s</kbd></dt><dd>Star or unstar the selected note</dd></div>
+      <div><dt><kbd>Del</kbd></dt><dd>Delete the selected note (Undo for 5 seconds)</dd></div>
       <div><dt><kbd>/</kbd></dt><dd>Search</dd></div>
       <div><dt><kbd>Enter</kbd> <kbd>↓</kbd></dt><dd>In search: jump to the first result</dd></div>
       <div><dt><kbd>Esc</kbd></dt><dd>Leave search (press again to clear it), or close a panel</dd></div>
@@ -242,6 +248,7 @@
       <div><dt><kbd>Cmd/Ctrl</kbd> <kbd>Shift</kbd> <kbd>S</kbd></dt><dd>Open the notebook</dd></div>
       <div><dt><kbd>Cmd/Ctrl</kbd> <kbd>Shift</kbd> <kbd>E</kbd></dt><dd>Save the current tab</dd></div>
     </dl>
+    <p id="shortcuts-fade-note" class="fade-note"></p>
   </dialog>
 
   <div id="toast" class="toast hidden" popover="manual" role="status" aria-live="polite">

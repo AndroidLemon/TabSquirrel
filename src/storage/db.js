@@ -507,6 +507,8 @@ export async function getStats() {
     total: tabs.length,
     today: tabs.filter(t => t.capturedAt >= todayStart).length,
     favorites: tabs.filter(t => t.isFavorite).length,
+    inbox: tabs.filter(t => !t.restoredAt).length, // same split as getArchivedTabs' 'inbox' / 'reopened' views
+    reopened: tabs.filter(t => t.restoredAt).length,
     totalReadingMinutes: tabs.reduce((acc, t) => acc + (t.readingTimeMinutes || 2), 0)
   };
 }

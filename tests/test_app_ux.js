@@ -48,6 +48,10 @@ async function runAppUXTests() {
     assert.match(firstRunTab, /short note of each is kept here/, 'First run says a note is kept');
     assert.match(firstRunTab, /reopens in one click/, 'First run says closed tabs reopen in one click');
     assert.ok(!/Save current tab/.test(firstRunTab), 'The full tab does not offer Save current tab');
+    assert.strictEqual(await page.locator('#perm-banner').isVisible(), true, 'An empty notebook without the permission shows the permission note');
+    assert.strictEqual(await page.locator('#perm-banner').evaluate(el => el.classList.contains('quiet')), false, 'It is not quiet before the first note');
+    assert.strictEqual(await page.locator('#perm-dismiss-btn').isHidden(), true, 'It cannot be dismissed before the first note');
+    assert.strictEqual(await page.locator('#fade-note').count(), 1, 'The fade sentence shows in the empty state');
     const firstRunPanel = await context.newPage();
     await firstRunPanel.addInitScript(() => { chrome.tabs.getCurrent = () => Promise.resolve(undefined); });
     await firstRunPanel.setViewportSize(NARROW);
@@ -121,11 +125,16 @@ async function runAppUXTests() {
     assert.strictEqual(await page.evaluate(() => document.body.dataset.surface), 'tab', 'Opened as a tab, surface must be "tab"');
     assert.strictEqual(await page.locator('#archive-current-btn').isHidden(), true, '"Archive Current Tab" must be hidden when opened as a tab');
     assert.strictEqual(await page.locator('#open-full-btn').isHidden(), true, '"Open full view" must be hidden when opened as a tab');
-    assert.strictEqual(await page.locator('#view-all').getAttribute('aria-current'), 'page', 'Full view opens on All');
+    assert.strictEqual(await page.locator('#view-inbox').getAttribute('aria-current'), 'page', 'Full view opens on the Inbox, like the panel');
     assert.strictEqual(await page.locator('#view-all').getAttribute('aria-pressed'), null, 'View switch uses aria-current, not aria-pressed');
     assert.strictEqual(await page.locator('#sidebar').isHidden(), true, 'Narrow layout hides the sidebar behind the Filters drawer');
     assert.strictEqual(await page.locator('#filters-btn').isVisible(), true, 'Narrow layout shows the Filters button');
     assert.strictEqual(await page.locator('#view-tabs').isVisible(), true, 'Inbox/Reopened/All control stays visible above the feed');
+    const rowGap = await page.evaluate(() => {
+      const mid = (id) => { const r = document.getElementById(id).getBoundingClientRect(); return r.top + r.height / 2; };
+      return Math.max(Math.abs(mid('view-tabs') - mid('results-count')), Math.abs(mid('view-tabs') - mid('view-options')));
+    });
+    assert.ok(rowGap < 20, `The count and Sort and view share the view tabs row (centres ${rowGap}px apart)`);
     assert.strictEqual(await page.locator('.stats-banner').count(), 0, 'The stats strip is gone');
     assert.strictEqual(await page.locator('#sort-select').isHidden(), true, 'Sort and density live in the collapsed drawer');
     assert.strictEqual(await page.locator('#density-toggle-btn').isHidden(), true, 'Density toggle lives in the collapsed drawer');
@@ -218,13 +227,17 @@ async function runAppUXTests() {
     assert.match(await page.textContent('#toast-message'), /Tab reopened/, 'Reopen confirms with a toast');
     console.log('✓ j / k selection and Enter-to-reopen verified\n');
 
-    // j / k move real focus onto the card title (screen readers announce it)
+    // j / k move real focus onto the card itself (screen readers announce it by its title)
     await page.evaluate(() => document.activeElement?.blur());
     await page.keyboard.press('j');
-    assert.strictEqual(await page.evaluate(() => document.activeElement?.className), 'card-title', 'j focuses the selected card title');
-    assert.strictEqual(await page.evaluate(() => document.activeElement?.closest('.tab-card')?.dataset.id), 'test-tab-2', 'Focused title belongs to the selected card');
+    assert.strictEqual(await page.evaluate(() => document.activeElement?.classList.contains('tab-card')), true, 'j focuses the selected card');
+    assert.strictEqual(await page.evaluate(() => document.activeElement?.dataset.id), 'test-tab-2', 'The focused card is the selected one');
+    assert.strictEqual(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), 'Modern Web APIs and Ergonomics', 'The card is named by its title');
+    assert.strictEqual(await page.evaluate(() => document.activeElement?.getAttribute('tabindex')), '-1', 'Cards take focus from j/k but are not tab stops');
+    assert.strictEqual(await page.evaluate(() => getComputedStyle(document.activeElement).outlineStyle), 'solid', 'A selected card shows its halo outline');
+    assert.strictEqual(await page.locator('.tab-card[data-id="test-tab-2"] .card-title-btn').evaluate(el => getComputedStyle(el).outlineStyle), 'none', 'The title button adds no second outline while the card is focused');
     await page.evaluate(() => document.activeElement?.blur());
-    console.log('✓ j / k move focus to the card title\n');
+    console.log('✓ j / k move focus to the card\n');
 
     // --- Toast: hover pauses the Undo timer; hidden toast leaves the tab order; failed Undo is honest ---
     console.log('--- Toast: pause, tab order, honest Undo ---');
@@ -305,6 +318,8 @@ async function runAppUXTests() {
 
     // --- TEST 7: Reader view fills the panel ---
     console.log('--- Test 7: Reader View (narrow) ---');
+    assert.strictEqual(await page.getAttribute('.tab-card[data-id="test-tab-1"] .reader-btn', 'aria-label'), 'Read note', 'The reader button is labelled Read note');
+    assert.strictEqual(await page.getAttribute('.tab-card[data-id="test-tab-1"] .reader-btn', 'title'), 'Read note', 'Its tooltip says Read note too');
     await page.click('.tab-card[data-id="test-tab-1"] .reader-btn');
     await page.waitForFunction(() => document.getElementById('modal-text-content').textContent.includes('full article text'));
     assert.strictEqual(await page.textContent('#modal-title'), 'Deep Learning and Neural Networks');
@@ -409,6 +424,7 @@ async function runAppUXTests() {
     await page.waitForFunction((sel) => !document.querySelector(sel), removeCardSel);
     await page.evaluate(() => { chrome.runtime.sendMessage = window.__realSend; });
     await page.locator('#toast-undo-btn').click();
+    await page.click('#view-reopened'); // the restored note is Reopened, so it is not in the Inbox the page opens on
     await page.waitForSelector(removeCardSel);
     const afterUndo = await page.evaluate(async () => {
       const { getTabById } = await import('/src/storage/db.js');
@@ -513,6 +529,10 @@ async function runAppUXTests() {
     await page.click('#export-dropdown-btn');
     assert.strictEqual(await exportMenu.isVisible(), true, 'Export menu opens');
     assert.strictEqual(await exportMenu.locator('.export-option-btn').count(), 3, 'Export offers Markdown, Obsidian and JSON');
+    assert.ok(!/respects active filters/i.test(await exportMenu.textContent()), 'The export menu does not repeat "respects active filters"');
+    assert.strictEqual(await exportMenu.locator('[data-format="json"] .option-title').textContent(), 'JSON backup (.json)', 'Export titles are sentence case');
+    assert.match(await exportMenu.locator('[data-format="json"] .option-desc').textContent(), /ignoring filters/, 'JSON says it ignores filters');
+    assert.match(await exportMenu.locator('[data-format="markdown"] .option-desc').textContent(), /you are viewing/, 'Markdown says it follows the current view');
     await page.keyboard.press('Escape');
     assert.strictEqual(await exportMenu.isHidden(), true, 'Escape closes the export menu');
     await page.click('#export-dropdown-btn');
@@ -761,6 +781,20 @@ async function runAppUXTests() {
     await sortPage.setViewportSize(NARROW);
     await sortPage.goto(APP_URL);
     await sortPage.waitForSelector('body[data-surface="panel"]');
+    const saveBtn = sortPage.locator('.topbar #archive-current-btn');
+    assert.strictEqual(await saveBtn.count(), 1, 'Save current tab is an icon button in the topbar');
+    assert.strictEqual(await saveBtn.getAttribute('aria-label'), 'Save current tab', 'It is named for assistive tech');
+    assert.strictEqual(await saveBtn.getAttribute('title'), 'Save current tab', 'It has a tooltip');
+    await sortPage.evaluate(() => {
+      window.__sent = null;
+      window.__realSend = chrome.runtime.sendMessage;
+      chrome.runtime.sendMessage = async (msg) => { window.__sent = msg; return { success: true }; };
+    });
+    await saveBtn.click();
+    await sortPage.waitForFunction(() => /Saved a note/.test(document.getElementById('toast-message').textContent));
+    assert.strictEqual(await sortPage.evaluate(() => window.__sent.type), 'ARCHIVE_ACTIVE_TAB', 'It still saves the active tab');
+    await sortPage.waitForFunction(() => !document.getElementById('archive-current-btn').disabled && !document.getElementById('archive-current-btn').hasAttribute('aria-busy')); // usable again after saving
+    await sortPage.evaluate(() => { chrome.runtime.sendMessage = window.__realSend; });
     await sortPage.click('#view-options > summary');
     await sortPage.selectOption('#sort-select', 'oldest');
     await sortPage.waitForFunction(async () => (await chrome.storage.local.get('notebook_sort')).notebook_sort === 'oldest');
@@ -791,6 +825,16 @@ async function runAppUXTests() {
     await hub.waitForSelector('.tab-card[data-id="inbox-note"]', { timeout: 5000 });
     await hub.click('.nav-item[data-view="inbox"]');
     await hub.waitForFunction(() => !document.querySelector('.tab-card[data-id="reopened-note"]'));
+    const viewCounts = await hub.evaluate(async () => {
+      const { getArchivedTabs } = await import('/src/storage/db.js');
+      return {
+        inbox: String((await getArchivedTabs({ view: 'inbox', limit: Infinity })).length),
+        reopened: String((await getArchivedTabs({ view: 'reopened', limit: Infinity })).length)
+      };
+    });
+    assert.strictEqual(await hub.textContent('#count-inbox'), viewCounts.inbox, 'Inbox has a count badge');
+    assert.strictEqual(await hub.textContent('#count-reopened'), viewCounts.reopened, 'Reopened has a count badge');
+    assert.notStrictEqual(viewCounts.reopened, '0', 'The fixture has a reopened note, so the badge is not trivially zero');
 
     let ids = await cardIds(hub);
     assert.ok(ids.includes('fading-note') && !ids.includes('reopened-note'), `Inbox must hide reopened notes, got ${ids}`);
@@ -824,10 +868,23 @@ async function runAppUXTests() {
     await hub.selectOption('#sort-select', 'newest');
     await hub.waitForFunction(() => document.querySelector('#sort-select').value === 'newest'
       && ![...document.querySelectorAll('.fade-chip')].some(c => c.textContent.startsWith('Fades in')));
-    assert.match(await hub.textContent('#fade-note'), /^Notes fade after \d+ days.*unless you star them\.$/, 'One quiet line explains fading');
+    assert.strictEqual(await hub.locator('#fade-note').count(), 0, 'The fade sentence is not above the feed');
     const dateOf = (id) => hub.locator(`.tab-card[data-id="${id}"] .fade-date`);
-    assert.match(await dateOf('inbox-note').textContent(), /fades [A-Z][a-z]{2} \d{1,2}/, 'An unstarred note shows when it fades');
-    assert.match(await dateOf('reopened-note').textContent(), /fades [A-Z][a-z]{2} \d{1,2}/, 'A reopened note shows its fade date too');
+    assert.strictEqual(await dateOf('inbox-note').count(), 0, 'A note 29 days from fading shows no date');
+    assert.match(await dateOf('reopened-note').textContent(), /fades [A-Z][a-z]{2} \d{1,2}/, 'A reopened note (7 days left) shows its fade date');
+    // 5 days out is inside the 7-day window and outside the 3-day chip: the date shows, the chip does not
+    await hub.evaluate(async () => {
+      const { saveArchivedTab } = await import('/src/storage/db.js');
+      await saveArchivedTab({ id: 'near-note', url: 'https://notes.example/near-note', title: 'near-note', capturedAt: Date.now() - 25 * 24 * 60 * 60 * 1000,
+        status: 'archived', summary: { tldr: 'near-note summary', bullets: [], tags: [] } });
+    });
+    await background.evaluate(() => chrome.runtime.sendMessage({ type: 'TABS_CLOSED' }).catch(() => {}));
+    await hub.waitForSelector('.tab-card[data-id="near-note"]');
+    assert.match(await dateOf('near-note').textContent(), /fades [A-Z][a-z]{2} \d{1,2}/, 'A note 5 days from fading shows its date');
+    assert.strictEqual(await hub.locator('.tab-card[data-id="near-note"] .fade-chip').count(), 0, 'It is outside the 3-day chip window');
+    await hub.evaluate(async () => (await import('/src/storage/db.js')).softDeleteTab('near-note'));
+    await background.evaluate(() => chrome.runtime.sendMessage({ type: 'TABS_CLOSED' }).catch(() => {}));
+    await hub.waitForFunction(() => !document.querySelector('.tab-card[data-id="near-note"]'));
     assert.strictEqual(await dateOf('fading-note').count(), 0, 'A starred note shows no fade date');
     assert.strictEqual(await hub.locator('.tab-card[data-id="fading-note"] .fade-chip').count(), 0, 'A starred note shows no chip either');
     assert.match(await hub.getAttribute('.tab-card[data-id="inbox-note"] .star-btn', 'aria-label'), /^Star: keep this note; it won't fade$/, 'Star says what it does');
@@ -837,7 +894,7 @@ async function runAppUXTests() {
     assert.strictEqual(await dateOf('fading-note').count(), 0, 'Inside the warning window the chip replaces the date');
     await hub.click('.tab-card[data-id="fading-note"] .star-btn'); // re-star
     await hub.waitForFunction(() => !document.querySelector('.tab-card[data-id="fading-note"] .fade-chip'));
-    console.log('✓ Fade explanation, per-card fade date (none when starred, chip takes over near the end), star label');
+    console.log('✓ Per-card fade date (only within 7 days; none when starred, chip takes over in the last 3), star label');
 
     // Reader: fade line plus Reopen / Star / Delete
     await hub.click('.tab-card[data-id="inbox-note"] .reader-btn');
@@ -892,7 +949,7 @@ async function runAppUXTests() {
     console.log('✓ Reader Star works after the card left the feed');
 
     // A background refresh must not pull focus out of the search box
-    await hub.focus('.tab-card[data-id="inbox-note"] .card-title');
+    await hub.focus('.tab-card[data-id="inbox-note"]');
     await hub.keyboard.press('j');
     await hub.focus('#search-input');
     await hub.evaluate(() => { document.querySelector('#tabs-feed .tab-card').dataset.stale = '1'; });
@@ -903,13 +960,17 @@ async function runAppUXTests() {
     console.log('✓ Background refresh keeps focus in search');
 
     // Shortcuts legend: ? opens, Escape closes, focus returns
-    await hub.focus('.tab-card[data-id="inbox-note"] .card-title');
+    await hub.focus('.tab-card[data-id="inbox-note"]');
     await hub.keyboard.press('?');
     await hub.waitForSelector('#shortcuts-dialog[open]');
     assert.match(await hub.textContent('#shortcuts-dialog'), /Keyboard shortcuts[\s\S]*Reopen[\s\S]*Search/, 'Legend lists the shortcuts');
+    assert.match(await hub.textContent('#shortcuts-fade-note'), /^Notes fade after \d+ days.*unless you star them\.$/, 'The legend carries the one-line fade explanation');
+    for (const key of ['o', 's', 'Del']) {
+      assert.ok((await hub.locator('#shortcuts-dialog kbd').allTextContents()).includes(key), `The legend lists ${key}`);
+    }
     await hub.keyboard.press('Escape');
     assert.strictEqual(await hub.evaluate(() => document.getElementById('shortcuts-dialog').open), false, 'Escape closes the legend');
-    assert.strictEqual(await hub.evaluate(() => document.activeElement.matches('.tab-card[data-id="inbox-note"] .card-title')), true, 'Focus returns to where it was');
+    assert.strictEqual(await hub.evaluate(() => document.activeElement.matches('.tab-card[data-id="inbox-note"]')), true, 'Focus returns to where it was');
     console.log('✓ ? opens the legend; Escape closes it and focus returns');
 
     // Enter in search focuses the first result without reopening it
@@ -921,7 +982,7 @@ async function runAppUXTests() {
     await hub.keyboard.press('/');
     await hub.fill('#search-input', 'summary');
     await hub.keyboard.press('Enter');
-    await hub.waitForFunction(() => document.activeElement?.matches('.tab-card .card-title'));
+    await hub.waitForFunction(() => document.activeElement?.matches('.tab-card'));
     const firstId = await hub.evaluate(() => document.querySelector('#tabs-feed .tab-card').dataset.id);
     assert.strictEqual(await hub.evaluate(() => document.activeElement.closest('.tab-card').dataset.id), firstId, 'Enter focuses the first result');
     assert.strictEqual(await hub.evaluate(() => window.__sent), null, 'Enter in search does not reopen anything');
@@ -934,6 +995,130 @@ async function runAppUXTests() {
     await hub.waitForFunction(() => document.getElementById('search-input').value === '');
     await hub.evaluate(() => { chrome.runtime.sendMessage = window.__realSend; });
     console.log('✓ Enter in search focuses the first result; Escape keeps the query, a second one clears it\n');
+
+    // --- TEST 14: title button, Go to tab, card keys, scoped search, permission note ---
+    console.log('--- Test 14: Title Button, Go to Tab, Card Keys, Scoped Search, Permission Note ---');
+    const refreshHub = async () => background.evaluate(() => chrome.runtime.sendMessage({ type: 'TABS_CLOSED' }).catch(() => {}));
+    await hub.evaluate(async () => {
+      const { saveArchivedTab } = await import('/src/storage/db.js');
+      const note = (id, status) => saveArchivedTab({
+        id, url: `https://live.example/${id}`, title: id, capturedAt: Date.now(), status,
+        summary: { tldr: `${id} gist`, bullets: [], tags: [] }
+      });
+      await note('saved-note', 'captured');
+      await note('sleeping-note', 'discarded');
+    });
+    await refreshHub();
+    await hub.waitForSelector('.tab-card[data-id="sleeping-note"]');
+    const primary = (id) => hub.locator(`.tab-card[data-id="${id}"] .restore-btn`).textContent().then(t => t.trim());
+    assert.strictEqual(await primary('saved-note'), 'Go to tab', 'A Saved note (tab still open) says Go to tab');
+    assert.strictEqual(await primary('sleeping-note'), 'Go to tab', 'A Sleeping note says Go to tab');
+    assert.strictEqual(await primary('inbox-note'), 'Reopen tab', 'A closed note says Reopen tab');
+    await hub.click('.tab-card[data-id="saved-note"] .reader-btn');
+    assert.strictEqual((await hub.textContent('#modal-reopen-btn')).trim(), 'Go to tab', 'The reader says the same');
+    await hub.keyboard.press('Escape');
+    console.log('✓ Saved and Sleeping notes say Go to tab; closed notes say Reopen tab');
+
+    // The title is a real button that opens the reader; it does not reopen anything
+    await hub.evaluate(() => {
+      window.__sent = null;
+      window.__realSend = chrome.runtime.sendMessage;
+      chrome.runtime.sendMessage = async (msg) => { window.__sent = msg; return { success: true }; };
+    });
+    const titleBtn = hub.locator('.tab-card[data-id="inbox-note"] h3.card-title > button.card-title-btn');
+    assert.strictEqual(await titleBtn.getAttribute('aria-label'), 'Read note: inbox-note', 'The title button is named "Read note: {title}"');
+    await titleBtn.click();
+    await hub.waitForSelector('#reader-dialog[open]');
+    assert.strictEqual(await hub.textContent('#modal-title'), 'inbox-note', 'Clicking the title opens that note in the reader');
+    assert.strictEqual(await hub.evaluate(() => window.__sent), null, 'Clicking the title does not reopen the tab');
+    await hub.keyboard.press('Escape');
+    await titleBtn.focus();
+    await hub.keyboard.press('Enter');
+    await hub.waitForSelector('#reader-dialog[open]');
+    await hub.keyboard.press('Escape');
+    await titleBtn.focus();
+    await hub.keyboard.press('Space');
+    await hub.waitForSelector('#reader-dialog[open]');
+    await hub.keyboard.press('Escape');
+    assert.strictEqual(await hub.evaluate(() => window.__sent), null, 'Enter and Space on the title open the reader, not the tab');
+    assert.strictEqual(await hub.evaluate(() => document.activeElement.matches('.tab-card[data-id="inbox-note"] .card-title-btn')), true, 'Closing the reader returns focus to the title button');
+    await hub.evaluate(() => { chrome.runtime.sendMessage = window.__realSend; });
+    console.log('✓ The title is a button that opens the reader (click, Enter, Space)');
+
+    // s / o / Delete act on the j/k-selected card, and are ignored while typing or in a dialog
+    await hub.evaluate(() => document.activeElement?.blur());
+    await hub.keyboard.press('j');
+    const selectedId = await hub.evaluate(() => document.activeElement.dataset.id);
+    const starred = () => hub.locator(`.tab-card[data-id="${selectedId}"] .star-btn`).evaluate(el => el.classList.contains('active'));
+    const wasStarred = await starred();
+    await hub.keyboard.press('s');
+    await hub.waitForFunction(([id, was]) => document.querySelector(`.tab-card[data-id="${id}"] .star-btn`).classList.contains('active') !== was, [selectedId, wasStarred]);
+    await hub.keyboard.press('s');
+    await hub.waitForFunction(([id, was]) => document.querySelector(`.tab-card[data-id="${id}"] .star-btn`).classList.contains('active') === was, [selectedId, wasStarred]);
+    await hub.keyboard.press('o');
+    await hub.waitForSelector('#reader-dialog[open]');
+    assert.strictEqual(await hub.textContent('#modal-title'), selectedId, 'o opens the selected note in the reader');
+    await hub.keyboard.press('s'); // the reader is a dialog: keys do not reach the feed
+    assert.strictEqual(await starred(), wasStarred, 's is ignored while the reader is open');
+    await hub.keyboard.press('Escape');
+    await hub.focus('#search-input');
+    await hub.keyboard.press('o');
+    await hub.keyboard.press('s');
+    assert.strictEqual(await hub.evaluate(() => document.getElementById('reader-dialog').open), false, 'o is typed, not run, while searching');
+    assert.strictEqual(await starred(), wasStarred, 's is typed, not run, while searching');
+    await hub.fill('#search-input', '');
+    await hub.waitForFunction(() => document.getElementById('search-input').value === '' && document.querySelectorAll('#tabs-feed .tab-card').length > 3);
+    await hub.keyboard.press('Escape');
+    for (const key of ['Delete', 'Backspace']) {
+      await hub.evaluate(() => document.activeElement?.blur());
+      await hub.keyboard.press('j');
+      const doomed = await hub.evaluate(() => document.activeElement.dataset.id);
+      await hub.keyboard.press(key);
+      await hub.locator('#toast-undo-btn').waitFor({ state: 'visible', timeout: 2000 });
+      assert.match(await hub.textContent('#toast-message'), /Note deleted/, `${key} deletes the selected note with an Undo toast`);
+      assert.strictEqual(await hub.evaluate(async (id) => !(await (await import('/src/storage/db.js')).getArchivedTabs({ limit: Infinity })).some(t => t.id === id), doomed), true, `${key} deleted ${doomed}`);
+      await hub.click('#toast-undo-btn');
+      await hub.waitForSelector(`.tab-card[data-id="${doomed}"]:not(.removing)`);
+      await hub.keyboard.press('Escape');
+    }
+    console.log('✓ s, o, Delete and Backspace act on the selected card; typing and dialogs are left alone');
+
+    // A scoped search that finds nothing names the view and offers All notes, keeping the query
+    await hub.click('.nav-item[data-view="inbox"]');
+    await hub.fill('#search-input', 'reopened-note');
+    await hub.waitForSelector('#tabs-feed .empty-state');
+    const scopedText = await hub.textContent('#tabs-feed .empty-state');
+    assert.match(scopedText, /Inbox/, 'The empty search says it searched the Inbox');
+    assert.match(scopedText, /reopened-note/, 'It repeats the query');
+    await hub.click('#tabs-feed .empty-action-btn');
+    await hub.waitForSelector('.tab-card[data-id="reopened-note"]');
+    assert.strictEqual(await hub.locator('.nav-item[data-view=""]').getAttribute('aria-current'), 'page', 'Search all notes switches to All notes');
+    assert.strictEqual(await hub.inputValue('#search-input'), 'reopened-note', 'It keeps the query');
+    await hub.click('.nav-item[data-time="favorites"]');
+    await hub.fill('#search-input', 'no-such-note');
+    await hub.waitForSelector('#tabs-feed .empty-state');
+    assert.match(await hub.textContent('#tabs-feed .empty-state'), /Starred/, 'A Starred search names Starred');
+    await hub.click('.nav-item[data-view=""]');
+    await hub.waitForFunction(() => /No matching notes/.test(document.querySelector('#tabs-feed .empty-state')?.textContent || ''));
+    assert.strictEqual(await hub.locator('#tabs-feed .empty-action-btn').count(), 0, 'A search that already covers every note offers no wider search');
+    await hub.fill('#search-input', '');
+    await hub.waitForSelector('.tab-card[data-id="inbox-note"]');
+    console.log('✓ Scoped no-results names the view and Search all notes keeps the query');
+
+    // Once notes exist the permission note is a quiet, dismissible hairline; dismissing sticks
+    const permBanner = hub.locator('#perm-banner');
+    assert.strictEqual(await permBanner.isVisible(), true, 'The permission note shows while permission is missing');
+    assert.strictEqual(await permBanner.evaluate(el => el.classList.contains('quiet')), true, 'With notes it is quiet');
+    assert.strictEqual(await permBanner.evaluate(el => getComputedStyle(el).backgroundColor), 'rgba(0, 0, 0, 0)', 'Quiet means no ink-wash fill');
+    assert.match(await permBanner.textContent(), /stay open and get no note/, 'It says what happens without the permission');
+    await hub.click('#perm-dismiss-btn');
+    assert.strictEqual(await permBanner.isHidden(), true, 'Dismiss hides the note');
+    assert.strictEqual(await hub.evaluate(async () => (await chrome.storage.local.get('perm_banner_dismissed')).perm_banner_dismissed), true, 'The dismissal is stored');
+    await hub.reload();
+    await hub.waitForSelector('.tab-card');
+    assert.strictEqual(await hub.locator('#perm-banner').isHidden(), true, 'The dismissal survives a reload');
+    await hub.evaluate(() => chrome.storage.local.remove('perm_banner_dismissed'));
+    console.log('✓ Permission note is quiet with notes, dismissible, and the dismissal persists\n');
     await hub.close();
 
     console.log('========================================================');

@@ -207,8 +207,8 @@ async function runShortcutsTests() {
     await helperPage.keyboard.press('Enter');
     await helperPage.waitForTimeout(600);
 
-    const focusedTitle = await helperPage.evaluate(() => document.activeElement.matches('.tab-card .card-title'));
-    assert.strictEqual(focusedTitle, true, 'Enter must move focus to the first result');
+    const focusedCard = await helperPage.evaluate(() => document.activeElement.matches('.tab-card'));
+    assert.strictEqual(focusedCard, true, 'Enter must move focus to the first result');
     const toastShown = await helperPage.locator('#toast').evaluate(el => !el.classList.contains('hidden'));
     assert.strictEqual(toastShown, false, 'Enter in search must not reopen the note (no toast)');
     console.log('✓ Enter focused the first result without reopening it');

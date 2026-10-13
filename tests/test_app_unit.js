@@ -122,7 +122,7 @@ for (const id of [
   'enable-perm-btn', 'view-inbox', 'view-reopened', 'view-all', 'sort-select', 'density-toggle-btn',
   'closed-today', 'closed-today-reopen-all', 'closed-today-list', 'tabs-feed', 'toast-undo-btn', 'toast-progress', 'filters-btn', 'sidebar', 'sidebar-tags',
   'sidebar-domains', 'filter-banner', 'clear-filter-btn', 'results-count', 'export-dropdown-btn', 'settings-btn',
-  'view-options', 'archive-current-btn', 'open-full-btn'
+  'view-options', 'archive-current-btn', 'open-full-btn', 'perm-dismiss-btn', 'count-inbox', 'count-reopened', 'shortcuts-fade-note'
 ]) {
   assert.ok(htmlContent.includes(`id="${id}"`), `index.html must include #${id}`);
 }
@@ -135,6 +135,9 @@ for (const sort of ['newest', 'oldest', 'reading-time-asc', 'reading-time-desc',
 assert.ok(!htmlContent.includes('stats-banner') && !htmlContent.includes('id="stat-'), 'The stats strip is gone');
 assert.ok(/id="archive-current-btn" class="[^"]*panel-only[^"]*" hidden/.test(htmlContent), 'Archive Current Tab must be panel-only and hidden until the surface is known');
 assert.ok(/id="open-full-btn" class="[^"]*panel-only[^"]*"/.test(htmlContent), 'Open full view must be panel-only');
+assert.ok(/<header class="topbar">[\s\S]*id="archive-current-btn"[\s\S]*<\/header>/.test(htmlContent), 'Save current tab lives in the topbar');
+assert.ok(/id="archive-current-btn"[^>]*aria-label="Save current tab"/.test(htmlContent) && /id="archive-current-btn"[^>]*title="Save current tab"/.test(htmlContent), 'Save current tab is an icon button with a label and tooltip');
+assert.ok(!htmlContent.includes('id="fade-note"'), 'The fade sentence is not static markup above the feed');
 assert.ok(!/\son[a-z]+\s*=/.test(htmlContent), 'index.html must not use inline event handlers (blocked by MV3 CSP)');
 
 // Test 10: Verify src/app/app.css rules

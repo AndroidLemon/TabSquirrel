@@ -2,7 +2,7 @@
  * Tab Squirrel - Shared HTML helpers for extension pages (side panel, wiki, options).
  */
 
-import { fadeChipLabel, fadeDateLabel } from './fade.js';
+import { fadeChipLabel, fadeDateLabel, FADE_DATE_DAYS } from './fade.js';
 
 /** "Fading soon" chip, or nothing when this note should not show one. */
 export function fadeChipHtml(tab, settings, sortBy) {
@@ -10,10 +10,10 @@ export function fadeChipHtml(tab, settings, sortBy) {
   return label ? `<span class="fade-chip">${label}</span>` : '';
 }
 
-/** Quiet "fades Oct 30" text; nothing for starred notes, or when the "Fading soon" chip already says it. */
+/** Quiet "fades Oct 30" text; nothing for starred notes, when the "Fading soon" chip already says it, or beyond FADE_DATE_DAYS. */
 export function fadeDateHtml(tab, settings, sortBy) {
   if (fadeChipLabel(tab, settings, sortBy)) return '';
-  const label = fadeDateLabel(tab, settings);
+  const label = fadeDateLabel(tab, settings, Date.now(), FADE_DATE_DAYS);
   return label ? `<span class="fade-date"> · ${label}</span>` : '';
 }
 

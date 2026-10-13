@@ -53,6 +53,8 @@ const DENSITY_KEY = 'sidepanel_density'; // pre-merge storage key, kept so saved
 const RECEIPT_SEEN_KEY = 'closed_today_seen'; // { day, upTo }: today's receipt was shown up to this lastClosedAt
 const RECEIPT_ROWS_VISIBLE = 3; // the rest sit behind "Show all"
 const REOPEN_ALL_CONFIRM_ABOVE = 5; // more still-closed rows than this and Reopen all asks first
+const PERM_DISMISSED_KEY = 'perm_banner_dismissed'; // the quiet permission note was dismissed
+const VIEW_LABELS = { inbox: 'Inbox', reopened: 'Reopened' };
 
 let fadeSettings = null;
 let tabsById = new Map();
@@ -65,6 +67,9 @@ let readerTab = null;
 let receiptSeenUpTo = null; // newest lastClosedAt already shown today; null until read from storage
 let receiptById = new Map(); // today's receipt rows, so a row title can open its note in the reader
 let reopenFailedIds = new Set(); // rows the last Reopen all could not reopen
+let permMissing = false; // the all-sites permission is not granted
+let permDismissed = false; // the user dismissed the quiet permission note
+let noteTotal = 0; // every note, whatever the view: decides how loud the permission note is
 
 const ICONS = {
   reopen: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>',
@@ -73,6 +78,14 @@ const ICONS = {
   copy: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>',
   trash: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>',
   empty: '<img class="empty-icon" src="../assets/icons/icon-48.png" alt="" width="40" height="40">'
+};
+
+// Keys that act on the j/k-selected card.
+const CARD_KEYS = {
+  s: (tab, card) => toggleStar(tab, card),
+  o: (tab) => openReader(tab),
+  Delete: (tab, card) => deleteCard(tab, card),
+  Backspace: (tab, card) => deleteCard(tab, card)
 };
 
 const SKELETONS = '<div class="skeleton-card"><div class="skeleton-line" style="width:40%"></div><div class="skeleton-line" style="width:75%;height:16px"></div><div class="skeleton-line" style="height:32px"></div></div>'.repeat(3);
@@ -100,7 +113,7 @@ async function init() {
     currentTab = await chrome.tabs.getCurrent();
   } catch {}
   state.surface = currentTab ? 'tab' : 'panel';
-  state.view = state.surface === 'panel' ? 'inbox' : '';
+  state.view = 'inbox';
   document.body.dataset.surface = state.surface;
   document.querySelectorAll('.panel-only').forEach(el => { el.hidden = state.surface !== 'panel'; });
 
@@ -136,8 +149,12 @@ async function updateStats() {
   const stats = await getStats();
   const set = (id, value) => { $(id).textContent = value; };
   set('count-all', stats.total);
+  set('count-inbox', stats.inbox);
+  set('count-reopened', stats.reopened);
   set('count-today', stats.today);
   set('count-favorites', stats.favorites || 0);
+  noteTotal = stats.total;
+  syncPermBanner();
 }
 
 async function renderSidebarFilters() {
@@ -343,9 +360,6 @@ async function renderFeed(showSkeletons = false) {
   fadeSettings = settings;
   tabsById = new Map(tabs.map(tab => [String(tab.id), tab]));
   setResultsCount(tabs.length);
-  const fadeNote = fadeExplanation(settings);
-  $('fade-note').textContent = fadeNote;
-  $('fade-note').hidden = !fadeNote || tabs.length === 0;
 
   if (tabs.length === 0) {
     const total = (await getStats().catch(() => null))?.total ?? 1; // unknown: don't claim a first run
@@ -384,20 +398,34 @@ export function firstRunCopy(settings, surface) {
   return { title: 'Nothing here yet', lines };
 }
 
+/** The view a search is limited to, named for the user; '' for All notes and the date ranges. */
+function searchScope() {
+  return state.time === 'favorites' ? 'Starred' : state.time ? '' : VIEW_LABELS[state.view] || '';
+}
+
 function emptyStateHtml(settings, total) {
   const hasFilter = Boolean(state.query || state.tag || state.domain || state.time);
+  const scope = searchScope();
   let title;
   let lines;
+  let action = '';
   if (total === 0 && !hasFilter) {
     ({ title, lines } = firstRunCopy(settings, state.surface));
   } else if (state.view === 'inbox' && !hasFilter) {
     title = 'Nothing new in your Inbox';
     lines = ['New captures land here until you reopen, star, or delete them.'];
+  } else if (state.query && scope) {
+    title = `No matches in ${scope}`;
+    lines = [`Searched ${scope} only for “${escapeHtml(state.query)}”.`];
+    action = '<button class="empty-action-btn" type="button" data-action="search-all">Search all notes</button>';
   } else {
     title = 'No matching notes';
     lines = ['Try adjusting your search terms or filters.'];
   }
-  return `<div class="empty-state">${ICONS.empty}<div class="empty-title">${title}</div><div class="empty-desc">${lines.map(line => `<p>${line}</p>`).join('')}</div></div>`;
+  // Fading is explained where the notebook is empty and in the shortcuts list, not above every feed.
+  const fade = !hasFilter && fadeExplanation(settings);
+  if (fade) lines.push(`<span id="fade-note" class="fade-note">${escapeHtml(fade)}</span>`);
+  return `<div class="empty-state">${ICONS.empty}<div class="empty-title">${title}</div><div class="empty-desc">${lines.map(line => `<p>${line}</p>`).join('')}</div>${action}</div>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -426,6 +454,11 @@ function starLabel(isFavorite) {
   return isFavorite ? 'Unstar: let this note fade again' : 'Star: keep this note; it won\'t fade';
 }
 
+/** Saved (tab still open) and Sleeping (discarded) notes have a tab to switch to; every other note reopens one. */
+function hasLiveTab(tab) {
+  return tab.status === 'captured' || tab.status === 'discarded';
+}
+
 function cardHtml(tab) {
   const q = state.query;
   const bullets = toSafeStringArray(tab.summary?.bullets);
@@ -433,7 +466,7 @@ function cardHtml(tab) {
   const star = starLabel(tab.isFavorite);
   const flags = getStatusBadge(tab) + fadeChipHtml(tab, fadeSettings, state.sortBy);
   return `
-    <article class="tab-card" data-id="${escapeHtml(tab.id)}">
+    <article class="tab-card" data-id="${escapeHtml(tab.id)}" tabindex="-1" aria-label="${escapeHtml(tab.title)}">
       <div class="card-header">
         <div class="card-source">
           <img class="favicon" src="${escapeHtml(faviconUrl(tab.url))}" alt="">
@@ -442,17 +475,17 @@ function cardHtml(tab) {
         <span class="card-time" title="Saved ${escapeHtml(new Date(tab.capturedAt).toLocaleString())}">${tab.readingTimeMinutes || 1} min read · saved ${formatTimeAgo(tab.capturedAt)}${fadeDateHtml(tab, fadeSettings, state.sortBy)}</span>
         ${flags ? `<div class="card-flags">${flags}</div>` : ''}
       </div>
-      <h3 class="card-title" tabindex="0" title="${escapeHtml(tab.title)}">${highlightSearch(tab.title, q)}</h3>
+      <h3 class="card-title"><button class="card-title-btn" type="button" title="${escapeHtml(tab.title)}" aria-label="Read note: ${escapeHtml(tab.title)}">${highlightSearch(tab.title, q)}</button></h3>
       ${tab.summary?.tldr ? `<div class="card-tldr">${highlightSearch(tab.summary.tldr, q)}</div>` : '<div class="card-tldr card-tldr-empty">No AI note for this tab</div>'}
       ${bullets.length ? `
         <button class="takeaways-toggle" type="button" aria-expanded="false"><span class="takeaways-chevron">▶</span> Key takeaways (${bullets.length})</button>
         <ul class="card-bullets collapsed">${bullets.map(b => `<li>${highlightSearch(b, q)}</li>`).join('')}</ul>` : ''}
       ${tags.length ? `<div class="card-tags">${tags.map(t => `<button type="button" class="card-tag" data-tag="${escapeHtml(t)}" title="Filter by #${escapeHtml(t)}">#${highlightSearch(t, q)}</button>`).join('')}</div>` : ''}
       <div class="card-footer">
-        <button class="restore-btn">${ICONS.reopen} Reopen tab</button>
+        <button class="restore-btn">${ICONS.reopen} ${hasLiveTab(tab) ? 'Go to tab' : 'Reopen tab'}</button>
         <div class="card-actions">
           <button class="action-icon-btn star-btn${tab.isFavorite ? ' active' : ''}" title="${star}" aria-label="${star}">${ICONS.star}</button>
-          <button class="action-icon-btn reader-btn" title="Reader view (full text)" aria-label="Reader view">${ICONS.reader}</button>
+          <button class="action-icon-btn reader-btn" title="Read note" aria-label="Read note">${ICONS.reader}</button>
           <button class="action-icon-btn copy-btn" title="Copy note (Markdown)" aria-label="Copy note">${ICONS.copy}</button>
           <button class="action-icon-btn delete-btn" title="Delete note" aria-label="Delete note">${ICONS.trash}</button>
         </div>
@@ -461,21 +494,25 @@ function cardHtml(tab) {
 }
 
 async function onFeedClick(e) {
+  if (e.target.closest('[data-action="search-all"]')) {
+    await applyFilters({ view: '', time: '', tag: '', domain: '' }); // the query stays
+    return;
+  }
   const card = e.target.closest('.tab-card');
-  const target = e.target.closest('button, .card-title');
+  const target = e.target.closest('button');
   const tab = card && tabsById.get(card.dataset.id);
   if (!tab || !target || card.classList.contains('removing')) return;
 
-  if (target.matches('.restore-btn, .card-title')) {
+  if (target.matches('.restore-btn')) {
     await reopenTab(tab.url, tab.id);
+  } else if (target.matches('.card-title-btn, .reader-btn')) {
+    await openReader(tab);
   } else if (target.matches('.takeaways-toggle')) {
     const open = target.classList.toggle('open');
     target.setAttribute('aria-expanded', String(open));
     card.querySelector('.card-bullets')?.classList.toggle('collapsed', !open);
   } else if (target.matches('.star-btn')) {
     await toggleStar(tab, card);
-  } else if (target.matches('.reader-btn')) {
-    await openReader(tab);
   } else if (target.matches('.copy-btn')) {
     await copyText(formatNoteSection(tab), 'Copied the note as Markdown.', target);
   } else if (target.matches('.delete-btn')) {
@@ -494,7 +531,7 @@ async function reopenTab(url, recordId) {
     const res = await chrome.runtime.sendMessage({ type: 'RESTORE_TAB', url, recordId });
     if (!res?.success) throw new Error(res?.error || 'no response');
     reopenFailedIds.delete(String(recordId));
-    showToast(res.restoredInPlace ? 'Switched to the sleeping tab.' : 'Tab reopened.');
+    showToast(res.restoredInPlace ? 'Switched to that tab.' : 'Tab reopened.');
     await refresh(); // status, inbox/reopened membership and Closed today all changed
     if (res.removed) showRemovedOnReopenToast(recordId);
   } catch (err) {
@@ -703,8 +740,8 @@ function selectCard(index, { focus = true } = {}) {
   selectedIndex = Math.max(0, Math.min(index, cards.length - 1));
   cards.forEach((card, i) => card.classList.toggle('keyboard-selected', i === selectedIndex));
   cards[selectedIndex].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  // Real focus on the title so screen readers announce the selected note.
-  if (focus) cards[selectedIndex].querySelector('.card-title')?.focus({ preventScroll: true });
+  // Real focus on the card so screen readers announce the selected note by its title.
+  if (focus) cards[selectedIndex].focus({ preventScroll: true });
 }
 
 function clearSelection() {
@@ -799,6 +836,10 @@ async function openReader(tab) {
 function updateReaderActions() {
   if (!readerTab) return;
   $('modal-fade').textContent = fadeChipLabel(readerTab, fadeSettings, state.sortBy) || fadeDateLabel(readerTab, fadeSettings);
+  const reopen = hasLiveTab(readerTab) ? 'Go to tab' : 'Reopen';
+  $('modal-reopen-btn').querySelector('.btn-label').textContent = reopen;
+  $('modal-reopen-btn').title = hasLiveTab(readerTab) ? 'Switch to this tab' : 'Reopen this tab';
+  $('modal-reopen-btn').setAttribute('aria-label', reopen === 'Reopen' ? 'Reopen tab' : reopen);
   const star = starLabel(readerTab.isFavorite);
   const btn = $('modal-star-btn');
   btn.title = star;
@@ -870,9 +911,8 @@ async function closeSidePanel() {
 }
 
 async function archiveCurrentTab(btn) {
-  const label = btn.innerHTML;
   btn.disabled = true;
-  btn.textContent = 'Saving...';
+  btn.setAttribute('aria-busy', 'true');
   try {
     const response = await chrome.runtime.sendMessage({ type: 'ARCHIVE_ACTIVE_TAB' });
     if (response?.success) {
@@ -887,7 +927,7 @@ async function archiveCurrentTab(btn) {
     showToast('Could not save this tab. Please try again.', true);
   } finally {
     btn.disabled = false;
-    btn.innerHTML = label;
+    btn.removeAttribute('aria-busy');
   }
 }
 
@@ -925,9 +965,37 @@ function applyDensity() {
 
 async function checkPermissions() {
   try {
-    $('perm-banner').hidden = await chrome.permissions.contains({ origins: ['<all_urls>'] });
+    permDismissed = Boolean((await chrome.storage.local.get(PERM_DISMISSED_KEY))[PERM_DISMISSED_KEY]);
+  } catch (err) {
+    console.debug('Failed to load permission note state:', err);
+  }
+  try {
+    permMissing = !(await chrome.permissions.contains({ origins: ['<all_urls>'] }));
   } catch (err) {
     console.debug('Permission check error:', err);
+  }
+  syncPermBanner();
+}
+
+/**
+ * The permission note is loud while the notebook is empty (nothing works without it), then a quiet
+ * hairline note once any note exists, which the user can dismiss for good.
+ */
+function syncPermBanner() {
+  const quiet = noteTotal > 0;
+  const banner = $('perm-banner');
+  banner.classList.toggle('quiet', quiet);
+  $('perm-dismiss-btn').hidden = !quiet;
+  banner.hidden = !permMissing || (quiet && permDismissed);
+}
+
+async function dismissPermBanner() {
+  permDismissed = true;
+  syncPermBanner();
+  try {
+    await chrome.storage.local.set({ [PERM_DISMISSED_KEY]: true });
+  } catch (err) {
+    console.debug('Failed to save permission note state:', err);
   }
 }
 
@@ -1022,10 +1090,12 @@ function setupEventListeners() {
     await closeSidePanel();
   });
   $('settings-btn').addEventListener('click', () => chrome.runtime.openOptionsPage());
+  $('perm-dismiss-btn').addEventListener('click', dismissPermBanner);
   $('enable-perm-btn').addEventListener('click', async () => {
     try {
       if (await chrome.permissions.request({ origins: ['<all_urls>'] })) {
-        $('perm-banner').hidden = true;
+        permMissing = false;
+        syncPermBanner();
         showToast('Permission granted.');
       } else {
         showToast('Permission was not granted, so page text can\'t be read yet.', true);
@@ -1151,7 +1221,12 @@ function setupEventListeners() {
 
   // Shortcuts legend: native <dialog>, so Escape closes it and focus returns to the opener
   const legend = $('shortcuts-dialog');
-  $('shortcuts-btn').addEventListener('click', () => { closeDrawer(); legend.showModal(); });
+  const openLegend = () => {
+    closeDrawer();
+    $('shortcuts-fade-note').textContent = fadeExplanation(fadeSettings);
+    legend.showModal();
+  };
+  $('shortcuts-btn').addEventListener('click', openLegend);
   $('shortcuts-close-btn').addEventListener('click', () => legend.close());
   legend.addEventListener('click', (e) => { if (e.target === legend) legend.close(); });
 
@@ -1186,8 +1261,7 @@ function setupEventListeners() {
     }
     if (e.key === '?' && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
       e.preventDefault();
-      closeDrawer();
-      legend.showModal();
+      openLegend();
       return;
     }
     if (typing || drawerOpen) return;
@@ -1198,12 +1272,17 @@ function setupEventListeners() {
     } else if (e.key === 'k' || e.key === 'ArrowUp') {
       e.preventDefault();
       selectCard(selectedIndex - 1);
-    } else if (e.key === 'Enter' && el?.matches('.card-title')) {
-      e.preventDefault();
-      el.click();
     } else if (e.key === 'Enter' && selectedIndex >= 0 && !el?.closest('button, a, summary')) {
       e.preventDefault();
       liveCards()[selectedIndex]?.querySelector('.restore-btn')?.click();
+    } else if (Object.hasOwn(CARD_KEYS, e.key) && selectedIndex >= 0 && !e.ctrlKey && !e.metaKey && !e.altKey &&
+        (!el || el === document.body || feed.contains(el))) {
+      // Act on the selected card, but never on a key pressed in the sidebar or another control.
+      const card = liveCards()[selectedIndex];
+      const tab = card && tabsById.get(card.dataset.id);
+      if (!tab) return;
+      e.preventDefault();
+      await CARD_KEYS[e.key](tab, card);
     }
   });
 }

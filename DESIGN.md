@@ -287,7 +287,7 @@ Ruled and restrained.
 
 ### Notebook parts
 - **Closed today receipt:** a collapsible list at the top of the notebook of tabs closed for you today, each row with favicon on the title line, title, domain, reason, TL;DR and a Reopen button, plus Reopen all.
-- **Quiet fade line:** one muted sentence under the search explaining when notes fade; each card carries its own quiet "fades Nov 12" date.
+- **Quiet fade line:** one muted sentence explaining when notes fade, shown in the empty state and the shortcuts list, not above the feed. A card carries its own quiet "fades Nov 12" date only in the last 7 days (the chip takes over for the last 3).
 
 ### Inputs / Fields
 - **Style:** paper surface with a 1px border in the input-rule colour and an 8px radius. The search icon is inset on the left and the `/` hint on the right.

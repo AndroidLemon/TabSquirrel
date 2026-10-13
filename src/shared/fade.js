@@ -27,6 +27,9 @@ export function getExpiry(record, settings) {
   return (record.restoredAt || record.capturedAt) + days * DAY_MS;
 }
 
+/** A card shows its quiet "fades Oct 30" date only this close to the end; farther out it is noise. */
+export const FADE_DATE_DAYS = 7;
+
 /**
  * Chip text for a note, or '' when it should not show one: never-fading notes, and fading
  * notes still further out than the warning window (unless the user is sorting by fade date,
@@ -44,12 +47,12 @@ export function fadeChipLabel(record, settings, sortBy, now = Date.now()) {
 }
 
 /**
- * Quiet "fades Oct 30" text for the card meta and reader, or '' for notes that never fade.
- * Shows the year only when it is not the current one.
+ * Quiet "fades Oct 30" text for the card meta and reader, or '' for notes that never fade (or, when
+ * `withinDays` is given, that fade later than that). Shows the year only when it is not the current one.
  */
-export function fadeDateLabel(record, settings, now = Date.now()) {
+export function fadeDateLabel(record, settings, now = Date.now(), withinDays = Infinity) {
   const expiry = getExpiry(record, settings);
-  if (expiry === null) return '';
+  if (expiry === null || (expiry - now) / DAY_MS > withinDays) return '';
   const date = new Date(expiry);
   const sameYear = date.getFullYear() === new Date(now).getFullYear();
   const text = date.toLocaleDateString('en', sameYear
