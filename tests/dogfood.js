@@ -439,6 +439,8 @@ ${telemetry.scenarios.map(s => `| **${s.name}** | \`${s.status}\` | ${s.metrics 
   fs.writeFileSync(reportPath, reportMd);
   console.log(`\n📄 Dogfooding report saved to: ${reportPath}`);
   console.log('--- Suite Execution Finished ---');
+  // Fail the npm chain, not just the report, so test:browser can't exit 0 on a broken dogfood run.
+  if (telemetry.testsFailed > 0) process.exitCode = 1;
 }
 
 runDogfood();
