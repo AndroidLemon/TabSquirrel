@@ -40,6 +40,28 @@ async function runAppUXTests() {
     await page.goto(APP_URL);
     await page.waitForLoadState('domcontentloaded');
 
+    // --- First run: an empty notebook says what will happen, never "Inbox zero" ---
+    console.log('--- Test 0: First-run empty state ---');
+    await page.waitForSelector('#tabs-feed .empty-state');
+    const firstRunTab = await page.textContent('#tabs-feed .empty-state');
+    assert.match(firstRunTab, /Tabs left idle for 60 minutes are closed/, 'First run states the real idle threshold');
+    assert.match(firstRunTab, /short note of each is kept here/, 'First run says a note is kept');
+    assert.match(firstRunTab, /reopens in one click/, 'First run says closed tabs reopen in one click');
+    assert.ok(!/Save current tab/.test(firstRunTab), 'The full tab does not offer Save current tab');
+    const firstRunPanel = await context.newPage();
+    await firstRunPanel.addInitScript(() => { chrome.tabs.getCurrent = () => Promise.resolve(undefined); });
+    await firstRunPanel.setViewportSize(NARROW);
+    await firstRunPanel.goto(APP_URL);
+    await firstRunPanel.waitForSelector('body[data-surface="panel"] #tabs-feed .empty-state');
+    assert.strictEqual(await firstRunPanel.locator('#view-inbox').getAttribute('aria-current'), 'page', 'The panel opens on the Inbox');
+    const firstRunText = await firstRunPanel.textContent('#tabs-feed .empty-state');
+    assert.ok(!/Inbox zero/.test(firstRunText), 'First run in the panel never says Inbox zero');
+    assert.match(firstRunText, /Tabs left idle for 60 minutes/, 'The panel states the idle threshold');
+    assert.match(firstRunText, /Save current tab/, 'The panel names Save current tab');
+    assert.strictEqual(await firstRunPanel.locator('#tabs-feed .empty-icon').getAttribute('src'), '../assets/icons/icon-48.png', 'The empty state uses the acorn icon');
+    await firstRunPanel.close();
+    console.log('✓ First run explains what will happen, with the real threshold, and names Save current tab only in the panel\n');
+
     // Seed test data in IndexedDB
     await page.evaluate(async () => {
       const { saveArchivedTab } = await import('/src/storage/db.js');
@@ -290,9 +312,44 @@ async function runAppUXTests() {
     // Layout size (offsetWidth/Height ignore the scale() entry animation)
     const dialogBox = await page.locator('#reader-dialog').evaluate(el => ({ width: el.offsetWidth, height: el.offsetHeight }));
     assert.ok(dialogBox.width >= NARROW.width - 1 && dialogBox.height >= NARROW.height - 1, `Reader should fill the panel, got ${dialogBox.width}x${dialogBox.height}`);
+    // Header: the title keeps its width, the actions stack beneath it, the close button stays top-right
+    const readerHeader = () => page.evaluate(() => {
+      const box = (id) => document.getElementById(id).getBoundingClientRect();
+      const dialog = box('reader-dialog');
+      const title = box('modal-title');
+      const actions = document.querySelector('.modal-header-actions').getBoundingClientRect();
+      const close = box('modal-close-btn');
+      const link = document.getElementById('modal-source-link');
+      return {
+        dialogWidth: dialog.width, titleWidth: title.width, titleBottom: title.bottom, actionsTop: actions.top,
+        closeTop: close.top, closeRightGap: dialog.right - close.right, overflow: document.getElementById('reader-dialog').scrollWidth - document.getElementById('reader-dialog').clientWidth,
+        linkText: link.textContent, linkHref: link.href, linkHeight: link.getBoundingClientRect().height
+      };
+    });
+    let header = await readerHeader();
+    assert.ok(header.titleWidth > header.dialogWidth * 0.6, `Reader title keeps its width at 380px: ${header.titleWidth} of ${header.dialogWidth}`);
+    assert.ok(header.actionsTop >= header.titleBottom, 'The actions sit on their own row beneath the title');
+    assert.ok(header.closeTop < header.titleBottom && header.closeRightGap < 30, 'The close button stays top-right');
+    assert.strictEqual(header.linkText, 'example.com', 'The header shows the domain, not the address');
+    assert.strictEqual(header.linkHref, 'https://example.com/deep-learning', 'The link still goes to the full URL');
+    assert.ok(header.linkHeight < 20, 'The source link stays on one line');
+    // 200% zoom on a 1280px window is a 640px viewport
+    await page.setViewportSize({ width: 640, height: 400 });
+    header = await readerHeader();
+    assert.ok(header.titleWidth > header.dialogWidth * 0.6, `Reader title keeps its width at 200% zoom: ${header.titleWidth} of ${header.dialogWidth}`);
+    assert.strictEqual(header.overflow, 0, 'The reader does not scroll sideways at 200% zoom');
+    await page.setViewportSize(WIDE);
+    header = await readerHeader();
+    assert.ok(header.actionsTop < header.titleBottom, 'On a wide window the actions share the title row');
+    await page.setViewportSize(NARROW);
+    // Body: the takeaways show, under a summary with no "Note overview" heading
+    const readerSummary = await page.textContent('#modal-summary-box');
+    assert.ok(!/Note overview/.test(readerSummary), 'The reader has no "Note overview" heading');
+    assert.match(readerSummary, /extensive overview of modern deep learning/, 'The reader shows the TL;DR');
+    assert.strictEqual(await page.locator('#modal-summary-box .modal-bullets li').count(), 3, 'The reader shows the takeaways');
     await page.keyboard.press('Escape');
     assert.strictEqual(await page.evaluate(() => document.getElementById('reader-dialog').open), false, 'Escape closes the reader');
-    console.log('✓ Reader loads full text via getTabById, fills the panel, closes on Escape\n');
+    console.log('✓ Reader loads full text via getTabById, fills the panel, keeps its header readable at 380px and 200% zoom, shows takeaways, closes on Escape\n');
 
     // --- TEST 8: Durable delete with 5-second Undo toast ---
     console.log('--- Test 8: Durable Delete & Interactive Undo Toast ---');
@@ -516,17 +573,20 @@ async function runAppUXTests() {
     await page.waitForFunction(() => document.getElementById('closed-today-count').textContent === '4');
     assert.strictEqual(await receiptOpen(), true, 'New closures since the last look open the receipt again');
 
-    // Reopen all reopens every row, then the receipt hides itself (nothing closed today any more).
+    // Reopen all reopens every row; the rows stay, marked Reopened, and Reopen all has nothing left to do.
     const pagesBefore = new Set(context.pages());
     await page.click('#closed-today-reopen-all');
-    await page.waitForSelector('#closed-today', { state: 'hidden', timeout: 15000 });
+    await page.waitForFunction(() => document.getElementById('closed-today-reopened').textContent.includes('4 reopened'), null, { timeout: 15000 });
     const afterReopenAll = await page.evaluate(async () => {
       const { getTabById } = await import('/src/storage/db.js');
       return Promise.all(['closed-note', 'closed-slept', 'closed-trusted', 'closed-later'].map(async id => (await getTabById(id))?.status));
     });
     assert.deepStrictEqual(afterReopenAll, ['restored', 'restored', 'restored', 'restored'], 'Reopen all reopened every row');
     assert.match(await page.textContent('#toast-message'), /Reopened 4 tabs\./, 'Reopen all reports what it did');
-    assert.strictEqual(await page.locator('#closed-today').isHidden(), true, 'Receipt is hidden when nothing was closed today');
+    assert.match(await page.textContent('#closed-today > summary'), /Closed 4 tabs for you today · 4 reopened/, 'The headline keeps the day\'s count and says how many were reopened');
+    assert.strictEqual(await page.locator('#closed-today-list .closed-today-state.reopened, #closed-today-more-list .closed-today-state.reopened').count(), 4, 'Every reopened row stays, marked Reopened');
+    assert.strictEqual(await page.locator('#closed-today .closed-today-row .closed-today-reopen-btn').count(), 0, 'A reopened row has no Reopen button');
+    assert.strictEqual(await page.locator('#closed-today-reopen-all').isHidden(), true, 'Reopen all is hidden when no row is still closed');
     // Close the four tabs Reopen all opened; wait for all of them to register first so none
     // lingers (a late one would be picked up by Test 11's waitForEvent('page')).
     for (let i = 0; i < 50 && context.pages().filter(p => !pagesBefore.has(p)).length < 4; i++) await new Promise(r => setTimeout(r, 100));
@@ -536,7 +596,7 @@ async function runAppUXTests() {
       for (const id of ['closed-note', 'closed-slept', 'closed-trusted', 'closed-later']) await softDeleteTab(id);
       await purgeDeletedTabs(0);
     });
-    console.log('✓ Receipt: open with a reason per row, collapses once seen, reopens on new closures, Reopen all, hidden when empty\n');
+    console.log('✓ Receipt: open with a reason per row, collapses once seen, reopens on new closures, Reopen all keeps its rows marked Reopened\n');
 
     // Reopen all with Remove Notes When Reopened on: one Undo toast brings every note back.
     // RESTORE_TAB is stubbed to do what the worker does (soft-delete, removed: true) without opening tabs.
@@ -579,6 +639,95 @@ async function runAppUXTests() {
       const { saveSettings, DEFAULT_SETTINGS } = await import('/src/storage/db.js');
       await saveSettings(DEFAULT_SETTINGS);
     });
+
+    // --- TEST 10c: the receipt scales (3 rows, Show all), confirms big batches, shows progress and failures ---
+    console.log('--- Test 10c: Receipt cap, title opens reader, confirm, progress, failures ---');
+    const ids7 = ['r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7'];
+    for (const id of ids7) {
+      await closeNote({ id, url: `https://closed.example/${id}`, title: `Receipt ${id}`, lastActiveAt: Date.now() - 70 * 60000 });
+    }
+    await tellClosed();
+    await page.waitForFunction(() => document.getElementById('closed-today-count').textContent === '7');
+    const rowsIn = (list) => page.locator(`${list} .closed-today-row`).count();
+    assert.strictEqual(await rowsIn('#closed-today-list'), 3, 'Only three receipt rows show at first');
+    assert.strictEqual(await rowsIn('#closed-today-more-list'), 4, 'The rest wait behind Show all');
+    assert.strictEqual(await page.locator('#closed-today-more').evaluate(el => el.open), false, 'Show all starts closed');
+    assert.strictEqual(await page.locator('#closed-today-more .more-closed').innerText(), 'Show all 7', 'The disclosure says how many there are');
+    assert.strictEqual(await page.locator('#closed-today-more-list .closed-today-title').first().isVisible(), false, 'Rows past the cap are hidden');
+    await page.click('#closed-today-more > summary');
+    assert.strictEqual(await page.locator('#closed-today-more-list .closed-today-title').first().isVisible(), true, 'Show all reveals the rest');
+    await page.click('#closed-today-more > summary');
+    assert.strictEqual(await page.locator('.closed-today-tldr').count(), 0, 'Rows no longer repeat the TL;DR');
+    assert.match(await page.locator('#closed-today-list .closed-today-when').first().textContent(), /^closed .*\d.* · idle 7\d min$/, 'A row says when it closed and how long it sat idle');
+    assert.strictEqual(await page.locator('#closed-today-list .closed-today-reason').first().isVisible(), true, 'and keeps its reason');
+
+    // The row title is a real button that opens the reader
+    const firstRowTitle = page.locator('#closed-today-list .closed-today-title').first();
+    assert.strictEqual(await firstRowTitle.evaluate(el => el.tagName), 'BUTTON', 'The row title is a button');
+    const firstRowName = await firstRowTitle.textContent();
+    await firstRowTitle.click();
+    await page.waitForFunction(() => document.getElementById('reader-dialog').open);
+    assert.strictEqual(await page.textContent('#modal-title'), firstRowName, 'Clicking a row title opens that note in the reader');
+    await page.keyboard.press('Escape');
+    assert.strictEqual(await page.evaluate(() => document.getElementById('reader-dialog').open), false);
+
+    // Confirm above 5 still-closed rows, not at or below. Reopens are stubbed (r1 always fails, each takes a beat).
+    const markReopenedNow = (id) => page.evaluate(async (i) => (await import('/src/storage/db.js')).markReopened(i), id);
+    await page.evaluate(() => {
+      window.__realSend = chrome.runtime.sendMessage;
+      window.__restoreCalls = 0;
+      chrome.runtime.sendMessage = async (msg) => {
+        if (msg?.type !== 'RESTORE_TAB') return window.__realSend.call(chrome.runtime, msg);
+        window.__restoreCalls++;
+        await new Promise(r => setTimeout(r, 150));
+        if (msg.recordId === 'r1') return { success: false, error: 'stubbed failure' };
+        await (await import('/src/storage/db.js')).markReopened(msg.recordId);
+        return { success: true };
+      };
+    });
+    const confirmShown = () => page.locator('#closed-today-confirm').isVisible();
+    await page.click('#closed-today-reopen-all');
+    assert.strictEqual(await confirmShown(), true, 'Seven still-closed rows ask before reopening');
+    assert.strictEqual((await page.textContent('#closed-today-confirm-text')).trim(), 'Reopen 7 tabs?');
+    assert.strictEqual(await page.locator('#closed-today-reopen-all').isHidden(), true, 'The confirmation replaces the Reopen all button');
+    assert.strictEqual(await page.evaluate(() => window.__restoreCalls), 0, 'Nothing reopens before the user confirms');
+    await page.click('#closed-today-confirm-no');
+    assert.strictEqual(await confirmShown(), false, 'Cancel dismisses the confirmation');
+    assert.strictEqual(await page.locator('#closed-today-reopen-all').isVisible(), true, 'and brings Reopen all back');
+    assert.strictEqual(await page.evaluate(() => window.__restoreCalls), 0, 'Cancel reopens nothing');
+
+    await markReopenedNow('r7');
+    await tellClosed();
+    await page.waitForFunction(() => document.getElementById('closed-today-reopened').textContent.includes('1 reopened'));
+    assert.match(await page.textContent('#closed-today > summary'), /Closed 7 tabs for you today · 1 reopened/, 'The headline counts the reopened row');
+    await page.click('#closed-today-reopen-all');
+    assert.strictEqual(await confirmShown(), true, 'Six still-closed rows still ask');
+    assert.strictEqual((await page.textContent('#closed-today-confirm-text')).trim(), 'Reopen 6 tabs?');
+    await page.click('#closed-today-confirm-no');
+
+    await markReopenedNow('r6');
+    await tellClosed();
+    await page.waitForFunction(() => document.getElementById('closed-today-reopened').textContent.includes('2 reopened'));
+    await page.click('#closed-today-reopen-all'); // five still closed: no question, and progress shows in the button
+    assert.strictEqual(await confirmShown(), false, 'Five still-closed rows reopen without asking');
+    await page.waitForFunction(() => /^Reopening \d of 5…$/.test(document.getElementById('closed-today-reopen-all').textContent));
+    await page.waitForFunction(() => document.getElementById('closed-today-reopened').textContent.includes('6 reopened'), null, { timeout: 15000 });
+    assert.strictEqual(await page.evaluate(() => window.__restoreCalls), 5, 'Reopen all only tried the rows that were still closed');
+    assert.strictEqual((await page.textContent('#closed-today-reopen-all')).trim(), 'Reopen all', 'The button returns to its label');
+    assert.match(await page.textContent('#toast-message'), /Reopened 4 tabs\. 1 could not be reopened\./);
+    const failedRows = page.locator('#closed-today .closed-today-row', { has: page.locator('.closed-today-state.failed') });
+    assert.strictEqual(await failedRows.count(), 1, 'Exactly one row is marked as failed');
+    assert.match(await failedRows.textContent(), /Receipt r1[\s\S]*Could not reopen/, 'The failed row is named and says so');
+    assert.strictEqual(await failedRows.locator('.closed-today-reopen-btn').count(), 1, 'and can be retried');
+    assert.match(await page.textContent('#closed-today > summary'), /Closed 7 tabs for you today · 6 reopened/);
+    assert.strictEqual(await page.locator('#closed-today-reopen-all').isVisible(), true, 'Reopen all stays while a row is still closed');
+    await page.evaluate(async (ids) => {
+      chrome.runtime.sendMessage = window.__realSend;
+      const { softDeleteTab, purgeDeletedTabs } = await import('/src/storage/db.js');
+      for (const id of ids) await softDeleteTab(id);
+      await purgeDeletedTabs(0);
+    }, ids7);
+    console.log('✓ Receipt: three rows and Show all, title opens the reader, confirm above five, progress, named failures\n');
 
     // --- TEST 11: Side panel surface ---
     console.log('--- Test 11: Side Panel Surface (panel-only controls, Open full view) ---');

@@ -174,7 +174,7 @@ assert.deepStrictEqual((await getArchivedTabs({ timeRange: 'today' })).map(t => 
 assert.deepStrictEqual((await getArchivedTabs({ timeRange: 'yesterday' })).map(t => t.id), ['d-yesterday']);
 console.log('✓ Calendar-day stats verified');
 
-// Test 11: closedAt feeds "Closed today"; reopening clears it
+// Test 11: lastClosedAt feeds "Closed today"; reopening clears closedAt but keeps the record of the closure
 console.log('Testing record lifecycle / closedSince...');
 await clearAllHistory();
 await saveArchivedTab({ id: 'c-closed', url: 'https://c.example/closed', status: 'discarded' });
@@ -186,8 +186,12 @@ assert.strictEqual(closedRec.closedFrom, undefined, 'A direct close records no c
 assert.deepStrictEqual((await getArchivedTabs({ closedSince: midnight.getTime() })).map(t => t.id), ['c-closed'],
   'closedSince returns only tabs Tab Squirrel closed');
 await markReopened('c-closed');
-assert.strictEqual((await getTabById('c-closed')).closedAt, null, 'Reopening clears closedAt');
-assert.strictEqual((await getArchivedTabs({ closedSince: midnight.getTime() })).length, 0);
+assert.ok(closedRec.lastClosedAt > 0, 'markClosedByTabSquirrel stamps lastClosedAt');
+const reopenedClosed = await getTabById('c-closed');
+assert.strictEqual(reopenedClosed.closedAt, null, 'Reopening clears closedAt');
+assert.strictEqual(reopenedClosed.lastClosedAt, closedRec.lastClosedAt, 'Reopening keeps lastClosedAt');
+assert.deepStrictEqual((await getArchivedTabs({ closedSince: midnight.getTime() })).map(t => t.id), ['c-closed'],
+  'a reopened note stays in Closed today');
 await saveArchivedTab({ id: 'c-slept', url: 'https://c.example/slept', status: 'discarded' });
 assert.strictEqual((await markClosedByTabSquirrel('c-slept', { closedFrom: 'suspended' })).closedFrom, 'suspended', 'A close of a suspended tab records closedFrom');
 await markReopened('c-slept');
@@ -198,6 +202,7 @@ await markClosedByTabSquirrel('c-manual');
 const kept = await markLeftOpen('c-manual', 'Chrome refused to close this tab; summary saved, tab left open');
 assert.strictEqual(kept.closureReason, 'Chrome refused to close this tab; summary saved, tab left open', 'Reason is recorded');
 assert.strictEqual(kept.closedAt, null, 'A tab Chrome kept open is not in Closed today');
+assert.strictEqual(kept.lastClosedAt, null, 'and its closure record is cleared');
 assert.strictEqual(kept.restoredAt, undefined, 'Not counted as reopened, so it stays in the inbox');
 assert.ok((await getArchivedTabs({ view: 'inbox' })).some(t => t.id === 'c-manual'));
 console.log('✓ Captured status verified');
@@ -216,6 +221,7 @@ const cap = { url: 'https://lc.example/cap', title: 'Cap' };
 const asClosed = await recordCapture({ ...cap, url: 'https://lc.example/c1' }, 'closed');
 assert.strictEqual(asClosed.status, 'archived');
 assert.ok(asClosed.closedAt > 0, "disposition 'closed' pairs archived with closedAt");
+assert.strictEqual(asClosed.lastClosedAt, asClosed.closedAt, "disposition 'closed' also stamps lastClosedAt");
 const asSuspended = await recordCapture({ ...cap, url: 'https://lc.example/c2' }, 'suspended');
 assert.strictEqual(asSuspended.status, 'discarded');
 assert.strictEqual(asSuspended.closedAt, null, "disposition 'suspended' leaves closedAt null");
@@ -225,6 +231,7 @@ assert.strictEqual(asOpen.closedAt, null, "disposition 'left-open' leaves closed
 
 const reopened = await markReopened(asClosed.id);
 assert.strictEqual(reopened.closedAt, null, 'reopening clears closedAt');
+assert.strictEqual(reopened.lastClosedAt, asClosed.lastClosedAt, 'reopening keeps lastClosedAt');
 assert.ok(reopened.restoredAt > 0, 'reopening stamps restoredAt');
 
 // Chrome refused to close a tab we had suspended: it stays suspended, and must land in
@@ -233,6 +240,7 @@ await saveArchivedTab({ id: 'lc-stuck', url: 'https://lc.example/stuck', status:
 const stuck = await markStaysSuspended('lc-stuck', 'Chrome refused to close this tab; it stays suspended');
 assert.strictEqual(stuck.status, 'discarded', 'markStaysSuspended puts the record back to suspended');
 assert.strictEqual(stuck.closedAt, null, 'and clears closedAt so it leaves Closed today');
+assert.strictEqual(stuck.lastClosedAt, null, 'and lastClosedAt, since the closure did not hold');
 assert.strictEqual(stuck.closureReason, 'Chrome refused to close this tab; it stays suspended', 'the refusal reason is recorded');
 assert.ok(!(await getArchivedTabs({ closedSince: 1 })).some(t => t.id === 'lc-stuck'), 'a stuck tab is not closed today');
 

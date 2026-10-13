@@ -128,7 +128,9 @@ export async function saveArchivedTab(tabData) {
         summary: sanitizeSummary(tabData.summary),
         // Unknown values (JSON import) must not pass the AI-only close gate
         summarySource: AI_SUMMARY_SOURCES.has(tabData.summarySource) ? tabData.summarySource : 'heuristic',
-        closedAt: timestamp(tabData.closedAt, null), // set only when Tab Squirrel itself closed the tab
+        closedAt: timestamp(tabData.closedAt, null), // set only while Tab Squirrel's closure of the tab stands
+        // When Tab Squirrel last closed it; survives a reopen, so "Closed today" keeps its record
+        lastClosedAt: timestamp(tabData.lastClosedAt ?? tabData.closedAt, null),
         wordCount: tabData.wordCount || 0,
         // 'discarded' (suspended) | 'archived' (closed) | 'restored' (reopened) |
         // 'captured' (summary saved, tab still open: manual archive or Chrome refused to close/suspend)
@@ -175,7 +177,7 @@ export async function getArchivedTabs(filters = {}) {
     timeRange = '',
     status = '',
     favoriteOnly = false,
-    closedSince = 0, // only records Tab Squirrel closed at/after this time
+    closedSince = 0, // only records Tab Squirrel last closed at/after this time (reopened ones included)
     view = '', // 'inbox' (never reopened) | 'reopened' | '' (all)
     includeText = false,
     sortBy = 'newest', // 'newest' | 'oldest' | 'reading-time-asc' | 'reading-time-desc' | 'title-asc' | 'domain' | 'expiring-soon'
@@ -195,7 +197,7 @@ export async function getArchivedTabs(filters = {}) {
     if (item.deletedAt) return false;
     if (favoriteOnly && !item.isFavorite) return false;
     if (status && item.status !== status) return false;
-    if (closedSince && !(item.closedAt >= closedSince)) return false;
+    if (closedSince && !(item.lastClosedAt >= closedSince)) return false;
     if (view === 'inbox' && item.restoredAt) return false;
     if (view === 'reopened' && !item.restoredAt) return false;
     if (domain && item.domain !== domain) return false;
@@ -328,16 +330,18 @@ async function updateRecord(id, mutate) {
 /**
  * Record lifecycle.
  *
- * `status`, `closedAt` and `restoredAt` are one state machine with one invariant, so nothing
+ * `status`, `closedAt`, `lastClosedAt` and `restoredAt` are one state machine with one invariant, so nothing
  * outside this block writes them except `saveArchivedTab`, which sets them directly for JSON
  * import: callers name the transition that happened and the timestamps are derived here. The
  * states:
  *
  *   captured   summary saved, tab still fully open (manual archive, or Chrome refused)
  *   discarded  tab suspended by Tab Squirrel, still in the tab strip
- *   archived   the tab is gone. `closedAt` is set only when Tab Squirrel itself closed it, which
- *              is exactly what "Closed today" counts
- *   restored   the user reopened it
+ *   archived   the tab is gone. `closedAt` is set only when Tab Squirrel itself closed it
+ *   restored   the user reopened it. `closedAt` clears, but `lastClosedAt` stays: "Closed today"
+ *              counts every note whose last closure was today and marks the reopened ones
+ *
+ * `lastClosedAt` is cleared only when a closure turns out not to hold (Chrome refused).
  */
 
 /**
@@ -347,7 +351,7 @@ async function updateRecord(id, mutate) {
 export async function markClosedByTabSquirrel(id, { closedFrom } = {}) {
   return updateRecord(id, (record) => {
     record.status = 'archived';
-    record.closedAt = Date.now();
+    record.closedAt = record.lastClosedAt = Date.now();
     if (closedFrom) record.closedFrom = closedFrom;
   });
 }
@@ -372,7 +376,7 @@ export async function markReopened(id) {
 export async function markLeftOpen(id, reason) {
   return updateRecord(id, (record) => {
     record.status = 'captured';
-    record.closedAt = null;
+    record.closedAt = record.lastClosedAt = null;
     if (reason) record.closureReason = reason;
   });
 }
@@ -381,7 +385,7 @@ export async function markLeftOpen(id, reason) {
 export async function markStaysSuspended(id, reason) {
   return updateRecord(id, (record) => {
     record.status = 'discarded';
-    record.closedAt = null;
+    record.closedAt = record.lastClosedAt = null;
     if (reason) record.closureReason = reason;
   });
 }

@@ -8,7 +8,7 @@ import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
 import { highlightSearch, escapeHtml } from '../src/shared/html.js';
-import { formatExtractedArticle, getStatusBadge, closedReason } from '../src/app/app.js';
+import { formatExtractedArticle, getStatusBadge, closedReason, closedWhen, firstRunCopy } from '../src/app/app.js';
 
 console.log('--- Running Knowledge Hub Unit & Markup Verification Tests ---');
 
@@ -92,6 +92,26 @@ assert.match(closedReason({ closureTier: 'suspend_only', closureReason: 'Contain
 assert.match(closedReason({ closureTier: 'suspend_only', closureReason: 'Closed: trusted domain' }), /always-close list/, 'a trusted-domain close names the list');
 assert.match(closedReason({}), /idle/, 'a record with no closure data still gets an honest idle reason');
 console.log('✓ Closed-today reasons derived from closureTier / closureReason');
+
+// Receipt row timing: idle time only when both stamps are real
+const closedAtMs = new Date(2026, 9, 13, 10, 42).getTime();
+assert.match(closedWhen({ lastClosedAt: closedAtMs, lastActiveAt: closedAtMs - 64 * 60000 }), /^closed .*42.* · idle 64 min$/, 'closed time plus idle minutes');
+assert.match(closedWhen({ lastClosedAt: closedAtMs, lastActiveAt: closedAtMs - 125 * 60000 }), / · idle 2 h 5 min$/, 'idle from two hours up reads in hours');
+assert.match(closedWhen({ lastClosedAt: closedAtMs, lastActiveAt: closedAtMs - 120 * 60000 }), / · idle 2 h$/, 'whole hours drop the minutes');
+assert.ok(!closedWhen({ lastClosedAt: closedAtMs }).includes('idle'), 'no lastActiveAt, no idle claim');
+assert.ok(!closedWhen({ lastClosedAt: closedAtMs, lastActiveAt: closedAtMs + 60000 }).includes('idle'), 'a stamp from after the close is not idle time');
+assert.ok(!closedWhen({ lastClosedAt: closedAtMs, lastActiveAt: closedAtMs - 20000 }).includes('idle'), 'under a minute is not worth stating');
+assert.strictEqual(closedWhen({}), '', 'a record with no closure says nothing');
+console.log('✓ Receipt closed time and idle time derived from the record');
+
+// First-run copy uses the real threshold and names Save current tab only in the panel
+const firstRunPanel = firstRunCopy({ timeoutMinutes: 45, archiveMode: 'hybrid' }, 'panel');
+assert.ok(firstRunPanel.lines.join(' ').includes('45 minutes'), 'first run states the user\'s idle threshold');
+assert.ok(firstRunPanel.lines.some(l => /Save current tab/.test(l)), 'the panel names Save current tab');
+assert.ok(!firstRunCopy({ timeoutMinutes: 45 }, 'tab').lines.some(l => /Save current tab/.test(l)), 'the full tab does not');
+assert.match(firstRunCopy({ timeoutMinutes: 1, archiveMode: 'close' }, 'tab').lines[0], /^Tabs left idle for 1 minute are closed\.$/, 'singular minute, close mode');
+assert.match(firstRunCopy({ timeoutMinutes: 30, archiveMode: 'discard' }, 'tab').lines[0], /put to sleep/, 'suspend-only mode does not promise closing');
+console.log('✓ First-run copy verified');
 
 // Test 9: Verify src/app/index.html markup (element ids the Playwright tests rely on)
 console.log('Verifying src/app/index.html markup...');

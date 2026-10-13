@@ -113,12 +113,21 @@
 
       <!-- The receipt: what Tab Squirrel closed today. Open until seen, then collapsed (app.js). -->
       <details id="closed-today" class="closed-today" hidden>
-        <summary>Closed <span id="closed-today-count">0</span> <span id="closed-today-noun">tabs</span> for you today.</summary>
-        <div class="closed-today-intro">
+        <summary>Closed <span id="closed-today-count">0</span> <span id="closed-today-noun">tabs</span> for you today<span id="closed-today-reopened"></span></summary>
+        <div id="closed-today-intro" class="closed-today-intro">
           <span>Notes are below; reopen any of them.</span>
           <button id="closed-today-reopen-all" class="closed-today-reopen-btn" type="button">Reopen all</button>
+          <div id="closed-today-confirm" class="closed-today-confirm" role="group" aria-label="Confirm Reopen all" hidden>
+            <span id="closed-today-confirm-text"></span>
+            <button id="closed-today-confirm-yes" class="closed-today-reopen-btn" type="button">Reopen</button>
+            <button id="closed-today-confirm-no" class="closed-today-cancel-btn" type="button">Cancel</button>
+          </div>
         </div>
         <div id="closed-today-list" class="closed-today-list"></div>
+        <details id="closed-today-more" class="closed-today-more" hidden>
+          <summary id="closed-today-more-summary"></summary>
+          <div id="closed-today-more-list" class="closed-today-list"></div>
+        </details>
       </details>
 
       <div id="perm-banner" class="perm-banner" hidden>
@@ -207,8 +216,8 @@
           <button id="modal-copy-btn" class="modal-copy-btn" title="Copy Markdown" aria-label="Copy Markdown">
             <span class="btn-label">Copy</span>
           </button>
-          <button id="modal-close-btn" class="modal-close-btn" title="Close reader view" aria-label="Close reader view">✕</button>
         </div>
+        <button id="modal-close-btn" class="modal-close-btn" title="Close reader view" aria-label="Close reader view">✕</button>
       </header>
       <div class="modal-body">
         <div id="modal-summary-box" class="modal-summary-box"></div>

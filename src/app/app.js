@@ -19,7 +19,8 @@ import {
   markReopened,
   getTabById,
   toggleFavoriteTab,
-  getSettings
+  getSettings,
+  DEFAULT_SETTINGS
 } from '../storage/db.js';
 import { escapeHtml, highlightSearch, faviconUrl, fadeChipHtml, fadeDateHtml } from '../shared/html.js';
 import { fadeChipLabel, fadeDateLabel, fadeExplanation } from '../shared/fade.js';
@@ -49,7 +50,9 @@ const SIDEBAR_DOMAINS_VISIBLE = 5;
 const SIDEBAR_LIST_MAX = 50; // visible plus the "More" disclosure
 const SORT_KEY = 'notebook_sort';
 const DENSITY_KEY = 'sidepanel_density'; // pre-merge storage key, kept so saved preferences survive
-const RECEIPT_SEEN_KEY = 'closed_today_seen'; // { day, upTo }: today's receipt was shown up to this closedAt
+const RECEIPT_SEEN_KEY = 'closed_today_seen'; // { day, upTo }: today's receipt was shown up to this lastClosedAt
+const RECEIPT_ROWS_VISIBLE = 3; // the rest sit behind "Show all"
+const REOPEN_ALL_CONFIRM_ABOVE = 5; // more still-closed rows than this and Reopen all asks first
 
 let fadeSettings = null;
 let tabsById = new Map();
@@ -59,7 +62,9 @@ let searchTimer = null;
 let toastTimer = null;
 let toastDuration = 2600;
 let readerTab = null;
-let receiptSeenUpTo = null; // newest closedAt already shown today; null until read from storage
+let receiptSeenUpTo = null; // newest lastClosedAt already shown today; null until read from storage
+let receiptById = new Map(); // today's receipt rows, so a row title can open its note in the reader
+let reopenFailedIds = new Set(); // rows the last Reopen all could not reopen
 
 const ICONS = {
   reopen: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>',
@@ -67,7 +72,7 @@ const ICONS = {
   reader: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>',
   copy: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>',
   trash: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>',
-  empty: '<svg class="empty-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>'
+  empty: '<img class="empty-icon" src="../assets/icons/icon-48.png" alt="" width="40" height="40">'
 };
 
 const SKELETONS = '<div class="skeleton-card"><div class="skeleton-line" style="width:40%"></div><div class="skeleton-line" style="width:75%;height:16px"></div><div class="skeleton-line" style="height:32px"></div></div>'.repeat(3);
@@ -188,9 +193,47 @@ export function closedReason(tab) {
   return 'Sat idle, so it was closed';
 }
 
+/** "closed 10:42 · idle 64 min", from what the record holds; no idle time unless both stamps are real. */
+export function closedWhen(tab) {
+  if (!Number.isFinite(tab.lastClosedAt)) return '';
+  const time = new Date(tab.lastClosedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const idle = Math.round((tab.lastClosedAt - tab.lastActiveAt) / 60000); // NaN when lastActiveAt is missing
+  if (!(idle >= 1)) return `closed ${time}`;
+  const hours = Math.floor(idle / 60);
+  const minutes = idle % 60;
+  const span = idle < 120 ? `${idle} min` : minutes ? `${hours} h ${minutes} min` : `${hours} h`;
+  return `closed ${time} · idle ${span}`;
+}
+
+function receiptRowHtml(tab) {
+  const id = escapeHtml(tab.id);
+  const closed = Boolean(tab.closedAt);
+  const failed = closed && reopenFailedIds.has(String(tab.id));
+  const side = !closed ? '<span class="closed-today-state reopened">Reopened</span>' : `
+      <div class="closed-today-side">
+        ${failed ? '<span class="closed-today-state failed">Could not reopen</span>' : ''}
+        <button class="closed-today-reopen-btn" data-url="${escapeHtml(tab.url)}" data-id="${id}">Reopen</button>
+      </div>`;
+  return `
+    <div class="closed-today-row">
+      <img class="favicon" src="${escapeHtml(faviconUrl(tab.url))}" alt="">
+      <div class="closed-today-info">
+        <button class="closed-today-title" type="button" data-id="${id}" title="${escapeHtml(tab.title)}">${escapeHtml(tab.title)}</button>
+        <div class="closed-today-meta">
+          <span class="closed-today-domain">${escapeHtml(tab.domain)}</span>
+          <span class="closed-today-reason">${closedReason(tab)}</span>
+        </div>
+        <div class="closed-today-when">${closedWhen(tab)}</div>
+      </div>
+      ${side}
+    </div>`;
+}
+
 /**
- * The receipt: what Tab Squirrel closed today. Open when it holds closures not yet shown today
- * (so first open of the day, or new closures since), collapsed on later opens, hidden when empty.
+ * The receipt: every note Tab Squirrel last closed today, kept after a reopen (marked Reopened) so
+ * the day's record doesn't rewrite itself. Open when it holds closures not yet shown today (so
+ * first open of the day, or new closures since), collapsed on later opens, hidden when empty.
+ * Three rows show; the rest sit behind "Show all".
  */
 async function renderClosedToday() {
   let tabs = [];
@@ -199,49 +242,82 @@ async function renderClosedToday() {
   } catch (err) {
     console.debug('Failed to load closed-today tabs:', err);
   }
+  tabs.sort((a, b) => b.lastClosedAt - a.lastClosedAt);
+  receiptById = new Map(tabs.map(tab => [String(tab.id), tab]));
   if (receiptSeenUpTo === null) receiptSeenUpTo = await loadReceiptSeen();
+  const reopened = tabs.filter(tab => !tab.closedAt).length;
   $('closed-today-count').textContent = tabs.length;
   $('closed-today-noun').textContent = tabs.length === 1 ? 'tab' : 'tabs';
+  $('closed-today-reopened').textContent = reopened ? ` · ${reopened} reopened` : '';
   $('closed-today').hidden = tabs.length === 0;
-  const newest = Math.max(0, ...tabs.map(tab => tab.closedAt || 0));
+  $('closed-today-intro').hidden = reopened === tabs.length; // nothing left to reopen
+  setReopenAllConfirm(0);
+  const newest = Math.max(0, ...tabs.map(tab => tab.lastClosedAt));
   if (tabs.length && newest > receiptSeenUpTo) {
     $('closed-today').open = true;
     receiptSeenUpTo = newest;
     chrome.storage.local.set({ [RECEIPT_SEEN_KEY]: { day: localDayKey(), upTo: newest } })
       .catch(err => console.debug('Failed to save receipt state:', err));
   }
-  $('closed-today-list').innerHTML = tabs.map(tab => `
-    <div class="closed-today-row">
-      <img class="favicon" src="${escapeHtml(faviconUrl(tab.url))}" alt="">
-      <div class="closed-today-info">
-        <div class="closed-today-title" title="${escapeHtml(tab.title)}">${escapeHtml(tab.title)}</div>
-        <div class="closed-today-meta">
-          <span class="closed-today-domain">${escapeHtml(tab.domain)}</span>
-          <span class="closed-today-reason">${closedReason(tab)}</span>
-        </div>
-        ${tab.summary?.tldr ? `<div class="closed-today-tldr">${escapeHtml(tab.summary.tldr)}</div>` : ''}
-      </div>
-      <button class="closed-today-reopen-btn" data-url="${escapeHtml(tab.url)}" data-id="${escapeHtml(tab.id)}">Reopen</button>
-    </div>`).join('');
+  $('closed-today-list').innerHTML = tabs.slice(0, RECEIPT_ROWS_VISIBLE).map(receiptRowHtml).join('');
+  const rest = tabs.slice(RECEIPT_ROWS_VISIBLE);
+  $('closed-today-more').hidden = rest.length === 0;
+  $('closed-today-more-summary').innerHTML =
+    `<span class="more-closed">Show all ${tabs.length}</span><span class="more-open">Show fewer</span>`;
+  $('closed-today-more-list').innerHTML = rest.map(receiptRowHtml).join('');
 }
 
-/** Reopen every row of the receipt, then refresh once and report plainly how it went. */
+function onReceiptClick(e) {
+  const reopen = e.target.closest('.closed-today-row .closed-today-reopen-btn');
+  if (reopen) {
+    reopenTab(reopen.dataset.url, reopen.dataset.id);
+    return;
+  }
+  const title = e.target.closest('.closed-today-title');
+  const tab = title && receiptById.get(title.dataset.id);
+  if (tab) openReader(tab);
+}
+
+const stillClosedButtons = () => Array.from(document.querySelectorAll('#closed-today .closed-today-row .closed-today-reopen-btn'));
+
+/** Show "Reopen N tabs?" with Reopen / Cancel in place of the Reopen all button; 0 puts the button back. */
+function setReopenAllConfirm(count, { focus = false } = {}) {
+  const asking = count > 0;
+  $('closed-today-confirm').hidden = !asking;
+  $('closed-today-reopen-all').hidden = asking;
+  if (asking) $('closed-today-confirm-text').textContent = `Reopen ${count} tabs?`;
+  if (focus) (asking ? $('closed-today-confirm-yes') : $('closed-today-reopen-all')).focus();
+}
+
+function onReopenAllClick() {
+  const count = stillClosedButtons().length;
+  if (count > REOPEN_ALL_CONFIRM_ABOVE) setReopenAllConfirm(count, { focus: true });
+  else reopenAllClosedToday();
+}
+
+/** Reopen every row still closed, one after another with progress in the button, then refresh once and say how it went. */
 async function reopenAllClosedToday() {
-  const rows = Array.from(document.querySelectorAll('#closed-today-list .closed-today-reopen-btn'));
+  const rows = stillClosedButtons().map(btn => btn.dataset);
   const button = $('closed-today-reopen-all');
+  setReopenAllConfirm(0);
   button.disabled = true;
+  reopenFailedIds = new Set();
   let reopened = 0;
   const removedIds = []; // notes dropped by Remove Notes When Reopened
-  for (const { dataset } of rows) {
+  for (const [i, { url, id }] of rows.entries()) {
+    button.textContent = `Reopening ${i + 1} of ${rows.length}…`;
     try {
-      const res = await chrome.runtime.sendMessage({ type: 'RESTORE_TAB', url: dataset.url, recordId: dataset.id });
+      const res = await chrome.runtime.sendMessage({ type: 'RESTORE_TAB', url, recordId: id });
       if (res?.success) reopened++;
-      if (res?.success && res.removed) removedIds.push(dataset.id);
+      else reopenFailedIds.add(id);
+      if (res?.success && res.removed) removedIds.push(id);
     } catch (err) {
       console.error('Error reopening tab:', err);
+      reopenFailedIds.add(id);
     }
   }
   button.disabled = false;
+  button.textContent = 'Reopen all';
   await refresh();
   const failed = rows.length - reopened;
   const done = `Reopened ${reopened} ${reopened === 1 ? 'tab' : 'tabs'}.`;
@@ -272,7 +348,9 @@ async function renderFeed(showSkeletons = false) {
   $('fade-note').hidden = !fadeNote || tabs.length === 0;
 
   if (tabs.length === 0) {
-    feed.innerHTML = emptyStateHtml();
+    const total = (await getStats().catch(() => null))?.total ?? 1; // unknown: don't claim a first run
+    if (seq !== renderSeq) return;
+    feed.innerHTML = emptyStateHtml(settings, total);
     return;
   }
   // Re-rendering destroys the focused card; take focus back only if it was in the feed (or
@@ -287,19 +365,39 @@ function setResultsCount(n) {
   $('results-count').textContent = `${n} ${n === 1 ? 'note' : 'notes'}`;
 }
 
-function emptyStateHtml() {
+/**
+ * What the notebook says before it holds any note: what will happen, with the user's own
+ * threshold. "Save current tab" exists only in the side panel, so only the panel names it.
+ */
+export function firstRunCopy(settings, surface) {
+  const { timeoutMinutes, archiveMode } = { ...DEFAULT_SETTINGS, ...settings };
+  const idle = `${timeoutMinutes} ${timeoutMinutes === 1 ? 'minute' : 'minutes'}`;
+  const asleep = archiveMode === 'discard';
+  const lines = [
+    asleep ? `Tabs left idle for ${idle} are put to sleep.`
+      : archiveMode === 'close' ? `Tabs left idle for ${idle} are closed.`
+      : `Tabs left idle for ${idle} are closed, or put to sleep if they might hold unsaved work.`,
+    'A short note of each is kept here.',
+    asleep ? 'Any note reopens its tab in one click.' : 'Anything closed reopens in one click.'
+  ];
+  if (surface === 'panel') lines.push('To keep a page now, use Save current tab.');
+  return { title: 'Nothing here yet', lines };
+}
+
+function emptyStateHtml(settings, total) {
   const hasFilter = Boolean(state.query || state.tag || state.domain || state.time);
-  let title = 'Your notebook is ready';
-  let desc = 'Tabs you leave idle will be closed and kept here as notes' +
-    (state.surface === 'panel' ? ', or click "Save current tab" to keep this page now.' : '.');
-  if (state.view === 'inbox' && !hasFilter) {
-    title = 'Inbox zero — nothing waiting.';
-    desc = 'New captures land here until you reopen, star, or delete them.';
-  } else if (hasFilter || state.view) {
+  let title;
+  let lines;
+  if (total === 0 && !hasFilter) {
+    ({ title, lines } = firstRunCopy(settings, state.surface));
+  } else if (state.view === 'inbox' && !hasFilter) {
+    title = 'Nothing new in your Inbox';
+    lines = ['New captures land here until you reopen, star, or delete them.'];
+  } else {
     title = 'No matching notes';
-    desc = 'Try adjusting your search terms or filters.';
+    lines = ['Try adjusting your search terms or filters.'];
   }
-  return `<div class="empty-state">${ICONS.empty}<div class="empty-title">${title}</div><div class="empty-desc">${desc}</div></div>`;
+  return `<div class="empty-state">${ICONS.empty}<div class="empty-title">${title}</div><div class="empty-desc">${lines.map(line => `<p>${line}</p>`).join('')}</div></div>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -395,6 +493,7 @@ async function reopenTab(url, recordId) {
   try {
     const res = await chrome.runtime.sendMessage({ type: 'RESTORE_TAB', url, recordId });
     if (!res?.success) throw new Error(res?.error || 'no response');
+    reopenFailedIds.delete(String(recordId));
     showToast(res.restoredInPlace ? 'Switched to the sleeping tab.' : 'Tab reopened.');
     await refresh(); // status, inbox/reopened membership and Closed today all changed
     if (res.removed) showRemovedOnReopenToast(recordId);
@@ -671,11 +770,16 @@ async function openReader(tab) {
   const dialog = $('reader-dialog');
   $('modal-title').textContent = tab.title || 'Untitled tab';
   const link = $('modal-source-link');
-  link.textContent = tab.url || '';
+  link.textContent = tab.domain || tab.url || ''; // the domain reads at any width; href and title keep the full address
+  link.title = tab.url || '';
   if (/^https?:\/\//i.test(tab.url)) link.href = tab.url; // only http(s) links are clickable
   else link.removeAttribute('href');
   updateReaderActions();
-  $('modal-summary-box').innerHTML = `<strong>Note overview</strong><p>${escapeHtml(tab.summary?.tldr || 'No overview available')}</p>`;
+  const bullets = toSafeStringArray(tab.summary?.bullets);
+  $('modal-summary-box').innerHTML = (tab.summary?.tldr || bullets.length)
+    ? (tab.summary?.tldr ? `<p>${escapeHtml(tab.summary.tldr)}</p>` : '') +
+      (bullets.length ? `<ul class="modal-bullets">${bullets.map(b => `<li>${escapeHtml(b)}</li>`).join('')}</ul>` : '')
+    : '<p>No overview available</p>';
   $('modal-text-content').innerHTML = '<p class="empty-article-text">Loading article text…</p>';
   dialog.showModal();
 
@@ -729,7 +833,7 @@ async function onReaderAction(action) {
  */
 export function formatExtractedArticle(text) {
   if (!text || typeof text !== 'string' || !text.trim()) {
-    return '<p class="empty-article-text">No snapshot text saved for this article.</p>';
+    return '<p class="empty-article-text">Only the summary was kept for this page.</p>';
   }
   return text.split(/\n\s*\n+/).map(block => {
     const trimmed = block.trim();
@@ -901,11 +1005,15 @@ function setupEventListeners() {
   toastEl.addEventListener('mouseleave', () => setToastPaused(false));
   toastEl.addEventListener('focusin', () => setToastPaused(true));
   toastEl.addEventListener('focusout', () => setToastPaused(false));
-  $('closed-today-reopen-all').addEventListener('click', reopenAllClosedToday);
-  $('closed-today-list').addEventListener('click', (e) => {
-    const btn = e.target.closest('.closed-today-reopen-btn');
-    if (btn) reopenTab(btn.dataset.url, btn.dataset.id);
+  $('closed-today-reopen-all').addEventListener('click', onReopenAllClick);
+  $('closed-today-confirm-yes').addEventListener('click', reopenAllClosedToday);
+  $('closed-today-confirm-no').addEventListener('click', () => setReopenAllConfirm(0, { focus: true }));
+  $('closed-today-confirm').addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    e.stopPropagation();
+    setReopenAllConfirm(0, { focus: true });
   });
+  $('closed-today').addEventListener('click', onReceiptClick);
 
   // Surface-specific actions
   $('archive-current-btn').addEventListener('click', (e) => archiveCurrentTab(e.currentTarget));

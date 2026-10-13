@@ -234,7 +234,6 @@ button {
 
 .filter-item-btn span:first-child,
 .closed-today-title,
-.closed-today-tldr,
 .card-domain,
 .compact .card-title {
   white-space: nowrap;
@@ -775,8 +774,28 @@ button {
   margin-top: 2px; /* sit on the title's line, not centred across the row */
 }
 
-.closed-today-reopen-btn {
+.closed-today-side {
   align-self: center;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+/* Status words pair a hue with the word itself (Reopened is moss, a failure is brick). */
+.closed-today-state {
+  font-size: 12px;
+  font-weight: 600;
+  align-self: center;
+  flex-shrink: 0;
+}
+
+.closed-today-state.reopened {
+  color: var(--success);
+}
+
+.closed-today-state.failed {
+  color: var(--danger);
 }
 
 .closed-today-info {
@@ -785,9 +804,27 @@ button {
 }
 
 .closed-today-title {
+  display: block;
+  max-width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
   font-family: var(--font-serif);
   font-size: 13px;
   font-weight: 400;
+}
+
+.closed-today-title:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.closed-today-title:focus-visible,
+.closed-today-more summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .closed-today-meta {
@@ -820,10 +857,55 @@ button {
   color: var(--text-secondary);
 }
 
-.closed-today-tldr {
+.closed-today-when {
+  font-family: var(--font-mono);
   font-size: 12px;
+  color: var(--text-muted);
+}
+
+.closed-today-confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.closed-today-cancel-btn {
+  background: transparent;
   color: var(--text-secondary);
-  min-width: 0;
+  border: 1px solid var(--border-color);
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.closed-today-cancel-btn:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.closed-today-more summary {
+  padding: 6px 12px;
+  border-top: 1px solid var(--border-color);
+  font-size: 12px;
+  color: var(--accent-text);
+  cursor: pointer;
+}
+
+.closed-today-more summary:hover {
+  background: var(--bg-surface-hover);
+}
+
+.closed-today-more .more-open,
+.closed-today-more[open] .more-closed {
+  display: none;
+}
+
+.closed-today-more[open] .more-open {
+  display: inline;
 }
 
 .closed-today-reopen-btn,
@@ -1244,8 +1326,10 @@ button:active:not(:disabled) {
 }
 
 .empty-icon {
-  color: var(--accent);
-  opacity: 0.5;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  opacity: 0.6;
 }
 
 .empty-title {
@@ -1255,8 +1339,13 @@ button:active:not(:disabled) {
 }
 
 .empty-desc {
+  max-width: 34ch;
   font-size: 12px;
   line-height: 1.5;
+}
+
+.empty-desc p + p {
+  margin-top: 6px;
 }
 
 /* ---------- Reader dialog ---------- */
@@ -1301,16 +1390,15 @@ dialog.reader-dialog[open] {
 
 .modal-header {
   padding: 16px 20px;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   border-bottom: 1px solid var(--border-color);
 }
 
 .modal-title-group {
   min-width: 0;
-  flex: 1;
 }
 
 .modal-title {
@@ -1318,13 +1406,19 @@ dialog.reader-dialog[open] {
   font-size: 22px;
   font-weight: 600;
   line-height: 1.3;
+  overflow-wrap: anywhere;
 }
 
+/* The domain, not the address: the full URL stays in href and title. */
 .modal-source-link {
+  display: block;
+  overflow: hidden;
   font-size: 12px;
   color: var(--accent);
   text-decoration: none;
-  word-break: break-all;
+  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .modal-source-link[href]:hover {
@@ -1333,9 +1427,10 @@ dialog.reader-dialog[open] {
 
 .modal-header-actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
   gap: 8px;
-  flex-shrink: 0;
 }
 
 .modal-copy-btn {
@@ -1394,16 +1489,34 @@ dialog.reader-dialog[open] {
   font-size: 18px;
 }
 
-.modal-summary-box strong {
-  font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 600;
-}
-
 .modal-summary-box p {
   font-size: 16px;
-  margin-top: 6px;
   color: var(--text-secondary);
+}
+
+.modal-summary-box p + ul {
+  margin-top: 10px;
+}
+
+.modal-bullets {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 15px;
+  color: var(--text-secondary);
+}
+
+.modal-bullets li {
+  position: relative;
+  padding-left: 14px;
+}
+
+.modal-bullets li::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  color: var(--accent);
 }
 
 /* Distraction-free reading typography */
@@ -1579,8 +1692,17 @@ dialog.reader-dialog[open] {
     max-height: 100vh;
   }
 
+  /* Title group and the close button share the first row; the actions drop to their own row. */
   .modal-header {
     padding: 12px 14px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+  }
+
+  .modal-header-actions {
+    grid-row: 2;
+    grid-column: 1 / -1;
+    justify-content: flex-start;
   }
 
   .modal-title {
@@ -1831,7 +1953,3 @@ dialog.shortcuts-dialog::backdrop {
   color: var(--text-secondary);
 }
 
-.modal-header-actions {
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
