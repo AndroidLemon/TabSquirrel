@@ -182,11 +182,15 @@ await saveArchivedTab({ id: 'c-manual', url: 'https://c.example/manual', status:
 const closedRec = await markClosedByTabSquirrel('c-closed');
 assert.strictEqual(closedRec.status, 'archived');
 assert.ok(closedRec.closedAt > 0, 'markClosedByTabSquirrel stamps closedAt');
+assert.strictEqual(closedRec.closedFrom, undefined, 'A direct close records no closedFrom');
 assert.deepStrictEqual((await getArchivedTabs({ closedSince: midnight.getTime() })).map(t => t.id), ['c-closed'],
   'closedSince returns only tabs Tab Squirrel closed');
 await markReopened('c-closed');
 assert.strictEqual((await getTabById('c-closed')).closedAt, null, 'Reopening clears closedAt');
 assert.strictEqual((await getArchivedTabs({ closedSince: midnight.getTime() })).length, 0);
+await saveArchivedTab({ id: 'c-slept', url: 'https://c.example/slept', status: 'discarded' });
+assert.strictEqual((await markClosedByTabSquirrel('c-slept', { closedFrom: 'suspended' })).closedFrom, 'suspended', 'A close of a suspended tab records closedFrom');
+await markReopened('c-slept');
 console.log('✓ Closed-today bookkeeping verified');
 
 // Test 11b: 'captured' = summary saved, tab still open (Chrome refused to close, or manual save)

@@ -631,6 +631,7 @@ async function runHybridTests() {
     assert.strictEqual(tier2.tabOpen, false, 'Tier 2 must close the long-suspended tab');
     assert.strictEqual(tier2.rec.status, 'archived', 'Tier 2 record must be archived');
     assert.ok(tier2.rec.closedAt > 0, 'Tier 2 close must stamp closedAt (Closed today)');
+    assert.strictEqual(tier2.rec.closedFrom, 'suspended', 'Tier 2 close records that the tab slept first');
     console.log('✓ Long-suspended tab was closed by tier 2 and recorded as archived');
 
     // --- Test 8: A hung executeScript is skipped after EXTRACT_TIMEOUT_MS and does not wedge isSweeping ---

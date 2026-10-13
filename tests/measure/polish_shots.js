@@ -34,7 +34,7 @@ try {
       base(3, { title: 'Trusted domain note', status: 'archived', closedAt: now - 90 * 60000, closureReason: 'Closed: trusted domain' }),
       base(4, { title: 'Starred reference on typography', status: 'archived', isFavorite: true }),
       base(5, { title: 'Reopened yesterday', status: 'restored', restoredAt: now - 86400000 }),
-      base(6, { title: 'Sleeping tab, still open', status: 'suspended' }),
+      base(6, { title: 'Sleeping tab, still open', status: 'discarded' }),
       base(7, { title: 'Old note close to fading', status: 'archived', capturedAt: now - 28 * 86400000 })
     ];
     for (const r of rows) await saveArchivedTab(r);

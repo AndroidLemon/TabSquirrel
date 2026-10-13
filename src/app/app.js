@@ -179,12 +179,12 @@ async function loadReceiptSeen() {
 /**
  * Plain reason a tab was closed, from what the record holds. Records in "Closed today" were all
  * closed by Tab Squirrel's idle sweep (a manual save leaves the tab open), so the reason is
- * which path closed it: a trusted domain, a tab that slept first and then sat idle twice as
- * long (hybrid mode: its suspend-time closureReason is still set), or plain idleness.
+ * which path closed it: a trusted domain, a tab that slept first and then sat idle longer
+ * (hybrid mode: closeDiscardedTab stamps closedFrom 'suspended'), or plain idleness.
  */
 export function closedReason(tab) {
   if (tab.closureReason === 'Closed: trusted domain') return 'On your always-close list';
-  if (tab.closureTier === 'suspend_only' && tab.closureReason) return 'Slept first, then closed after sitting idle longer';
+  if (tab.closedFrom === 'suspended') return 'Slept first, then closed after sitting idle longer';
   return 'Sat idle, so it was closed';
 }
 
@@ -231,10 +231,12 @@ async function reopenAllClosedToday() {
   const button = $('closed-today-reopen-all');
   button.disabled = true;
   let reopened = 0;
+  const removedIds = []; // notes dropped by Remove Notes When Reopened
   for (const { dataset } of rows) {
     try {
       const res = await chrome.runtime.sendMessage({ type: 'RESTORE_TAB', url: dataset.url, recordId: dataset.id });
       if (res?.success) reopened++;
+      if (res?.success && res.removed) removedIds.push(dataset.id);
     } catch (err) {
       console.error('Error reopening tab:', err);
     }
@@ -243,7 +245,9 @@ async function reopenAllClosedToday() {
   await refresh();
   const failed = rows.length - reopened;
   const done = `Reopened ${reopened} ${reopened === 1 ? 'tab' : 'tabs'}.`;
-  showToast(failed ? `${done} ${failed} could not be reopened.` : done, failed > 0);
+  const summary = failed ? `${done} ${failed} could not be reopened.` : done;
+  if (removedIds.length) showRemovedOnReopenToast(removedIds, `${summary} ${removedIds.length === 1 ? 'Its note was' : 'Their notes were'} removed.`);
+  else showToast(summary, failed > 0);
 }
 
 async function renderFeed(showSkeletons = false) {
@@ -271,8 +275,12 @@ async function renderFeed(showSkeletons = false) {
     feed.innerHTML = emptyStateHtml();
     return;
   }
+  // Re-rendering destroys the focused card; take focus back only if it was in the feed (or
+  // nowhere), never from the search box or another control the user moved to.
+  const active = document.activeElement;
+  const hadFeedFocus = !active || active === document.body || feed.contains(active);
   feed.innerHTML = tabs.map(cardHtml).join('');
-  if (selectedIndex >= 0) selectCard(selectedIndex);
+  if (selectedIndex >= 0) selectCard(selectedIndex, { focus: hadFeedFocus });
 }
 
 function setResultsCount(n) {
@@ -367,7 +375,7 @@ async function onFeedClick(e) {
     target.setAttribute('aria-expanded', String(open));
     card.querySelector('.card-bullets')?.classList.toggle('collapsed', !open);
   } else if (target.matches('.star-btn')) {
-    await toggleStar(tab, card, target);
+    await toggleStar(tab, card);
   } else if (target.matches('.reader-btn')) {
     await openReader(tab);
   } else if (target.matches('.copy-btn')) {
@@ -396,7 +404,7 @@ async function reopenTab(url, recordId) {
   }
 }
 
-async function toggleStar(tab, card, btn) {
+async function toggleStar(tab, card) {
   try {
     const updated = await toggleFavoriteTab(tab.id);
     tab.isFavorite = updated ? updated.isFavorite : !tab.isFavorite;
@@ -405,15 +413,20 @@ async function toggleStar(tab, card, btn) {
     showToast('Could not update the star', true);
     return;
   }
-  btn.classList.toggle('active', tab.isFavorite);
-  btn.title = starLabel(tab.isFavorite);
-  btn.setAttribute('aria-label', btn.title);
+  const btn = card?.querySelector('.star-btn');
+  if (btn) {
+    btn.classList.toggle('active', tab.isFavorite);
+    btn.title = starLabel(tab.isFavorite);
+    btn.setAttribute('aria-label', btn.title);
+  }
   showToast(tab.isFavorite ? 'Starred. This note will not fade.' : 'Unstarred');
   updateStats();
-  if (state.time === 'favorites' && !tab.isFavorite) {
+  // No card (the reader outlived it) in Starred means the note has to come back, or go, with the feed.
+  if (state.time === 'favorites' && (!tab.isFavorite || !card)) {
     await renderFeed();
     return;
   }
+  if (!card) return;
   // The fade chip and date depend on isFavorite; refresh them without a full re-render.
   card.querySelector('.fade-chip')?.remove();
   card.querySelector('.fade-date')?.remove();
@@ -444,14 +457,14 @@ async function copyText(text, message, btn) {
  * Delete is durable immediately (tombstone via softDeleteTab), with a 5-second Undo toast
  * that calls restoreDeletedTab.
  */
-async function deleteCard(tab, card) {
+async function deleteCard(tab, card = null) {
   // Animate synchronously for instant feedback, before the IndexedDB write lands.
-  card.classList.add('removing');
+  card?.classList.add('removing');
   try {
     await softDeleteTab(tab.id);
   } catch (err) {
     console.error('Error deleting tab:', err);
-    card.classList.remove('removing');
+    card?.classList.remove('removing');
     showToast('Could not delete that note.', true);
     return;
   }
@@ -460,7 +473,7 @@ async function deleteCard(tab, card) {
   updateStats();
   renderSidebarFilters();
   setTimeout(() => {
-    card.remove();
+    card?.remove();
     if (!$('tabs-feed').querySelector('.tab-card')) renderFeed();
   }, 260);
 
@@ -471,21 +484,37 @@ async function deleteCard(tab, card) {
  * Undo toast for a note removed because it was reopened (Remove Notes When Reopened). Undo restores it
  * the way it would have been with the setting off: back in the list, marked Reopened.
  */
-function showRemovedOnReopenToast(recordId) {
-  showUndoToast('Note removed (reopened)', recordId, async () => {
-    const restored = await restoreDeletedTab(recordId);
-    if (!restored) return null;
-    return markReopened(recordId);
-  });
+function showRemovedOnReopenToast(recordIds, message = 'Note removed (reopened)') {
+  const ids = [].concat(recordIds);
+  showUndoToast(message, ids[0], async () => {
+    let failed = 0;
+    for (const id of ids) {
+      try {
+        const restored = await restoreDeletedTab(id);
+        if (!restored || !await markReopened(id)) failed++;
+      } catch (err) {
+        console.error('Error restoring tab:', err);
+        failed++;
+      }
+    }
+    if (ids.length === 1) return failed === 0;
+    return failed ? `Could not restore ${failed} of ${ids.length} notes. They may already be gone.` : true;
+  }, ids.length === 1 ? 'Note restored' : 'Notes restored');
 }
 
-/** 5-second toast whose Undo runs `restore`, then refreshes and highlights the returned card. */
-function showUndoToast(message, id, restore) {
+/**
+ * 5-second toast whose Undo runs `restore`, then refreshes and highlights the returned card.
+ * `restore` resolves truthy on success, falsy on failure, or a string to fail with that message.
+ */
+function showUndoToast(message, id, restore, restoredMessage = 'Note restored') {
   showToast(message, false, async () => {
     hideToast();
     let restoredOk = false;
+    let failMessage = 'Could not restore that note. It may already be gone.';
     try {
-      restoredOk = Boolean(await restore());
+      const result = await restore();
+      restoredOk = Boolean(result) && typeof result !== 'string';
+      if (typeof result === 'string') failMessage = result;
     } catch (err) {
       console.error('Error restoring tab:', err);
     }
@@ -496,8 +525,8 @@ function showUndoToast(message, id, restore) {
       restored.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       setTimeout(() => restored.classList.remove('undo-restored'), 1200);
     }
-    if (restoredOk) showToast('Note restored');
-    else showToast('Could not restore that note. It may already be gone.', true);
+    if (restoredOk) showToast(restoredMessage);
+    else showToast(failMessage, true);
   }, 5000);
 }
 
@@ -566,7 +595,7 @@ function liveCards() {
   return Array.from(document.querySelectorAll('#tabs-feed .tab-card:not(.removing)'));
 }
 
-function selectCard(index) {
+function selectCard(index, { focus = true } = {}) {
   const cards = liveCards();
   if (cards.length === 0) {
     selectedIndex = -1;
@@ -576,7 +605,7 @@ function selectCard(index) {
   cards.forEach((card, i) => card.classList.toggle('keyboard-selected', i === selectedIndex));
   cards[selectedIndex].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   // Real focus on the title so screen readers announce the selected note.
-  cards[selectedIndex].querySelector('.card-title')?.focus({ preventScroll: true });
+  if (focus) cards[selectedIndex].querySelector('.card-title')?.focus({ preventScroll: true });
 }
 
 function clearSelection() {
@@ -673,13 +702,17 @@ function updateReaderActions() {
   btn.querySelector('.btn-label').textContent = readerTab.isFavorite ? 'Unstar' : 'Star';
 }
 
-/** Reader Reopen / Star / Delete reuse the card's handlers on the note's card in the feed. */
+/**
+ * Reader Reopen / Star / Delete reuse the card handlers, working from the note itself: the card
+ * may be gone (a re-render after Unstar in Starred drops it) and its actions must still work.
+ */
 async function onReaderAction(action) {
-  const tab = readerTab && tabsById.get(String(readerTab.id));
-  const card = tab && document.querySelector(`#tabs-feed .tab-card[data-id="${CSS.escape(String(tab.id))}"]`);
-  if (!tab || !card || card.classList.contains('removing')) return;
+  if (!readerTab) return;
+  const tab = tabsById.get(String(readerTab.id)) || readerTab;
+  const card = document.querySelector(`#tabs-feed .tab-card[data-id="${CSS.escape(String(tab.id))}"]`);
+  if (card?.classList.contains('removing')) return;
   if (action === 'star') {
-    await toggleStar(tab, card, card.querySelector('.star-btn'));
+    await toggleStar(tab, card);
     readerTab.isFavorite = tab.isFavorite;
     updateReaderActions();
     return;

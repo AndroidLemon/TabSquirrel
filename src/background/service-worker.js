@@ -428,7 +428,7 @@ async function closeDiscardedTab(tab, recordId, settings) {
       await revertIfStillOpen(tab.id, recordId, true, 'Chrome refused to close this tab; it stays suspended');
       return;
     }
-    await markClosedByTabSquirrel(recordId);
+    await markClosedByTabSquirrel(recordId, { closedFrom: 'suspended' });
     console.log(`[Tab Squirrel] Closed long-discarded tab ${tab.id} (${tab.url}).`);
     // Refresh the side panel's "Closed today"; no page open is fine.
     chrome.runtime.sendMessage({ type: 'TABS_CLOSED' }).catch(() => {});

@@ -340,11 +340,15 @@ async function updateRecord(id, mutate) {
  *   restored   the user reopened it
  */
 
-/** Tab Squirrel closed the tab itself. Feeds "Closed today". */
-export async function markClosedByTabSquirrel(id) {
+/**
+ * Tab Squirrel closed the tab itself. Feeds "Closed today". `closedFrom: 'suspended'` records
+ * that the tab had been suspended first (hybrid mode), which "Closed today" explains to the user.
+ */
+export async function markClosedByTabSquirrel(id, { closedFrom } = {}) {
   return updateRecord(id, (record) => {
     record.status = 'archived';
     record.closedAt = Date.now();
+    if (closedFrom) record.closedFrom = closedFrom;
   });
 }
 

@@ -491,12 +491,12 @@ async function runAppUXTests() {
     const closeNote = (note) => page.evaluate(async (n) => {
       const { saveArchivedTab, markClosedByTabSquirrel } = await import('/src/storage/db.js');
       await saveArchivedTab({ ...n, domain: 'closed.example', status: 'archived', summary: { tldr: `${n.id} gist`, bullets: [], tags: [] } });
-      await markClosedByTabSquirrel(n.id);
+      await markClosedByTabSquirrel(n.id, n.closedFrom ? { closedFrom: n.closedFrom } : undefined);
     }, note);
     const tellClosed = () => background.evaluate(() => chrome.runtime.sendMessage({ type: 'TABS_CLOSED' }).catch(() => {}));
     assert.strictEqual(await receiptOpen(), true, 'Receipt is open by default when it holds closures not yet seen');
     assert.match(await page.textContent('#closed-today > summary'), /Closed 1 tab for you today/, 'Receipt opens with one plain sentence');
-    await closeNote({ id: 'closed-slept', url: 'https://closed.example/slept', title: 'Slept First', closureTier: 'suspend_only', closureReason: 'Contains form or interactive input controls' });
+    await closeNote({ id: 'closed-slept', url: 'https://closed.example/slept', title: 'Slept First', closedFrom: 'suspended', closureTier: 'suspend_only', closureReason: 'Contains form or interactive input controls' });
     await closeNote({ id: 'closed-trusted', url: 'https://closed.example/trusted', title: 'Trusted', closureTier: 'suspend_only', closureReason: 'Closed: trusted domain' });
     await tellClosed();
     await page.waitForFunction(() => document.getElementById('closed-today-count').textContent === '3');
@@ -537,6 +537,43 @@ async function runAppUXTests() {
       await purgeDeletedTabs(0);
     });
     console.log('✓ Receipt: open with a reason per row, collapses once seen, reopens on new closures, Reopen all, hidden when empty\n');
+
+    // Reopen all with Remove Notes When Reopened on: one Undo toast brings every note back.
+    // RESTORE_TAB is stubbed to do what the worker does (soft-delete, removed: true) without opening tabs.
+    await page.evaluate(async () => {
+      const { saveSettings, DEFAULT_SETTINGS } = await import('/src/storage/db.js');
+      await saveSettings({ ...DEFAULT_SETTINGS, removeOnReopen: true });
+    });
+    await closeNote({ id: 'removed-a', url: 'https://closed.example/a', title: 'Removed A' });
+    await closeNote({ id: 'removed-b', url: 'https://closed.example/b', title: 'Removed B' });
+    await tellClosed();
+    await page.waitForFunction(() => document.getElementById('closed-today-count').textContent === '2');
+    await page.evaluate(() => {
+      window.__realSend = chrome.runtime.sendMessage;
+      chrome.runtime.sendMessage = async (msg) => {
+        if (msg?.type !== 'RESTORE_TAB') return window.__realSend.call(chrome.runtime, msg);
+        const { softDeleteTab } = await import('/src/storage/db.js');
+        await softDeleteTab(msg.recordId);
+        return { success: true, removed: true };
+      };
+    });
+    await page.click('#closed-today-reopen-all');
+    await page.locator('#toast-undo-btn').waitFor({ state: 'visible', timeout: 5000 });
+    assert.match(await page.textContent('#toast-message'), /Reopened 2 tabs\. Their notes were removed\./, 'Reopen all says the notes were removed');
+    await page.click('#toast-undo-btn');
+    await page.waitForFunction(() => document.getElementById('toast-message').textContent === 'Notes restored');
+    const removedAfterUndo = await page.evaluate(async () => {
+      const { getTabById } = await import('/src/storage/db.js');
+      return Promise.all(['removed-a', 'removed-b'].map(async id => { const t = await getTabById(id); return { present: Boolean(t), deleted: Boolean(t?.deletedAt), status: t?.status }; }));
+    });
+    assert.deepStrictEqual(removedAfterUndo, Array(2).fill({ present: true, deleted: false, status: 'restored' }), 'Undo restores every note Reopen all removed');
+    await page.evaluate(async () => {
+      chrome.runtime.sendMessage = window.__realSend;
+      const { softDeleteTab, purgeDeletedTabs } = await import('/src/storage/db.js');
+      for (const id of ['removed-a', 'removed-b']) await softDeleteTab(id);
+      await purgeDeletedTabs(0);
+    });
+    console.log('✓ Reopen all with removed notes offers one Undo that restores them all\n');
 
     await page.evaluate(async () => {
       const { saveSettings, DEFAULT_SETTINGS } = await import('/src/storage/db.js');
@@ -685,6 +722,36 @@ async function runAppUXTests() {
     await hub.click('#toast-undo-btn');
     await hub.waitForSelector('.tab-card[data-id="inbox-note"]:not(.removing)');
     console.log('✓ Reader Reopen, Star and Delete (with Undo) verified');
+
+    // Reader actions keep working after the card leaves the feed (Unstar in Starred drops it)
+    await hub.click('.nav-item[data-time="favorites"]');
+    await hub.waitForSelector('.tab-card[data-id="fading-note"]');
+    await hub.click('.tab-card[data-id="fading-note"] .reader-btn');
+    await hub.waitForSelector('#reader-dialog[open]');
+    await hub.click('#modal-star-btn'); // Unstar
+    await hub.waitForFunction(() => !document.querySelector('.tab-card[data-id="fading-note"]'));
+    assert.strictEqual((await hub.textContent('#modal-star-btn')).trim(), 'Star', 'Reader offers Star once unstarred');
+    await hub.click('#modal-star-btn'); // Star again, with no card in the feed
+    await hub.waitForFunction(() => document.getElementById('modal-star-btn').textContent.trim() === 'Unstar');
+    assert.match(await hub.textContent('#toast-message'), /^Starred/, 'Starring from the reader still toasts');
+    const restarred = await hub.evaluate(async () => (await (await import('/src/storage/db.js')).getTabById('fading-note')).isFavorite);
+    assert.strictEqual(restarred, true, 'The note ends up starred');
+    await hub.waitForSelector('.tab-card[data-id="fading-note"]');
+    await hub.keyboard.press('Escape');
+    await hub.click('.nav-item[data-view=""]');
+    await hub.waitForSelector('.tab-card[data-id="inbox-note"]');
+    console.log('✓ Reader Star works after the card left the feed');
+
+    // A background refresh must not pull focus out of the search box
+    await hub.focus('.tab-card[data-id="inbox-note"] .card-title');
+    await hub.keyboard.press('j');
+    await hub.focus('#search-input');
+    await hub.evaluate(() => { document.querySelector('#tabs-feed .tab-card').dataset.stale = '1'; });
+    await background.evaluate(() => chrome.runtime.sendMessage({ type: 'TABS_CLOSED' }).catch(() => {}));
+    await hub.waitForFunction(() => !document.querySelector('#tabs-feed .tab-card[data-stale]'));
+    assert.strictEqual(await hub.evaluate(() => document.activeElement.id), 'search-input', 'Refresh leaves focus in the search box');
+    assert.strictEqual(await hub.locator('#tabs-feed .keyboard-selected').count(), 1, 'Refresh keeps the selection highlight');
+    console.log('✓ Background refresh keeps focus in search');
 
     // Shortcuts legend: ? opens, Escape closes, focus returns
     await hub.focus('.tab-card[data-id="inbox-note"] .card-title');

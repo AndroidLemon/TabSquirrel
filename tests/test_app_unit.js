@@ -87,7 +87,8 @@ console.log('✓ Status badges verified (Sleeping, Reopened, Saved, Closed)');
 
 // Receipt reasons are derived from the record, never invented
 assert.match(closedReason({ closureTier: 'safe_to_close', closureReason: 'Pure stateless reading article' }), /idle/, 'a plain reading page closed after sitting idle');
-assert.match(closedReason({ closureTier: 'suspend_only', closureReason: 'Contains form or interactive input controls' }), /Slept first/, 'a tab that slept before closing says so');
+assert.match(closedReason({ closureTier: 'suspend_only', closureReason: 'Contains form or interactive input controls', closedFrom: 'suspended' }), /Slept first/, 'a tab that slept before closing says so');
+assert.match(closedReason({ closureTier: 'suspend_only', closureReason: 'Contains form or interactive input controls' }), /Sat idle/, 'a suspend_only page closed directly (close mode) never slept');
 assert.match(closedReason({ closureTier: 'suspend_only', closureReason: 'Closed: trusted domain' }), /always-close list/, 'a trusted-domain close names the list');
 assert.match(closedReason({}), /idle/, 'a record with no closure data still gets an honest idle reason');
 console.log('✓ Closed-today reasons derived from closureTier / closureReason');
