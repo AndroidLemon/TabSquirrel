@@ -1,0 +1,8 @@
+<!-- Tab Squirrel "acorn tab": an acorn whose cap is a browser-tab shape. Ink #2E4A7A on paper #FDFBF7 (Plainsong).
+     Source for icon-16/48/128.png: rsvg-convert -w N -h N icon.svg -o icon-N.png -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <rect width="128" height="128" rx="28" fill="#2E4A7A"/>
+  <rect x="59" y="16" width="10" height="16" rx="3" fill="#FDFBF7"/>
+  <path d="M28 58 L37 36 Q40 30 47 30 L81 30 Q88 30 91 36 L100 58 Z" fill="#FDFBF7"/>
+  <path d="M36 66 L92 66 C92 88 80 104 64 110 C48 104 36 88 36 66 Z" fill="#FDFBF7"/>
+</svg>
