@@ -43,6 +43,9 @@ const state = {
 };
 
 const TIME_LABELS = { favorites: 'Starred', today: 'Captured today', yesterday: 'Yesterday', week: 'Past 7 days' };
+const SIDEBAR_TAGS_VISIBLE = 8;
+const SIDEBAR_DOMAINS_VISIBLE = 5;
+const SIDEBAR_LIST_MAX = 50; // visible plus the "More" disclosure
 const SORT_KEY = 'notebook_sort';
 const DENSITY_KEY = 'sidepanel_density'; // pre-merge storage key, kept so saved preferences survive
 const RECEIPT_SEEN_KEY = 'closed_today_seen'; // { day, upTo }: today's receipt was shown up to this closedAt
@@ -133,11 +136,22 @@ async function updateStats() {
 
 async function renderSidebarFilters() {
   const [tags, domains] = await Promise.all([getAllTags(), getAllDomains()]);
-  const list = (items, key) => items.map(({ value, label, count }) =>
-    `<button class="filter-item-btn${state[key] === value ? ' active' : ''}" aria-pressed="${state[key] === value}" data-${key}="${escapeHtml(value)}"><span>${escapeHtml(label)}</span><span class="badge">${count}</span></button>`
-  ).join('') || '<p class="filter-empty">None yet</p>';
-  $('sidebar-tags').innerHTML = list(tags.slice(0, 12).map(({ tag, count }) => ({ value: tag, label: `#${tag}`, count })), 'tag');
-  $('sidebar-domains').innerHTML = list(domains.slice(0, 8).map(({ domain, count }) => ({ value: domain, label: domain, count })), 'domain');
+  // The first few show; the rest sit behind a native "More" disclosure (kept open across re-renders,
+  // and forced open when the applied filter is hidden inside it).
+  const list = (container, items, key, visible) => {
+    const wasOpen = container.querySelector('details')?.open;
+    const button = ({ value, label, count }) =>
+      `<button class="filter-item-btn${state[key] === value ? ' applied' : ''}" aria-pressed="${state[key] === value}" data-${key}="${escapeHtml(value)}"><span>${escapeHtml(label)}</span><span class="badge">${count}</span></button>`;
+    const rest = items.slice(visible, SIDEBAR_LIST_MAX);
+    const open = wasOpen || rest.some(item => item.value === state[key]);
+    container.innerHTML = items.slice(0, visible).map(button).join('') || '<p class="filter-empty">None yet</p>';
+    if (rest.length) {
+      container.insertAdjacentHTML('beforeend',
+        `<details class="filter-more"${open ? ' open' : ''}><summary>More</summary>${rest.map(button).join('')}</details>`);
+    }
+  };
+  list($('sidebar-tags'), tags.map(({ tag, count }) => ({ value: tag, label: `#${tag}`, count })), 'tag', SIDEBAR_TAGS_VISIBLE);
+  list($('sidebar-domains'), domains.map(({ domain, count }) => ({ value: domain, label: domain, count })), 'domain', SIDEBAR_DOMAINS_VISIBLE);
 }
 
 function startOfLocalDay() {
@@ -493,31 +507,25 @@ async function applyFilters(patch) {
   await renderFeed();
 }
 
-/** Reflect `state` in every control (nav, view tabs, tag/domain lists, banner, sort). */
+/** Reflect `state` in every control (view switch, tag/domain lists, banner, sort). */
 function syncControls() {
-  document.querySelectorAll('.nav-item').forEach(item => {
-    const active = item.dataset.time
+  // The sidebar's Views/When items and the narrow view switch share one rule: the current page.
+  document.querySelectorAll('.nav-item, .view-tab-btn').forEach(item => {
+    const current = item.dataset.time
       ? item.dataset.time === state.time
       : !state.time && item.dataset.view === state.view;
-    item.classList.toggle('active', active);
-    item.setAttribute('aria-pressed', String(active));
-    if (active) item.setAttribute('aria-current', 'page');
+    if (current) item.setAttribute('aria-current', 'page');
     else item.removeAttribute('aria-current');
   });
-  document.querySelectorAll('.view-tab-btn').forEach(btn => {
-    const active = btn.dataset.view === state.view;
-    btn.setAttribute('aria-pressed', String(active));
-    if (active) btn.setAttribute('aria-current', 'page');
-    else btn.removeAttribute('aria-current');
-  });
+  // Tag and domain are applied filters on top of the current view, styled quieter than it.
   document.querySelectorAll('#sidebar-tags [data-tag]').forEach(b => {
     const on = b.dataset.tag === state.tag;
-    b.classList.toggle('active', on);
+    b.classList.toggle('applied', on);
     b.setAttribute('aria-pressed', String(on));
   });
   document.querySelectorAll('#sidebar-domains [data-domain]').forEach(b => {
     const on = b.dataset.domain === state.domain;
-    b.classList.toggle('active', on);
+    b.classList.toggle('applied', on);
     b.setAttribute('aria-pressed', String(on));
   });
 
@@ -577,7 +585,7 @@ function clearSelection() {
 function openDrawer() {
   document.body.classList.add('drawer-open');
   $('filters-btn').setAttribute('aria-expanded', 'true');
-  document.querySelector('#sidebar .nav-item.active, #sidebar .nav-item')?.focus();
+  document.querySelector('#sidebar .nav-item[aria-current], #sidebar .nav-item')?.focus();
 }
 
 function closeDrawer() {

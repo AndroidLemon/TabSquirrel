@@ -253,11 +253,28 @@ button {
   color: var(--text-primary);
 }
 
-.nav-item.active,
-.filter-item-btn.active {
+.nav-item[aria-current="page"] {
   background: var(--accent-light);
   color: var(--accent-text);
   font-weight: 600;
+}
+
+/* An applied tag/domain filter: quieter than the current view (no fill, ink and a marker). */
+.filter-item-btn.applied {
+  color: var(--accent-text);
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--accent-text);
+}
+
+.filter-more summary {
+  padding: 5px 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.filter-more summary:hover {
+  color: var(--text-primary);
 }
 
 .badge {
@@ -501,6 +518,7 @@ button {
 
 .feed-controls {
   position: relative;
+  margin-left: auto;
 }
 
 .controls-row {
@@ -678,8 +696,7 @@ button {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   padding: 3px;
-  flex: 1;
-  max-width: 320px;
+  flex: 1 1 100%;
 }
 
 .view-tab-btn {
@@ -694,7 +711,7 @@ button {
   cursor: pointer;
 }
 
-.view-tab-btn[aria-pressed="true"] {
+.view-tab-btn[aria-current="page"] {
   background: var(--accent-light);
   color: var(--accent-text);
 }
@@ -1500,15 +1517,6 @@ dialog.reader-dialog[open] {
     inset: 0;
     z-index: 150;
     background: var(--scrim);
-  }
-
-  .view-tabs {
-    max-width: none;
-    flex-basis: 100%;
-  }
-
-  .feed-controls {
-    margin-left: auto;
   }
 
   /* Reader view fills the panel */

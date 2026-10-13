@@ -99,7 +99,8 @@ async function runAppUXTests() {
     assert.strictEqual(await page.evaluate(() => document.body.dataset.surface), 'tab', 'Opened as a tab, surface must be "tab"');
     assert.strictEqual(await page.locator('#archive-current-btn').isHidden(), true, '"Archive Current Tab" must be hidden when opened as a tab');
     assert.strictEqual(await page.locator('#open-full-btn').isHidden(), true, '"Open full view" must be hidden when opened as a tab');
-    assert.strictEqual(await page.locator('#view-all').getAttribute('aria-pressed'), 'true', 'Full view opens on All');
+    assert.strictEqual(await page.locator('#view-all').getAttribute('aria-current'), 'page', 'Full view opens on All');
+    assert.strictEqual(await page.locator('#view-all').getAttribute('aria-pressed'), null, 'View switch uses aria-current, not aria-pressed');
     assert.strictEqual(await page.locator('#sidebar').isHidden(), true, 'Narrow layout hides the sidebar behind the Filters drawer');
     assert.strictEqual(await page.locator('#filters-btn').isVisible(), true, 'Narrow layout shows the Filters button');
     assert.strictEqual(await page.locator('#view-tabs').isVisible(), true, 'Inbox/Reopened/All control stays visible above the feed');
@@ -409,8 +410,44 @@ async function runAppUXTests() {
     await page.click('.tab-card[data-id="test-tab-1"] .card-tag[data-tag="research"]');
     await page.waitForFunction(() => document.querySelectorAll('#tabs-feed .tab-card').length === 1);
     assert.match(await page.textContent('#filter-label'), /#research/, 'Tag pill click filters by that tag');
-    assert.strictEqual(await page.locator('#sidebar-tags [data-tag="research"]').evaluate(el => el.classList.contains('active')), true, 'Sidebar highlights the active tag');
+    assert.strictEqual(await page.locator('#sidebar-tags [data-tag="research"]').evaluate(el => el.classList.contains('applied')), true, 'Sidebar marks the applied tag');
+    assert.strictEqual(await page.locator('#sidebar .nav-item[aria-current="page"]').count(), 1, 'A tag filter leaves exactly one current view');
+    assert.strictEqual(await page.locator('#sidebar .nav-item[aria-current="page"]').getAttribute('data-view'), '', 'The current view is still All notes');
+    assert.strictEqual(await page.locator('#sidebar .filter-item-btn.applied').count(), 1, 'Exactly one applied filter is marked');
+    assert.strictEqual(await page.locator('#sidebar-tags [data-tag="research"]').getAttribute('aria-current'), null, 'An applied tag is not a current view');
     await page.click('#clear-filter-btn');
+    await page.waitForFunction(() => document.querySelectorAll('#tabs-feed .tab-card').length === 2);
+    assert.deepStrictEqual(await page.locator('#sidebar .nav-section-title').allTextContents(), ['Views', 'When', 'Tags', 'Domains'], 'Sidebar sections run Views / When / Tags / Domains');
+    assert.strictEqual(await page.locator('#sidebar .nav-item[data-time="favorites"]').evaluate((el) => {
+      let node = el;
+      while (node && !node.classList.contains('nav-section-title')) node = node.previousElementSibling;
+      return node?.textContent;
+    }), 'Views', 'Starred sits under Views');
+
+    // Domains: top 5 visible, the rest behind "More"
+    await page.evaluate(async () => {
+      const { saveArchivedTab } = await import('/src/storage/db.js');
+      for (let i = 1; i <= 4; i++) {
+        await saveArchivedTab({ id: `extra-domain-${i}`, url: `https://site${i}.test/a`, title: `Extra ${i}`, domain: `site${i}.test`,
+          capturedAt: Date.now() - 1000 * i, summary: { tldr: 'x', bullets: [], tags: [] }, status: 'archived' });
+      }
+    });
+    await page.reload();
+    await page.waitForSelector('.tab-card');
+    assert.strictEqual(await page.locator('#sidebar-domains > .filter-item-btn').count(), 5, 'Domains list shows the top 5');
+    const domainsMore = page.locator('#sidebar-domains details.filter-more');
+    const allDomains = await page.evaluate(async () => (await (await import('/src/storage/db.js')).getAllDomains()).length);
+    assert.ok(allDomains > 5, 'Seeded more than 5 domains');
+    assert.strictEqual(await domainsMore.locator('.filter-item-btn').count(), allDomains - 5, 'Every other domain sits under More');
+    assert.strictEqual(await domainsMore.locator('.filter-item-btn').first().isHidden(), true, 'More starts collapsed');
+    await domainsMore.locator('summary').click();
+    assert.strictEqual(await domainsMore.locator('.filter-item-btn').first().isVisible(), true, 'More reveals the rest');
+    assert.strictEqual(await page.locator('#sidebar-tags details.filter-more').count(), 0, 'A short tag list has no More');
+    await page.evaluate(async () => {
+      const { softDeleteTab } = await import('/src/storage/db.js');
+      for (let i = 1; i <= 4; i++) await softDeleteTab(`extra-domain-${i}`);
+    });
+    await page.reload();
     await page.waitForFunction(() => document.querySelectorAll('#tabs-feed .tab-card').length === 2);
     console.log('✓ Domain filter, card tag-pill filter and banner clear verified');
 
@@ -442,6 +479,8 @@ async function runAppUXTests() {
     });
     await background.evaluate(() => chrome.runtime.sendMessage({ type: 'TABS_CLOSED' }).catch(() => {}));
     await page.waitForSelector('#closed-today:not([hidden])', { timeout: 5000 });
+    const [receiptBox, searchBox] = await Promise.all([page.locator('#closed-today').boundingBox(), page.locator('#search-input').boundingBox()]);
+    assert.ok(receiptBox.y < searchBox.y, 'The receipt sits above the search row');
     assert.strictEqual(await page.textContent('#closed-today-count'), '1', 'Closed today counts the newly closed tab');
     await page.waitForSelector('.tab-card[data-id="closed-note"]', { timeout: 5000 });
     console.log('✓ TABS_CLOSED refreshes "Closed today" and the feed without a reload\n');
@@ -514,7 +553,7 @@ async function runAppUXTests() {
     await panel.waitForSelector('body[data-surface="panel"]', { timeout: 5000 });
     assert.strictEqual(await panel.locator('#archive-current-btn').isVisible(), true, '"Archive Current Tab" is shown in the side panel');
     assert.strictEqual(await panel.locator('#open-full-btn').isVisible(), true, '"Open full view" is shown in the side panel');
-    assert.strictEqual(await panel.locator('#view-inbox').getAttribute('aria-pressed'), 'true', 'Side panel opens on the Inbox');
+    assert.strictEqual(await panel.locator('#view-inbox').getAttribute('aria-current'), 'page', 'Side panel opens on the Inbox');
     console.log('✓ Panel surface shows Archive Current Tab + Open full view and opens on Inbox');
 
     const [fullPage] = await Promise.all([
@@ -564,7 +603,7 @@ async function runAppUXTests() {
     });
     await hub.reload();
     await hub.waitForSelector('.tab-card[data-id="inbox-note"]', { timeout: 5000 });
-    await hub.click('#view-inbox');
+    await hub.click('.nav-item[data-view="inbox"]');
     await hub.waitForFunction(() => !document.querySelector('.tab-card[data-id="reopened-note"]'));
 
     let ids = await cardIds(hub);
@@ -573,14 +612,14 @@ async function runAppUXTests() {
     assert.match(chip, /Fading soon · (1d left|today)/, 'Note near its fade date shows a chip');
     console.log(`✓ Inbox hides reopened notes; fading note shows "${chip}"`);
 
-    await hub.click('#view-reopened');
+    await hub.click('.nav-item[data-view="reopened"]');
     await hub.waitForFunction(() => !document.querySelector('.tab-card[data-id="inbox-note"]'));
     const reopenedBadge = await hub.textContent('.tab-card[data-id="reopened-note"] .badge-status');
     assert.deepStrictEqual(await cardIds(hub), ['reopened-note'], 'Reopened view lists only reopened notes');
     assert.strictEqual(reopenedBadge.trim(), 'Reopened', 'Reopened notes carry the Reopened badge');
     console.log('✓ Reopened view lists only reopened notes');
 
-    await hub.click('#view-all');
+    await hub.click('.nav-item[data-view=""]');
     await hub.waitForSelector('.tab-card[data-id="fading-note"]');
     await hub.click('.tab-card[data-id="fading-note"] .star-btn');
     await hub.waitForFunction(() => !document.querySelector('.tab-card[data-id="fading-note"] .fade-chip'));
