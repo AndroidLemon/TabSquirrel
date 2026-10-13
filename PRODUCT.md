@@ -23,7 +23,7 @@ Tab suspenders free memory but leave the clutter and keep no record. Read-later 
 ## Operating Context
 
 - Lives in desktop Chrome (minimum version 141, Manifest V3). The notebook is one page that runs in the side panel (narrow, single column) and as a full tab (sidebar plus grid). Options open in their own tab.
-- Shortcuts: Cmd/Ctrl+Shift+S opens the panel and Cmd/Ctrl+Shift+E archives the active tab. In the notebook: j/k or the arrow keys move between cards, Enter reopens, `/` searches, Escape clears or closes.
+- Shortcuts: Cmd/Ctrl+Shift+S opens the panel and Cmd/Ctrl+Shift+E archives the active tab. In the notebook: j/k or the arrow keys move between cards, Enter reopens, `/` searches, the first Escape leaves search and keeps the query, a second clears it, and Escape closes dialogs. `?` lists shortcuts.
 - Note lifecycle: notes start in the Inbox, then Reopened, and fade unless starred (30 days if never reopened, 7 days after the last reopen; both configurable, 0 means never). Closed tabs collect in a "Closed today" list. There are no per-tab notifications.
 - Exports to Obsidian (zip of .md files), Markdown and JSON. JSON can be re-imported.
 
@@ -35,7 +35,7 @@ Tab suspenders free memory but leave the clutter and keep no record. Read-later 
 - Summarizer tiers: offline heuristic, Chrome's on-device Prompt API, Gemini with the user's own key, or any OpenAI-compatible local server.
 - Local-first: data stays in IndexedDB and chrome.storage. Nothing leaves the machine unless the user configures a cloud or remote summarizer (see PRIVACY.md).
 - Plain JS, HTML and CSS with no framework and no build step for the extension itself.
-- Terminology: note, Inbox, Reopened, Sleeping (suspended), Saved (summary kept, tab still open), Archived (tab closed), fade, star.
+- Terminology: note, Inbox, Reopened, Sleeping (suspended), Saved (summary kept, tab still open), Closed (tab closed, note kept), fade, star.
 
 ## Brand Commitments
 

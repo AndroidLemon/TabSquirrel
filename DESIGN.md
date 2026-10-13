@@ -193,7 +193,7 @@ A paper-and-ink palette: warm neutrals do almost all the work, one ink-blue acce
 
 ### Secondary
 - **Moss** (`moss`, `moss-wash`): Reopened and success states.
-- **Ochre** (`ochre`): Saved status, the "Fades in Nd" chip and the star.
+- **Ochre** (`ochre`): Saved status, the "Fading soon · Nd left" chip and the star.
 - **Brick** (`brick`, `brick-wash`): destructive actions and error toasts.
 
 ### Neutral
@@ -205,7 +205,7 @@ A paper-and-ink palette: warm neutrals do almost all the work, one ink-blue acce
 ### Named Rules
 **The One Ink Rule.** Ink blue is the only accent. Moss, ochre and brick appear only as status, never as decoration.
 
-**The Archived Is Quiet Rule.** Archived is the default state, so it gets no badge at all. Badges and colour are reserved for states that need attention: Saved, Sleeping, Reopened.
+**The Closed Is Quiet Rule.** Closed is the default state, so it gets no badge at all. Badges and colour are reserved for states that need attention: Saved, Sleeping, Reopened.
 
 **The Fixed Toast Rule.** Toasts use their own fixed-colour tokens in both schemes, so the contrast of the Undo button never depends on page tokens.
 
@@ -275,7 +275,7 @@ Ruled and restrained.
 
 ### Chips
 - **Tag:** paper-muted fill, secondary text, sans 12px, 4px radius. On hover it takes an ink wash and ink text. Clicking a tag filters by it.
-- **Status badge and fade chip:** the badge's hue at 12% opacity for the fill, the hue for the text and a 25% border. Sleeping is ink, Reopened is moss, Saved is ochre, and "Fades in Nd" is ochre. Archived has no badge. Each badge pairs its colour with an emoji and a word.
+- **Status badge and fade chip:** the badge's hue at 12% opacity for the fill, the hue for the text and a 25% border. Sleeping is ink, Reopened is moss, Saved is ochre, and "Fading soon · Nd left" is ochre. Closed has no badge. Each badge pairs its colour with a word; none carries an icon or emoji. Badge and chip sit on their own row under the domain and meta.
 - **Count badge:** mono 12px on a rule-coloured fill.
 
 ### Cards / Containers
@@ -283,7 +283,11 @@ Ruled and restrained.
 - **Background:** paper surface on a paper page.
 - **Shadow strategy:** none. A hairline rule border turns to rule strong on hover.
 - **Internal padding:** 12px in the side panel and 16px in the grid, with a 6–10px gap between rows.
-- **Anatomy:** a header with favicon, mono domain, time and status badge; a serif title; the TL;DR on a paper-muted panel; serif takeaways with ink bullets; tags; and a footer, separated by a rule, holding the actions.
+- **Anatomy:** a header with favicon and mono domain, the meta line (read time, saved time, quiet "fades Nov 12" date) and, when needed, a status badge or fade chip on its own row (narrow widths put the meta on its own line under the domain); a serif title; the TL;DR on a paper-muted panel; serif takeaways with ink bullets; tags; and a footer, separated by a rule, holding the actions.
+
+### Notebook parts
+- **Closed today receipt:** a collapsible list at the top of the notebook of tabs closed for you today, each row with favicon on the title line, title, domain, reason, TL;DR and a Reopen button, plus Reopen all.
+- **Quiet fade line:** one muted sentence under the search explaining when notes fade; each card carries its own quiet "fades Nov 12" date.
 
 ### Inputs / Fields
 - **Style:** paper surface with a 1px border in the input-rule colour and an 8px radius. The search icon is inset on the left and the `/` hint on the right.
@@ -294,7 +298,7 @@ Ruled and restrained.
 - **Narrow layout:** the same sidebar becomes a left drawer behind a Filters button.
 
 ### Toast (signature)
-A fixed charcoal bar in both schemes. It sits at bottom centre in the narrow layout and bottom right in the wide one. The Undo button is a pale-ink pill. A 2px ink progress bar counts down the 5-second Undo window. The error variant switches to a brick fill.
+A fixed charcoal bar in both schemes, shown as a manual popover so it stays above the open reader dialog. It sits at bottom centre in the narrow layout and bottom right in the wide one. The Undo button is a pale-ink pill. A 2px ink progress bar counts down the 5-second Undo window. The error variant switches to a brick fill.
 
 ### Reader Dialog (signature)
 A native `<dialog>`: 20px radius, up to 820px wide and 85vh tall, with the overlay shadow and a blurred scrim. On open it fades and scales up from 96% (200ms). The header holds a 22px serif title and the ink source link. The body is an 18px Newsreader column, 68ch wide, with line height 1.6.
@@ -308,7 +312,7 @@ One easing curve, `cubic-bezier(.2, .7, .2, 1)`. Durations: 120ms for colour and
 - **Do** take every colour from the tokens on `:root` and define its dark counterpart under `prefers-color-scheme: dark`.
 - **Do** set content in Newsreader, controls in Plex Sans and data in Plex Mono (the Three Voices Rule).
 - **Do** separate surfaces with 1px rules and tonal steps. Reserve shadows for menus, dialogs and toasts.
-- **Do** pair every status hue with a word and an icon, and leave Archived unbadged.
+- **Do** pair every status hue with a word, and leave Closed unbadged.
 - **Do** keep filled ink buttons at `night-ink-fill` in dark mode, not the bright `night-ink`, and set their text in `--accent-fill-ink` (dark text on the quiet fill is only 2.7:1).
 - **Do** keep a visible focus halo and AA contrast in both schemes, and respect reduced motion.
 

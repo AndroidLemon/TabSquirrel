@@ -659,6 +659,8 @@ async function runAppUXTests() {
     assert.match(await hub.textContent('#modal-fade'), /fades [A-Z][a-z]{2} \d{1,2}/, 'Reader shows the fade date');
     await hub.click('#modal-star-btn');
     await hub.waitForSelector('.tab-card[data-id="inbox-note"] .star-btn.active');
+    assert.strictEqual(await hub.evaluate(() => document.getElementById('reader-dialog').open && document.getElementById('toast').matches(':popover-open')), true, 'Toast is in the top layer, visible above the open reader dialog');
+    assert.strictEqual(await hub.locator('#toast').isVisible(), true, 'Toast is visible while the reader is open');
     assert.strictEqual((await hub.textContent('#modal-star-btn')).trim(), 'Unstar', 'Reader Star button follows the star');
     assert.strictEqual(await hub.textContent('#modal-fade'), '', 'A starred note has no fade line in the reader');
     await hub.click('#modal-star-btn');

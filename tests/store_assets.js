@@ -323,7 +323,7 @@ async function seedNotes(page) {
 /**
  * Grants <all_urls> as a required host permission in the TEMP extension copy's manifest.json
  * only (never tests/helpers/test-extension.js or the real manifest.json), so the screenshots
- * don't show the "Enable Tab Extraction" onboarding banner that a fresh install would have.
+ * don't show the "Let Tab Squirrel read pages" onboarding banner that a fresh install would have.
  */
 function grantAllUrlsInTempManifest(extensionPath) {
   const manifestPath = path.join(extensionPath, 'manifest.json');

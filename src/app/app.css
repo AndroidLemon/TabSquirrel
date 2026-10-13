@@ -765,10 +765,18 @@ button {
 
 .closed-today-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   padding: 6px 12px;
   border-top: 1px solid var(--border-color);
+}
+
+.closed-today-row .favicon {
+  margin-top: 2px; /* sit on the title's line, not centred across the row */
+}
+
+.closed-today-reopen-btn {
+  align-self: center;
 }
 
 .closed-today-info {
@@ -866,17 +874,32 @@ button {
 
 .card-header {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 8px;
+  gap: 4px 8px;
 }
 
 .card-source {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: 6px;
   min-width: 0;
+}
+
+/* Status badge and fade chip: their own row under the domain and meta */
+.card-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex-basis: 100%;
+}
+
+/* Narrow: domain on the first line at full width, meta on its own line beneath */
+@media (max-width: 719.98px) {
+  .card-source {
+    flex-basis: 100%;
+  }
 }
 
 .favicon {
@@ -891,6 +914,10 @@ button {
   font-size: 12px;
   color: var(--text-primary);
   max-width: 180px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .card-tag {
@@ -1131,6 +1158,20 @@ button:active:not(:disabled) {
 
 .compact .card-domain {
   max-width: 80px;
+}
+
+.compact .card-header {
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+.compact .card-source {
+  flex-basis: auto;
+}
+
+.compact .card-flags {
+  flex-basis: auto;
+  flex-wrap: nowrap;
 }
 
 .compact .card-title {
@@ -1405,8 +1446,13 @@ dialog.reader-dialog[open] {
 
 /* ---------- Toast ---------- */
 
+/* A popover="manual" element, so it sits in the top layer above the open reader dialog. */
 .toast {
   position: fixed;
+  inset: auto;
+  margin: 0;
+  width: auto;
+  height: auto;
   bottom: 16px;
   left: 50%;
   transform: translateX(-50%);

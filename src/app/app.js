@@ -43,7 +43,7 @@ const state = {
   density: 'comfortable' // 'comfortable' | 'compact'
 };
 
-const TIME_LABELS = { favorites: 'Starred', today: 'Captured today', yesterday: 'Yesterday', week: 'Past 7 days' };
+const TIME_LABELS = { favorites: 'Starred', today: 'Today', yesterday: 'Yesterday', week: 'Past 7 days' };
 const SIDEBAR_TAGS_VISIBLE = 8;
 const SIDEBAR_DOMAINS_VISIBLE = 5;
 const SIDEBAR_LIST_MAX = 50; // visible plus the "More" disclosure
@@ -325,25 +325,25 @@ function cardHtml(tab) {
   const bullets = toSafeStringArray(tab.summary?.bullets);
   const tags = toSafeStringArray(tab.summary?.tags).map(t => t.replace(/^#/, ''));
   const star = starLabel(tab.isFavorite);
+  const flags = getStatusBadge(tab) + fadeChipHtml(tab, fadeSettings, state.sortBy);
   return `
     <article class="tab-card" data-id="${escapeHtml(tab.id)}">
       <div class="card-header">
         <div class="card-source">
           <img class="favicon" src="${escapeHtml(faviconUrl(tab.url))}" alt="">
           <span class="card-domain">${highlightSearch(tab.domain, q)}</span>
-          ${getStatusBadge(tab)}
-          ${fadeChipHtml(tab, fadeSettings, state.sortBy)}
         </div>
         <span class="card-time" title="Saved ${escapeHtml(new Date(tab.capturedAt).toLocaleString())}">${tab.readingTimeMinutes || 1} min read · saved ${formatTimeAgo(tab.capturedAt)}${fadeDateHtml(tab, fadeSettings, state.sortBy)}</span>
+        ${flags ? `<div class="card-flags">${flags}</div>` : ''}
       </div>
       <h3 class="card-title" tabindex="0" title="${escapeHtml(tab.title)}">${highlightSearch(tab.title, q)}</h3>
       ${tab.summary?.tldr ? `<div class="card-tldr">${highlightSearch(tab.summary.tldr, q)}</div>` : '<div class="card-tldr card-tldr-empty">No AI note for this tab</div>'}
       ${bullets.length ? `
-        <button class="takeaways-toggle" type="button" aria-expanded="false"><span class="takeaways-chevron">▶</span> Key Takeaways (${bullets.length})</button>
+        <button class="takeaways-toggle" type="button" aria-expanded="false"><span class="takeaways-chevron">▶</span> Key takeaways (${bullets.length})</button>
         <ul class="card-bullets collapsed">${bullets.map(b => `<li>${highlightSearch(b, q)}</li>`).join('')}</ul>` : ''}
       ${tags.length ? `<div class="card-tags">${tags.map(t => `<button type="button" class="card-tag" data-tag="${escapeHtml(t)}" title="Filter by #${escapeHtml(t)}">#${highlightSearch(t, q)}</button>`).join('')}</div>` : ''}
       <div class="card-footer">
-        <button class="restore-btn">${ICONS.reopen} Reopen Tab</button>
+        <button class="restore-btn">${ICONS.reopen} Reopen tab</button>
         <div class="card-actions">
           <button class="action-icon-btn star-btn${tab.isFavorite ? ' active' : ''}" title="${star}" aria-label="${star}">${ICONS.star}</button>
           <button class="action-icon-btn reader-btn" title="Reader view (full text)" aria-label="Reader view">${ICONS.reader}</button>
@@ -640,7 +640,7 @@ export async function performExport(format = 'markdown') {
 async function openReader(tab) {
   readerTab = tab;
   const dialog = $('reader-dialog');
-  $('modal-title').textContent = tab.title || 'Untitled Tab';
+  $('modal-title').textContent = tab.title || 'Untitled tab';
   const link = $('modal-source-link');
   link.textContent = tab.url || '';
   if (/^https?:\/\//i.test(tab.url)) link.href = tab.url; // only http(s) links are clickable
@@ -783,7 +783,7 @@ function applyDensity() {
   const btn = $('density-toggle-btn');
   btn.classList.toggle('active', compact);
   btn.setAttribute('aria-pressed', String(compact));
-  btn.title = compact ? 'Switch to Comfortable View' : 'Switch to Compact View';
+  btn.title = compact ? 'Switch to comfortable view' : 'Switch to compact view';
 }
 
 async function checkPermissions() {
@@ -812,6 +812,9 @@ function showToast(message, isError = false, onUndo = null, duration = 2600) {
   void progress.offsetWidth;
   progress.style.animation = onUndo ? `toastCountdown ${duration}ms linear forwards` : 'none';
   toast.classList.remove('hidden', 'paused');
+  // Top layer: re-showing moves it above any modal dialog that opened since.
+  if (toast.matches(':popover-open')) toast.hidePopover();
+  toast.showPopover();
   toastDuration = duration;
   toastTimer = setTimeout(hideToast, duration);
 }
@@ -836,8 +839,13 @@ function setToastPaused(paused) {
 
 function hideToast() {
   clearTimeout(toastTimer);
-  $('toast').classList.add('hidden');
-  $('toast').classList.remove('paused');
+  const toast = $('toast');
+  toast.classList.add('hidden');
+  toast.classList.remove('paused');
+  // Let the fade-out finish before leaving the top layer.
+  setTimeout(() => {
+    if (toast.classList.contains('hidden') && toast.matches(':popover-open')) toast.hidePopover();
+  }, 220);
   $('toast-progress').style.animation = 'none';
 }
 

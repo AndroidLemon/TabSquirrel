@@ -47,7 +47,7 @@
         <div class="nav-section-title">When</div>
         <button class="nav-item" data-time="today">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-          Captured today
+          Today
           <span class="badge" id="count-today">0</span>
         </button>
         <button class="nav-item" data-time="yesterday">
@@ -123,7 +123,7 @@
 
       <div id="perm-banner" class="perm-banner" hidden>
         <div>
-          <strong>Enable Tab Extraction</strong>
+          <strong>Let Tab Squirrel read pages</strong>
           <p>Grant permission to read and summarize background tabs.</p>
         </div>
         <button id="enable-perm-btn" class="perm-btn">Enable</button>
@@ -162,13 +162,13 @@
             <select id="sort-select" class="sort-select" aria-label="Sort notes" title="Sort notes">
               <option value="newest">Newest</option>
               <option value="oldest">Oldest</option>
-              <option value="reading-time-asc">Quick Reads</option>
-              <option value="reading-time-desc">Deep Dives</option>
+              <option value="reading-time-asc">Quick reads</option>
+              <option value="reading-time-desc">Deep dives</option>
               <option value="title-asc">Title (A–Z)</option>
               <option value="domain">Domain</option>
               <option value="expiring-soon">Fading soonest</option>
             </select>
-            <button id="density-toggle-btn" class="density-toggle-btn" aria-pressed="false" aria-label="Toggle compact view" title="Switch to Compact View"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></button>
+            <button id="density-toggle-btn" class="density-toggle-btn" aria-pressed="false" aria-label="Toggle compact view" title="Switch to compact view"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></button>
 
             </div>
           </details>
@@ -205,8 +205,7 @@
             <span class="btn-label">Delete</span>
           </button>
           <button id="modal-copy-btn" class="modal-copy-btn" title="Copy Markdown" aria-label="Copy Markdown">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-            <span class="btn-label">Copy Markdown</span>
+            <span class="btn-label">Copy</span>
           </button>
           <button id="modal-close-btn" class="modal-close-btn" title="Close reader view" aria-label="Close reader view">✕</button>
         </div>
@@ -236,7 +235,7 @@
     </dl>
   </dialog>
 
-  <div id="toast" class="toast hidden" role="status" aria-live="polite">
+  <div id="toast" class="toast hidden" popover="manual" role="status" aria-live="polite">
     <span id="toast-message" class="toast-message"></span>
     <button id="toast-undo-btn" class="toast-undo-btn" hidden>Undo</button>
     <div id="toast-progress" class="toast-progress"></div>
