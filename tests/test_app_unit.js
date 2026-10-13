@@ -79,8 +79,8 @@ const badge = (status, closureReason) => getStatusBadge({ status, closureReason 
 assert.ok(badge('discarded').includes('class="badge-status sleeping"') && badge('discarded').includes('>Sleeping</span>'), 'discarded -> Sleeping');
 assert.ok(badge('restored').includes('class="badge-status restored"') && badge('restored').includes('>Reopened</span>'), 'restored -> Reopened');
 assert.ok(badge('captured').includes('class="badge-status captured"') && badge('captured').includes('>Saved</span>'), 'captured -> Saved');
-assert.ok(badge('archived').includes('class="badge-status archived"') && badge('archived').includes('>Closed</span>'), 'archived -> Closed');
-assert.ok(badge(undefined).includes('>Closed</span>'), 'Unknown status falls back to Closed');
+assert.strictEqual(badge('archived'), '', 'archived (the default state) renders no badge');
+assert.strictEqual(badge(undefined), '', 'Unknown status renders no badge');
 assert.ok(badge('captured', 'Chrome refused to close this tab; summary saved, tab left open').includes('title="Chrome refused to close this tab; summary saved, tab left open"'), 'Badge tooltip is the closureReason');
 assert.ok(!badge('captured', '"><img src=x>').includes('<img'), 'closureReason tooltip must be escaped');
 console.log('✓ Status badges verified (Sleeping, Reopened, Saved, Closed)');
@@ -101,7 +101,7 @@ for (const id of [
   'enable-perm-btn', 'view-inbox', 'view-reopened', 'view-all', 'sort-select', 'density-toggle-btn',
   'closed-today', 'closed-today-reopen-all', 'closed-today-list', 'tabs-feed', 'toast-undo-btn', 'toast-progress', 'filters-btn', 'sidebar', 'sidebar-tags',
   'sidebar-domains', 'filter-banner', 'clear-filter-btn', 'results-count', 'export-dropdown-btn', 'settings-btn',
-  'stat-total', 'archive-current-btn', 'open-full-btn'
+  'view-options', 'archive-current-btn', 'open-full-btn'
 ]) {
   assert.ok(htmlContent.includes(`id="${id}"`), `index.html must include #${id}`);
 }
@@ -111,6 +111,7 @@ for (const time of ['favorites', 'today', 'yesterday', 'week']) {
 for (const sort of ['newest', 'oldest', 'reading-time-asc', 'reading-time-desc', 'title-asc', 'domain', 'expiring-soon']) {
   assert.ok(htmlContent.includes(`<option value="${sort}">`), `Sort select must offer "${sort}"`);
 }
+assert.ok(!htmlContent.includes('stats-banner') && !htmlContent.includes('id="stat-'), 'The stats strip is gone');
 assert.ok(/id="archive-current-btn" class="[^"]*panel-only[^"]*" hidden/.test(htmlContent), 'Archive Current Tab must be panel-only and hidden until the surface is known');
 assert.ok(/id="open-full-btn" class="[^"]*panel-only[^"]*"/.test(htmlContent), 'Open full view must be panel-only');
 assert.ok(!/\son[a-z]+\s*=/.test(htmlContent), 'index.html must not use inline event handlers (blocked by MV3 CSP)');

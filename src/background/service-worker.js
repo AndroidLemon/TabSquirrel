@@ -747,8 +747,8 @@ function showArchivedNotification(title) {
     chrome.notifications.create({
       type: 'basic',
       iconUrl: chrome.runtime.getURL('src/assets/icons/icon-128.png'),
-      title: 'Tab Archived to Wiki',
-      message: `"${shortTitle}" summarized and saved to your knowledge base.`,
+      title: 'Saved a note',
+      message: `"${shortTitle}" is in your notebook. The tab stays open.`,
       silent: true
     });
   } catch (err) {

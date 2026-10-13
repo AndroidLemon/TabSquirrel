@@ -103,8 +103,9 @@ async function runAppUXTests() {
     assert.strictEqual(await page.locator('#sidebar').isHidden(), true, 'Narrow layout hides the sidebar behind the Filters drawer');
     assert.strictEqual(await page.locator('#filters-btn').isVisible(), true, 'Narrow layout shows the Filters button');
     assert.strictEqual(await page.locator('#view-tabs').isVisible(), true, 'Inbox/Reopened/All control stays visible above the feed');
-    assert.strictEqual(await page.locator('.stats-banner').isVisible(), true, 'Stats row is visible');
-    assert.strictEqual(await page.textContent('#stat-total'), '3', 'Stats row counts seeded summaries');
+    assert.strictEqual(await page.locator('.stats-banner').count(), 0, 'The stats strip is gone');
+    assert.strictEqual(await page.locator('#sort-select').isHidden(), true, 'Sort and density live in the collapsed drawer');
+    assert.strictEqual(await page.locator('#density-toggle-btn').isHidden(), true, 'Density toggle lives in the collapsed drawer');
     console.log('✓ Tab surface hides panel-only controls; narrow layout uses the drawer\n');
 
     // --- TEST 2: Search clear button, keyboard hint & highlighting ---
@@ -152,6 +153,7 @@ async function runAppUXTests() {
     const densityBtn = page.locator('#density-toggle-btn');
     const feedIsCompact = () => page.locator('#tabs-feed').evaluate(el => el.classList.contains('compact'));
     assert.strictEqual(await densityBtn.getAttribute('aria-pressed'), 'false', 'Density button should not be active initially');
+    await page.click('#view-options > summary');
     await densityBtn.click();
     assert.strictEqual(await densityBtn.evaluate(el => el.classList.contains('active')), true, 'Density button should have .active in compact mode');
     assert.strictEqual(await feedIsCompact(), true, 'Feed should switch to compact cards');
@@ -161,6 +163,7 @@ async function runAppUXTests() {
     await page.reload();
     await page.waitForSelector('.tab-card');
     assert.strictEqual(await feedIsCompact(), true, 'Compact density persists across reloads');
+    await page.click('#view-options > summary');
     await densityBtn.click();
     assert.strictEqual(await feedIsCompact(), false, 'Cards should revert to comfortable');
     console.log('✓ Density toggle and storage persistence verified\n');
@@ -527,6 +530,22 @@ async function runAppUXTests() {
     console.log('✓ Open full view opens a tab and closes the side panel\n');
     await fullPage.close();
 
+    // The sort choice survives a reload (stored in chrome.storage.local)
+    const sortPage = await context.newPage();
+    await sortPage.addInitScript(() => { chrome.tabs.getCurrent = () => Promise.resolve(undefined); });
+    await sortPage.setViewportSize(NARROW);
+    await sortPage.goto(APP_URL);
+    await sortPage.waitForSelector('body[data-surface="panel"]');
+    await sortPage.click('#view-options > summary');
+    await sortPage.selectOption('#sort-select', 'oldest');
+    await sortPage.waitForFunction(async () => (await chrome.storage.local.get('notebook_sort')).notebook_sort === 'oldest');
+    await sortPage.reload();
+    await sortPage.waitForSelector('body[data-surface="panel"]');
+    assert.strictEqual(await sortPage.locator('#sort-select').inputValue(), 'oldest', 'Sort choice persists across reload');
+    await sortPage.evaluate(() => chrome.storage.local.remove('notebook_sort'));
+    await sortPage.close();
+    console.log('✓ Sort choice persists across reload\n');
+
     // --- TEST 12: Inbox / Reopened views, fade chip, star, expiring-soon sort ---
     console.log('--- Test 12: Inbox Views, Fading & Expiring-Soon Sort ---');
     const hub = await context.newPage();
@@ -567,6 +586,7 @@ async function runAppUXTests() {
     await hub.waitForFunction(() => !document.querySelector('.tab-card[data-id="fading-note"] .fade-chip'));
     console.log('✓ Starring removes the fade chip');
 
+    await hub.click('#view-options > summary');
     await hub.selectOption('#sort-select', 'expiring-soon');
     await hub.waitForFunction(() => document.querySelector('#tabs-feed .tab-card')?.dataset.id === 'reopened-note');
     ids = await cardIds(hub);

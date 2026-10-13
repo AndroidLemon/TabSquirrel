@@ -205,7 +205,7 @@ A paper-and-ink palette: warm neutrals do almost all the work, one ink-blue acce
 ### Named Rules
 **The One Ink Rule.** Ink blue is the only accent. Moss, ochre and brick appear only as status, never as decoration.
 
-**The Archived Is Quiet Rule.** Archived is the default state, so its badge has no hue (paper-muted fill, secondary text). Colour is reserved for states that need attention.
+**The Archived Is Quiet Rule.** Archived is the default state, so it gets no badge at all. Badges and colour are reserved for states that need attention: Saved, Sleeping, Reopened.
 
 **The Fixed Toast Rule.** Toasts use their own fixed-colour tokens in both schemes, so the contrast of the Undo button never depends on page tokens.
 
@@ -223,7 +223,7 @@ A paper-and-ink palette: warm neutrals do almost all the work, one ink-blue acce
 - **Reading** (400, 18px, 1.6, max 68ch): article text in the reader view. The summary box matches it so the measures line up.
 - **Summary** (400, 14px; 15px at 720px and wider): the TL;DR and takeaways, in serif.
 - **Body** (400, 13px, 1.4; 14px at 720px and wider): all UI text.
-- **Label** (600, 12px, 0.05em, uppercase): sidebar section headings and stat labels. Badges use 600 at 12px with 0.02em tracking.
+- **Label** (600, 12px, 0.05em, uppercase): sidebar section headings. Badges use 600 at 12px with 0.02em tracking.
 - **Data** (400, 12px, mono): domains, timestamps and count badges.
 
 ### Named Rules
@@ -275,7 +275,7 @@ Ruled and restrained.
 
 ### Chips
 - **Tag:** paper-muted fill, secondary text, sans 12px, 4px radius. On hover it takes an ink wash and ink text. Clicking a tag filters by it.
-- **Status badge and fade chip:** the badge's hue at 12% opacity for the fill, the hue for the text and a 25% border. Sleeping is ink, Reopened is moss, Saved is ochre, and "Fades in Nd" is ochre. Archived is neutral. Each badge pairs its colour with an emoji and a word.
+- **Status badge and fade chip:** the badge's hue at 12% opacity for the fill, the hue for the text and a 25% border. Sleeping is ink, Reopened is moss, Saved is ochre, and "Fades in Nd" is ochre. Archived has no badge. Each badge pairs its colour with an emoji and a word.
 - **Count badge:** mono 12px on a rule-coloured fill.
 
 ### Cards / Containers
@@ -308,7 +308,7 @@ One easing curve, `cubic-bezier(.2, .7, .2, 1)`. Durations: 120ms for colour and
 - **Do** take every colour from the tokens on `:root` and define its dark counterpart under `prefers-color-scheme: dark`.
 - **Do** set content in Newsreader, controls in Plex Sans and data in Plex Mono (the Three Voices Rule).
 - **Do** separate surfaces with 1px rules and tonal steps. Reserve shadows for menus, dialogs and toasts.
-- **Do** pair every status hue with a word and an icon, and keep Archived neutral.
+- **Do** pair every status hue with a word and an icon, and leave Archived unbadged.
 - **Do** keep filled ink buttons at `night-ink-fill` in dark mode, not the bright `night-ink`, and set their text in `--accent-fill-ink` (dark text on the quiet fill is only 2.7:1).
 - **Do** keep a visible focus halo and AA contrast in both schemes, and respect reduced motion.
 

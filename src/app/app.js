@@ -43,6 +43,7 @@ const state = {
 };
 
 const TIME_LABELS = { favorites: 'Starred', today: 'Captured today', yesterday: 'Yesterday', week: 'Past 7 days' };
+const SORT_KEY = 'notebook_sort';
 const DENSITY_KEY = 'sidepanel_density'; // pre-merge storage key, kept so saved preferences survive
 const RECEIPT_SEEN_KEY = 'closed_today_seen'; // { day, upTo }: today's receipt was shown up to this closedAt
 
@@ -97,6 +98,7 @@ async function init() {
   setupEventListeners();
   syncControls();
   await loadDensity();
+  await loadSort();
   checkPermissions();
   await refresh(true);
 }
@@ -124,9 +126,6 @@ function currentFilters() {
 async function updateStats() {
   const stats = await getStats();
   const set = (id, value) => { $(id).textContent = value; };
-  set('stat-total', stats.total);
-  set('stat-today', stats.today);
-  set('stat-time', `${stats.totalReadingMinutes}m`);
   set('count-all', stats.total);
   set('count-today', stats.today);
   set('count-favorites', stats.favorites || 0);
@@ -283,16 +282,19 @@ function emptyStateHtml() {
 
 /**
  * Status badge for a record: sleeping (discarded), reopened (restored), saved (captured:
- * summary saved but the tab is still open), otherwise closed. Tooltip = closureReason.
+ * summary saved but the tab is still open). Closed is the default state, so it gets no badge
+ * (empty string). Tooltip = closureReason.
  * @param {Object} tab
  * @returns {string}
  */
 export function getStatusBadge(tab) {
-  const [cls, label, fallback] = {
+  const entry = {
     discarded: ['sleeping', 'Sleeping', 'Sleeping tab (RAM suspended)'],
     restored: ['restored', 'Reopened', 'Tab was reopened'],
     captured: ['captured', 'Saved', 'Note saved; tab left open']
-  }[tab.status] || ['archived', 'Closed', 'Tab closed; note kept'];
+  }[tab.status];
+  if (!entry) return '';
+  const [cls, label, fallback] = entry;
   return `<span class="badge-status ${cls}" title="${escapeHtml(tab.closureReason || fallback)}">${label}</span>`;
 }
 
@@ -720,6 +722,19 @@ async function loadDensity() {
   applyDensity();
 }
 
+async function loadSort() {
+  try {
+    const data = await chrome.storage.local.get(SORT_KEY);
+    const saved = data[SORT_KEY];
+    if ([...$('sort-select').options].some(o => o.value === saved)) {
+      state.sortBy = saved;
+      syncControls();
+    }
+  } catch (err) {
+    console.debug('Failed to load sort preference:', err);
+  }
+}
+
 function applyDensity() {
   const compact = state.density === 'compact';
   $('tabs-feed').classList.toggle('compact', compact);
@@ -852,7 +867,14 @@ function setupEventListeners() {
     if (btn) applyFilters({ domain: state.domain === btn.dataset.domain ? '' : btn.dataset.domain, tag: '' });
   });
   $('clear-filter-btn').addEventListener('click', () => applyFilters({ tag: '', domain: '', time: '' }));
-  $('sort-select').addEventListener('change', (e) => applyFilters({ sortBy: e.target.value }));
+  $('sort-select').addEventListener('change', async (e) => {
+    applyFilters({ sortBy: e.target.value });
+    try {
+      await chrome.storage.local.set({ [SORT_KEY]: state.sortBy });
+    } catch (err) {
+      console.debug('Failed to save sort preference:', err);
+    }
+  });
 
   $('density-toggle-btn').addEventListener('click', async () => {
     state.density = state.density === 'compact' ? 'comfortable' : 'compact';

@@ -48,7 +48,7 @@ function setupListeners() {
     try {
       const granted = await chrome.permissions.request({ origins: ['<all_urls>'] });
       if (granted) {
-        showToast('Extraction permissions granted!');
+        showToast('Extraction permissions granted.');
       }
       await checkPermissions();
     } catch (err) {
@@ -136,7 +136,7 @@ function setupListeners() {
   document.getElementById('export-md-btn').addEventListener('click', async () => {
     const tabs = await getArchivedTabs({ limit: 10000 });
     const md = exportToMarkdown(tabs);
-    triggerDownload(md, 'TabSquirrel_Wiki_Export.md', 'text/markdown;charset=utf-8');
+    triggerDownload(md, 'TabSquirrel_Notes_Export.md', 'text/markdown;charset=utf-8');
     showToast('Exported Markdown');
   });
 
@@ -172,7 +172,7 @@ function setupListeners() {
   });
 
   document.getElementById('clear-history-btn').addEventListener('click', async () => {
-    if (confirm('Are you sure you want to delete all stored tab summaries and wiki notes? This action cannot be undone.')) {
+    if (confirm('Are you sure you want to delete all stored tab summaries and notes? This action cannot be undone.')) {
       await clearAllHistory();
       await updateStorageMeter();
       showToast('All history cleared');

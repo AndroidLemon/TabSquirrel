@@ -103,13 +103,6 @@
             <span class="brand-subtitle">Notebook</span>
           </div>
         </div>
-        <div class="stats-banner">
-          <div class="stat-item"><span class="stat-num" id="stat-total">0</span><span class="stat-label">Notes</span></div>
-          <div class="stat-divider"></div>
-          <div class="stat-item"><span class="stat-num" id="stat-today">0</span><span class="stat-label">Saved today</span></div>
-          <div class="stat-divider"></div>
-          <div class="stat-item"><span class="stat-num" id="stat-time">0m</span><span class="stat-label">Reading time</span></div>
-        </div>
         <button id="open-full-btn" class="icon-btn panel-only" title="Open full view in a tab" aria-label="Open full view in a tab" hidden>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
         </button>
@@ -124,7 +117,7 @@
       </div>
 
       <!-- In a tab, the "current tab" is Tab Squirrel itself, so this only makes sense in the side panel -->
-      <button id="archive-current-btn" class="primary-btn panel-only" hidden>
+      <button id="archive-current-btn" class="quiet-btn panel-only" hidden>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
         Save current tab
       </button>
@@ -150,16 +143,22 @@
         </div>
         <div class="feed-controls">
           <span id="results-count" class="results-count"></span>
-          <select id="sort-select" class="sort-select" aria-label="Sort notes" title="Sort notes">
-            <option value="newest">Newest</option>
-            <option value="oldest">Oldest</option>
-            <option value="reading-time-asc">Quick Reads</option>
-            <option value="reading-time-desc">Deep Dives</option>
-            <option value="title-asc">Title (A–Z)</option>
-            <option value="domain">Domain</option>
-            <option value="expiring-soon">Fading soonest</option>
-          </select>
-          <button id="density-toggle-btn" class="density-toggle-btn" aria-pressed="false" aria-label="Toggle compact view" title="Switch to Compact View"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></button>
+          <details id="view-options" class="view-options">
+            <summary>Sort and view</summary>
+            <div class="view-options-body">
+            <select id="sort-select" class="sort-select" aria-label="Sort notes" title="Sort notes">
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
+              <option value="reading-time-asc">Quick Reads</option>
+              <option value="reading-time-desc">Deep Dives</option>
+              <option value="title-asc">Title (A–Z)</option>
+              <option value="domain">Domain</option>
+              <option value="expiring-soon">Fading soonest</option>
+            </select>
+            <button id="density-toggle-btn" class="density-toggle-btn" aria-pressed="false" aria-label="Toggle compact view" title="Switch to Compact View"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></button>
+
+            </div>
+          </details>
         </div>
       </div>
 

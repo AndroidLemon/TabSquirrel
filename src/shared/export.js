@@ -62,7 +62,7 @@ export function formatNoteSection(tab) {
  */
 export function exportToMarkdown(tabs) {
   if (tabs.length === 0) return '';
-  const header = `# Tab Squirrel Knowledge Wiki Export\n*Exported on ${new Date().toLocaleString()}*\n\n`;
+  const header = `# Tab Squirrel Notes Export\n*Exported on ${new Date().toLocaleString()}*\n\n`;
   return header + tabs.map(formatNoteSection).join('\n\n---\n\n');
 }
 
