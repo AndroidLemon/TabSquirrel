@@ -1,5 +1,5 @@
 /**
- * TabSum - Shared HTML helpers for extension pages (side panel, wiki, options).
+ * Tab Squirrel - Shared HTML helpers for extension pages (side panel, wiki, options).
  */
 
 import { fadeChipLabel } from './fade.js';

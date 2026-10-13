@@ -1,5 +1,5 @@
 /**
- * TabSum - Storage Unit Tests
+ * Tab Squirrel - Storage Unit Tests
  * Verifies favorites, storage estimates, soft-delete tombstones, text-store split,
  * URL dedupe, summary sanitization, calendar-day stats, closed-today bookkeeping and fading.
  */
@@ -8,7 +8,7 @@ import assert from 'node:assert';
 import 'fake-indexeddb/auto';
 import { getExpiry, fadeChipLabel, FADE_WARNING_DAYS } from '../src/shared/fade.js';
 
-console.log('--- Running TabSum Storage Unit Tests ---');
+console.log('--- Running Tab Squirrel Storage Unit Tests ---');
 
 globalThis.chrome = {
   storage: {
@@ -38,7 +38,7 @@ const {
   softDeleteTab,
   restoreDeletedTab,
   purgeDeletedTabs,
-  markClosedByTabSum,
+  markClosedByTabSquirrel,
   markTabGone,
   markReopened,
   markLeftOpen,
@@ -179,18 +179,18 @@ console.log('Testing record lifecycle / closedSince...');
 await clearAllHistory();
 await saveArchivedTab({ id: 'c-closed', url: 'https://c.example/closed', status: 'discarded' });
 await saveArchivedTab({ id: 'c-manual', url: 'https://c.example/manual', status: 'archived' });
-const closedRec = await markClosedByTabSum('c-closed');
+const closedRec = await markClosedByTabSquirrel('c-closed');
 assert.strictEqual(closedRec.status, 'archived');
-assert.ok(closedRec.closedAt > 0, 'markClosedByTabSum stamps closedAt');
+assert.ok(closedRec.closedAt > 0, 'markClosedByTabSquirrel stamps closedAt');
 assert.deepStrictEqual((await getArchivedTabs({ closedSince: midnight.getTime() })).map(t => t.id), ['c-closed'],
-  'closedSince returns only tabs TabSum closed');
+  'closedSince returns only tabs Tab Squirrel closed');
 await markReopened('c-closed');
 assert.strictEqual((await getTabById('c-closed')).closedAt, null, 'Reopening clears closedAt');
 assert.strictEqual((await getArchivedTabs({ closedSince: midnight.getTime() })).length, 0);
 console.log('✓ Closed-today bookkeeping verified');
 
 // Test 11b: 'captured' = summary saved, tab still open (Chrome refused to close, or manual save)
-await markClosedByTabSum('c-manual');
+await markClosedByTabSquirrel('c-manual');
 const kept = await markLeftOpen('c-manual', 'Chrome refused to close this tab; summary saved, tab left open');
 assert.strictEqual(kept.closureReason, 'Chrome refused to close this tab; summary saved, tab left open', 'Reason is recorded');
 assert.strictEqual(kept.closedAt, null, 'A tab Chrome kept open is not in Closed today');
@@ -199,13 +199,13 @@ assert.ok((await getArchivedTabs({ view: 'inbox' })).some(t => t.id === 'c-manua
 console.log('✓ Captured status verified');
 
 // Test 12: Inbox views, fading, expiring-soon sort
-// Lifecycle: a tab TabSum closed vs a tab that merely went away, and capture dispositions
+// Lifecycle: a tab Tab Squirrel closed vs a tab that merely went away, and capture dispositions
 console.log('Testing lifecycle transitions...');
 await clearAllHistory();
 await saveArchivedTab({ id: 'lc-gone', url: 'https://lc.example/gone', status: 'discarded' });
 const gone = await markTabGone('lc-gone');
 assert.strictEqual(gone.status, 'archived', 'markTabGone archives the record');
-assert.ok(!gone.closedAt, 'a tab TabSum did not close must not count as closed today');
+assert.ok(!gone.closedAt, 'a tab Tab Squirrel did not close must not count as closed today');
 assert.strictEqual((await getArchivedTabs({ closedSince: 1 })).length, 0, 'and it stays out of Closed today (0 means the filter is off)');
 
 const cap = { url: 'https://lc.example/cap', title: 'Cap' };
@@ -241,7 +241,7 @@ console.log('Testing inbox views and fading...');
 await clearAllHistory();
 const DAY = 24 * 60 * 60 * 1000;
 const fade = { fadeUnopenedDays: 30, fadeReopenedDays: 7 };
-globalThis.chrome.storage.local._data['tabsum_settings'] = fade;
+globalThis.chrome.storage.local._data['tab_squirrel_settings'] = fade;
 const nowMs = Date.now();
 await saveArchivedTab({ id: 'f-old', url: 'https://f.example/old', status: 'archived', capturedAt: nowMs - 31 * DAY });
 await saveArchivedTab({ id: 'f-new', url: 'https://f.example/new', status: 'archived', capturedAt: nowMs - DAY });

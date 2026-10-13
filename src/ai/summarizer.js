@@ -1,5 +1,5 @@
 /**
- * TabSum - Multi-Tier Summarization Engine
+ * Tab Squirrel - Multi-Tier Summarization Engine
  * Tier 0: Algorithmic Heuristics (Instant, 0ms, 100% offline, zero-config)
  * Tier 1: Chrome Built-in Prompt API (Gemini Nano on-device, via LanguageModel)
  * Tier 2: Gemini Flash BYOK (Optional cloud API)

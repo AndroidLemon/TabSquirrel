@@ -180,15 +180,15 @@ async function main() {
     const userDataDir = path.resolve(REPO_ROOT, 'tests/.playwright_user_data_discardstate');
     if (fs.existsSync(userDataDir)) fs.rmSync(userDataDir, { recursive: true, force: true });
 
-    const extraArgs = process.env.TABSUM_NO_GPU === '1'
+    const extraArgs = process.env.TAB_SQUIRREL_NO_GPU === '1'
       ? ['--no-first-run', '--disable-gpu', '--disable-software-rasterizer', '--disable-gpu-compositing']
-      : process.env.TABSUM_METAL === '1'
+      : process.env.TAB_SQUIRREL_METAL === '1'
         ? ['--no-first-run', '--use-angle=metal', '--ignore-gpu-blocklist', '--enable-gpu-rasterization']
         : ['--no-first-run'];
     const launchOpts = extensionLaunchOptions(extensionPath, extraArgs);
-    // TABSUM_CHANNEL=chrome: the installed Google Chrome has a hardware GPU path,
+    // TAB_SQUIRREL_CHANNEL=chrome: the installed Google Chrome has a hardware GPU path,
     // which sidesteps the SwiftShader compositor segfault on discard().
-    if (process.env.TABSUM_CHANNEL) launchOpts.channel = process.env.TABSUM_CHANNEL;
+    if (process.env.TAB_SQUIRREL_CHANNEL) launchOpts.channel = process.env.TAB_SQUIRREL_CHANNEL;
     context = await chromium.launchPersistentContext(userDataDir, launchOpts);
     const background = await waitForServiceWorker(context);
     console.log(`Extension loaded: ${background.url()}\n`);

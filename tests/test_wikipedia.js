@@ -1,5 +1,5 @@
 /**
- * TabSum - End-to-End Wikipedia Inactivity & Knowledge Archival Test
+ * Tab Squirrel - End-to-End Wikipedia Inactivity & Knowledge Archival Test
  * Opens multiple arbitrary Wikipedia pages, verifies real DOM readability extraction,
  * auto-archives stale background tabs, protects active tabs, checks IndexedDB persistence,
  * and tests Wiki search and 1-click tab restoration.
@@ -33,7 +33,7 @@ const WIKI_PAGES = [
 ];
 
 async function runWikipediaMultiTabTest() {
-  console.log('🧪 Starting TabSum Multi-Tab Wikipedia End-to-End Test...\n');
+  console.log('🧪 Starting Tab Squirrel Multi-Tab Wikipedia End-to-End Test...\n');
 
   if (fs.existsSync(USER_DATA_DIR)) {
     fs.rmSync(USER_DATA_DIR, { recursive: true, force: true });
@@ -43,14 +43,14 @@ async function runWikipediaMultiTabTest() {
   let context;
 
   try {
-    console.log('🚀 Launching Chromium with TabSum MV3 unpacked extension...');
+    console.log('🚀 Launching Chromium with Tab Squirrel MV3 unpacked extension...');
     context = await chromium.launchPersistentContext(USER_DATA_DIR,
       extensionLaunchOptions(EXTENSION_PATH, ['--no-first-run', '--disable-blink-features=AutomationControlled']));
 
     // 1. Locate Extension Service Worker
     const background = await waitForServiceWorker(context, 15000);
     const extensionId = background.url().split('/')[2];
-    console.log(`✓ TabSum Extension ID: ${extensionId}`);
+    console.log(`✓ Tab Squirrel Extension ID: ${extensionId}`);
 
     // 2. Open Extension Sidepanel to interact with storage & DB directly via ES modules
     const sidepanel = await context.newPage();
@@ -223,7 +223,7 @@ async function runWikipediaMultiTabTest() {
     console.log(`    Tags: [${webbRecord.summary.tags.join(', ')}]`);
 
     // 9. Verify Wiki Dashboard UI
-    console.log('\n📖 Opening TabSum Knowledge Wiki Dashboard UI...');
+    console.log('\n📖 Opening Tab Squirrel Knowledge Wiki Dashboard UI...');
     const wikiTab = await context.newPage();
     await wikiTab.goto(`chrome-extension://${extensionId}/src/app/index.html`);
     await wikiTab.waitForLoadState('domcontentloaded');

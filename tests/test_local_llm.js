@@ -1,5 +1,5 @@
 /**
- * TabSum - OpenAI-compatible (local LLM) summarization tier
+ * Tab Squirrel - OpenAI-compatible (local LLM) summarization tier
  * Mocks fetch to verify request shape, SSE stream parsing across chunk boundaries,
  * non-streaming replies with <think> blocks, and fallback on server errors.
  */
@@ -7,7 +7,7 @@
 import assert from 'node:assert';
 import { summarizeContent } from '../src/ai/summarizer.js';
 
-console.log('--- Running TabSum Local LLM (OpenAI-compatible) Tests ---');
+console.log('--- Running Tab Squirrel Local LLM (OpenAI-compatible) Tests ---');
 
 const article = {
   title: 'How Bloom Filters Work',

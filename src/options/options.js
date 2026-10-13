@@ -1,5 +1,5 @@
 /**
- * TabSum - Settings & Permissions Controller
+ * Tab Squirrel - Settings & Permissions Controller
  */
 
 import { getSettings, saveSettings, setDomainList, getArchivedTabs, saveArchivedTab, getStorageEstimate, clearAllHistory } from '../storage/db.js';
@@ -129,14 +129,14 @@ function setupListeners() {
   document.getElementById('export-json-btn').addEventListener('click', async () => {
     const tabs = await getArchivedTabs({ limit: Infinity, includeText: true });
     const json = exportToJSON(tabs);
-    triggerDownload(json, 'TabSum_Backup.json', 'application/json;charset=utf-8');
+    triggerDownload(json, 'TabSquirrel_Backup.json', 'application/json;charset=utf-8');
     showToast('Exported JSON backup');
   });
 
   document.getElementById('export-md-btn').addEventListener('click', async () => {
     const tabs = await getArchivedTabs({ limit: 10000 });
     const md = exportToMarkdown(tabs);
-    triggerDownload(md, 'TabSum_Wiki_Export.md', 'text/markdown;charset=utf-8');
+    triggerDownload(md, 'TabSquirrel_Wiki_Export.md', 'text/markdown;charset=utf-8');
     showToast('Exported Markdown');
   });
 
@@ -205,7 +205,7 @@ async function checkPermissions() {
       grantBtn.textContent = 'Permission Active';
       grantBtn.disabled = true;
     } else {
-      statusEl.textContent = '⚠ TabSum requires permission to read background tab content.';
+      statusEl.textContent = '⚠ Tab Squirrel requires permission to read background tab content.';
       grantBtn.textContent = 'Enable on All Sites';
       grantBtn.disabled = false;
     }
@@ -236,7 +236,7 @@ async function testLocalLlmConnection() {
   // Must run first, while the click still counts as a user gesture
   const granted = await chrome.permissions.request({ origins: [`${origin}/*`] }).catch(() => false);
   if (!granted) {
-    status.textContent = `✗ TabSum needs permission to reach ${origin}`;
+    status.textContent = `✗ Tab Squirrel needs permission to reach ${origin}`;
     return;
   }
 
@@ -323,7 +323,7 @@ function showToast(message) {
 
 // Any write from elsewhere (the tab context menu) refreshes the cache the handlers save from.
 chrome.storage.onChanged.addListener(async (changes, area) => {
-  if (area !== 'local' || !changes.tabsum_settings) return;
+  if (area !== 'local' || !changes.tab_squirrel_settings) return;
   currentSettings = await getSettings();
   renderAllChips();
 });

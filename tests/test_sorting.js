@@ -1,5 +1,5 @@
 /**
- * TabSum - Sorting Unit Tests
+ * Tab Squirrel - Sorting Unit Tests
  * Verifies getArchivedTabs sorting capabilities:
  * - 'newest' (most recent first)
  * - 'oldest' (chronological oldest first)
@@ -24,7 +24,7 @@ if (!globalThis.chrome) {
 }
 
 export async function runSortingTests() {
-  console.log('--- Running TabSum Database Sorting Unit Tests ---');
+  console.log('--- Running Tab Squirrel Database Sorting Unit Tests ---');
   const { clearAllHistory, saveArchivedTab, getArchivedTabs } = await import('../src/storage/db.js');
 
   await clearAllHistory();

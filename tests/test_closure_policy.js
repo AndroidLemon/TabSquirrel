@@ -1,5 +1,5 @@
 /**
- * TabSum - Closure Policy Unit Tests
+ * Tab Squirrel - Closure Policy Unit Tests
  *
  * The whole closure ladder without a browser: every safety gate, the tier classifier and
  * the close-vs-suspend decision. Previously these branches were only reachable by launching
@@ -21,7 +21,7 @@ import {
   AI_SUMMARY_SOURCES
 } from '../src/shared/closure-policy.js';
 
-console.log('--- Running TabSum Closure Policy Tests ---');
+console.log('--- Running Tab Squirrel Closure Policy Tests ---');
 
 const MIN = 60 * 1000;
 const settings = { timeoutMinutes: 60, archiveMode: 'hybrid', ignorePinnedTabs: true, excludedDomains: [] };
@@ -78,7 +78,7 @@ assert.strictEqual(t2.recordId, 'rec-1', 'the record id is carried through');
 assert.strictEqual(sweep(discarded, { lastActive: now - 90 * MIN, discardedRecordId: 'rec-1' }).action, 'skip',
   'between 1x and 2x the timeout a suspended tab is left alone');
 assert.strictEqual(sweep(discarded, { lastActive: now - 121 * MIN }).action, 'skip',
-  'a suspended tab TabSum did not suspend is left alone');
+  'a suspended tab Tab Squirrel did not suspend is left alone');
 assert.strictEqual(
   sweep(discarded, { lastActive: now - 121 * MIN, discardedRecordId: 'rec-1', settings: { ...settings, archiveMode: 'close' } }).action,
   'skip', 'tier 2 is hybrid-only');

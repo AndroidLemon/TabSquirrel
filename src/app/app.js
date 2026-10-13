@@ -1,10 +1,10 @@
 /**
- * TabSum - Knowledge Hub controller.
+ * Tab Squirrel - Knowledge Hub controller.
  *
  * One page serves both Chrome's side panel and the full view in a tab. Layout adapts to
  * width in app.css (narrow: single column + Filters drawer; wide: sidebar + card grid).
  * Only a few controls depend on the surface: "Archive current tab" and "Open full view"
- * exist in the side panel only (in a tab, the current tab is TabSum itself).
+ * exist in the side panel only (in a tab, the current tab is Tab Squirrel itself).
  *
  * Importable in Node for unit tests: all DOM/chrome access is behind the document guard.
  */
@@ -73,7 +73,7 @@ if (typeof document !== 'undefined') {
     init();
   }
 
-  // TabSum closes idle tabs in the background; refresh stats/feed/"Closed today" when that
+  // Tab Squirrel closes idle tabs in the background; refresh stats/feed/"Closed today" when that
   // happens. Must not call sendResponse or return true (no response expected here).
   chrome.runtime.onMessage.addListener((message) => {
     if (message?.type === 'TABS_CLOSED') refresh();
@@ -530,13 +530,13 @@ export async function performExport(format = 'markdown') {
   }
   const stamp = Date.now();
   if (format === 'json') {
-    triggerDownload(exportToJSON(tabs), `tabsum-wiki-export-${stamp}.json`, 'application/json;charset=utf-8');
+    triggerDownload(exportToJSON(tabs), `tab-squirrel-wiki-export-${stamp}.json`, 'application/json;charset=utf-8');
     showToast('Exported Wiki Backup (JSON)!');
   } else if (format === 'obsidian') {
-    triggerDownload(exportToObsidianZip(tabs), `tabsum-obsidian-vault-${stamp}.zip`, 'application/zip');
+    triggerDownload(exportToObsidianZip(tabs), `tab-squirrel-obsidian-vault-${stamp}.zip`, 'application/zip');
     showToast('Exported Obsidian vault (.zip)!');
   } else {
-    triggerDownload(exportToMarkdown(tabs), `tabsum-wiki-export-${stamp}.md`, 'text/markdown;charset=utf-8');
+    triggerDownload(exportToMarkdown(tabs), `tab-squirrel-wiki-export-${stamp}.md`, 'text/markdown;charset=utf-8');
     showToast('Exported Wiki to Markdown!');
   }
 }

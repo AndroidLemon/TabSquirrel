@@ -1,7 +1,7 @@
-# Chrome Web Store Listing: TabSum
+# Chrome Web Store Listing: Tab Squirrel
 
 **Last Updated**: 2026-09-16  
-**Extension Name**: TabSum: Inactive Tab Summarizer & Knowledge Wiki  
+**Extension Name**: Tab Squirrel: Inactive Tab Summarizer & Knowledge Wiki  
 **Version**: 1.0.0  
 **Category**: Productivity / Tools  
 **Minimum Chrome**: 141 (side panel close API; the on-device model needs a recent Chrome too)  
@@ -22,7 +22,7 @@ Automatically summarizes neglected tabs and organizes them into an in-browser pe
 
 We open dozens of tabs intending to read them, but the tab bar quickly becomes a burden. Closing a tab feels like deleting a thought, so we hoard them. Tab suspenders free the memory but leave the clutter, and neither they nor Chrome's memory saver keep any record of what you had open.
 
-**TabSum** watches your background tabs. When one has sat untouched for an hour, it reads the article, writes a short summary, saves it to a searchable notebook in your browser, and then closes or suspends the tab. Anything it closes can be reopened with one click.
+**Tab Squirrel** watches your background tabs. When one has sat untouched for an hour, it reads the article, writes a short summary, saves it to a searchable notebook in your browser, and then closes or suspends the tab. Anything it closes can be reopened with one click.
 
 ### Key Features
 - **Real inactivity, not wall-clock time**: time you spend idle, locked, or asleep does not count toward the threshold.
@@ -34,10 +34,10 @@ We open dozens of tabs intending to read them, but the tab bar quickly becomes a
 - **Notes that fade**: unstarred notes delete themselves after 30 days (7 days after a reopen). Star anything to keep it. Both timers are configurable.
 - **Export**: Markdown, an Obsidian vault `.zip` with frontmatter, or a full JSON backup that can be re-imported.
 - **Keyboard first**: `Ctrl/Cmd+Shift+S` opens the side panel, `Ctrl/Cmd+Shift+E` summarizes the current tab, and `j`/`k`/`Enter`/`/` navigate the notebook.
-- **Local by default**: with the default provider, TabSum makes no network requests at all. Nothing is synced or sent anywhere unless you configure a summarizer.
+- **Local by default**: with the default provider, Tab Squirrel makes no network requests at all. Nothing is synced or sent anywhere unless you configure a summarizer.
 
 ### Single Purpose
-TabSum archives inactive browser tabs: it summarizes them, stores the summary locally, and closes or suspends the tab. Every permission below serves that one purpose.
+Tab Squirrel archives inactive browser tabs: it summarizes them, stores the summary locally, and closes or suspends the tab. Every permission below serves that one purpose.
 
 ---
 
@@ -79,10 +79,10 @@ For the dashboard's data-use checkboxes:
 - Data is not used or transferred to determine creditworthiness or for lending.
 
 ### Disclosure text
-- **Host permissions**: TabSum requests `<all_urls>` as an optional permission during onboarding so it can extract article text from tabs eligible for archival. Until granted, TabSum leaves tabs on that site alone.
+- **Host permissions**: Tab Squirrel requests `<all_urls>` as an optional permission during onboarding so it can extract article text from tabs eligible for archival. Until granted, Tab Squirrel leaves tabs on that site alone.
 - **Favicons**: site icons come from Chrome's local favicon cache via the `favicon` permission, never from the live site or a third-party favicon service. No extra request, no leak.
 - **Storage**: content parsing, summarization by the default provider, and storage all happen on the user's device, in the browser's IndexedDB and `chrome.storage.local`. Nothing is synced.
-- **Network**: with the default provider, TabSum makes no network requests. The only exceptions are summarization providers the user configures:
+- **Network**: with the default provider, Tab Squirrel makes no network requests. The only exceptions are summarization providers the user configures:
   - **Google Gemini** with the user's own API key: the extracted text of a tab is sent to Google's Gemini API. Governed by Google's terms for that key.
   - **An OpenAI-compatible server** at a user-supplied URL, typically a local model on the user's own machine: the extracted text is sent to that URL. Access to the server's origin is granted through an explicit permission prompt.
 - **Keys**: API keys and server addresses are stored in `chrome.storage.local`, unencrypted like all extension storage, never synced, and sent only to the provider they belong to.
@@ -99,7 +99,7 @@ https://github.com/AndroidLemon/TabSum/blob/main/PRIVACY.md
 - [x] Screenshots, 1280×800, five: full notebook, a summarized card expanded (reader view), a tag filter narrowing results, a composited side-panel view, and Options (`docs/store/01-notebook.png`, `docs/store/02-card-expanded.png`, `docs/store/03-search-filter.png`, `docs/store/04-side-panel.png`, `docs/store/05-options.png`). Regenerate with `npm run assets:store` (see `tests/store_assets.js`).
 - [x] Small promo tile, 440×280 (`docs/store/promo-440x280.png`)
 - [x] Privacy policy URL (`PRIVACY.md`, see section 3)
-- [x] Upload zip: `npm run package` → `dist/tabsum-<version>.zip` (manifest, `src/`, `LICENSE` only)
+- [x] Upload zip: `npm run package` → `dist/tab-squirrel-<version>.zip` (manifest, `src/`, `LICENSE` only)
 - Demo GIFs (not a dashboard requirement, but useful for the listing copy or a README): `docs/store/demo-notebook.gif`, `docs/store/demo-keyboard.gif`.
 
 ---

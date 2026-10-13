@@ -1,5 +1,5 @@
 /**
- * TabSum - Shared export helpers (Markdown, Obsidian vault, JSON backup) for the
+ * Tab Squirrel - Shared export helpers (Markdown, Obsidian vault, JSON backup) for the
  * wiki dashboard and options page. Keeping this in one place avoids the two pages
  * producing two different, incompatible export formats.
  */
@@ -62,7 +62,7 @@ export function formatNoteSection(tab) {
  */
 export function exportToMarkdown(tabs) {
   if (tabs.length === 0) return '';
-  const header = `# TabSum Knowledge Wiki Export\n*Exported on ${new Date().toLocaleString()}*\n\n`;
+  const header = `# Tab Squirrel Knowledge Wiki Export\n*Exported on ${new Date().toLocaleString()}*\n\n`;
   return header + tabs.map(formatNoteSection).join('\n\n---\n\n');
 }
 
@@ -97,7 +97,7 @@ tags: ${tagsFormatted}
 ## Key Takeaways
 ${bulletsContent}
 
-*Captured via TabSum*`;
+*Captured via Tab Squirrel*`;
 }
 
 /**

@@ -1,5 +1,5 @@
 /**
- * TabSum - Core Tab Hardening Verification Suite
+ * Tab Squirrel - Core Tab Hardening Verification Suite
  * Tests deduplication, two-phase commit status transitions,
  * orphan pending reconciliation, expanded zero-loss safety detection (Shadow DOM, rich editors),
  * and in-place tab reactivation without duplicate tabs.
@@ -576,7 +576,7 @@ async function extractTabAllFrames(background, route) {
 }
 
 async function runHardeningTests() {
-  console.log('🧪 Starting TabSum Core Tab Hardening Test Suite...\n');
+  console.log('🧪 Starting Tab Squirrel Core Tab Hardening Test Suite...\n');
 
   if (fs.existsSync(USER_DATA_DIR)) {
     fs.rmSync(USER_DATA_DIR, { recursive: true, force: true });

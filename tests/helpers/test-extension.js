@@ -33,7 +33,7 @@ function copyDir(src, dest) {
  * into its manifest.json, and returns the temp directory path.
  */
 export function buildTestExtension() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tabsum-ext-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tab-squirrel-ext-'));
 
   copyDir(path.join(REPO_ROOT, 'src'), path.join(dir, 'src'));
 
@@ -55,20 +55,20 @@ export function buildTestExtension() {
 /**
  * Launch options shared by the Playwright suites.
  *
- * TABSUM_HEADLESS=1 runs with no visible window. It needs channel 'chromium': Playwright's
+ * TAB_SQUIRREL_HEADLESS=1 runs with no visible window. It needs channel 'chromium': Playwright's
  * default headless build is the headless shell, which cannot load extensions at all, while
  * the full Chrome binary in new-headless mode can.
- * TABSUM_OFFSCREEN=1 keeps a real window but parks it off-screen, for the rare case where
+ * TAB_SQUIRREL_OFFSCREEN=1 keeps a real window but parks it off-screen, for the rare case where
  * headless changes behaviour and you still don't want the window in your face.
  */
 export function extensionLaunchOptions(extensionPath, extraArgs = []) {
-  const headless = process.env.TABSUM_HEADLESS === '1';
+  const headless = process.env.TAB_SQUIRREL_HEADLESS === '1';
   const args = [
     `--disable-extensions-except=${extensionPath}`,
     `--load-extension=${extensionPath}`,
     ...extraArgs
   ];
-  if (!headless && process.env.TABSUM_OFFSCREEN === '1') {
+  if (!headless && process.env.TAB_SQUIRREL_OFFSCREEN === '1') {
     args.push('--window-position=-3000,-3000', '--window-size=1280,900');
   }
   return headless ? { channel: 'chromium', headless: true, args } : { headless: false, args };

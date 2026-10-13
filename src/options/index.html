@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TabSum Settings & Permissions</title>
+  <title>Tab Squirrel Settings & Permissions</title>
   <link rel="stylesheet" href="../fonts/fonts.css">
   <link rel="stylesheet" href="options.css">
 </head>
@@ -11,9 +11,9 @@
   <div class="options-container">
     <header class="options-header">
       <div class="brand">
-        <img src="../assets/icons/icon-48.png" alt="TabSum" class="brand-icon">
+        <img src="../assets/icons/icon-48.png" alt="Tab Squirrel" class="brand-icon">
         <div>
-          <h1>TabSum Settings</h1>
+          <h1>Tab Squirrel Settings</h1>
           <p class="subtitle">Customize tab inactivity, privacy, and summarization rules.</p>
         </div>
       </div>
@@ -30,7 +30,7 @@
       </div>
       <div class="card-content">
         <h2>Page Content Extraction Access</h2>
-        <p>To summarize background tabs automatically, TabSum needs permission to extract reading text from web pages. Your content is parsed directly on your device and never uploaded to external servers without your consent.</p>
+        <p>To summarize background tabs automatically, Tab Squirrel needs permission to extract reading text from web pages. Your content is parsed directly on your device and never uploaded to external servers without your consent.</p>
         <div class="permission-status" id="permission-status">Checking permission status...</div>
       </div>
       <button id="grant-perm-btn" class="primary-btn">Enable Extraction</button>
@@ -43,7 +43,7 @@
       <div class="setting-row">
         <div class="setting-label-group">
           <label for="timeout-select">Inactivity Threshold</label>
-          <span class="setting-desc">How long a tab can remain untouched before TabSum archives it.</span>
+          <span class="setting-desc">How long a tab can remain untouched before Tab Squirrel archives it.</span>
         </div>
         <select id="timeout-select" class="form-select">
           <option value="15">15 minutes</option>
@@ -58,7 +58,7 @@
       <div class="setting-row">
         <div class="setting-label-group">
           <label>Archival Action</label>
-          <span class="setting-desc">Choose how TabSum cleans up your tabs once summarized.</span>
+          <span class="setting-desc">Choose how Tab Squirrel cleans up your tabs once summarized.</span>
         </div>
         <div class="radio-group">
           <label class="radio-option">
@@ -165,7 +165,7 @@
       <div class="setting-row hidden local-llm-row">
         <div class="setting-label-group">
           <label>Connection</label>
-          <span class="setting-desc" id="openai-test-status">Grants TabSum access to the server and checks it responds.</span>
+          <span class="setting-desc" id="openai-test-status">Grants Tab Squirrel access to the server and checks it responds.</span>
         </div>
         <button id="openai-test-btn" class="secondary-btn">Test Connection</button>
       </div>

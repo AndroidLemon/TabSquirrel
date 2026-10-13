@@ -1,5 +1,5 @@
 /**
- * TabSum - Milestone 7 Keyboard Shortcuts & Navigation Verification Test
+ * Tab Squirrel - Milestone 7 Keyboard Shortcuts & Navigation Verification Test
  * Verifies manifest command bindings, service worker onCommand listener,
  * notification & badge updates, and Knowledge Hub keyboard navigation (/, Escape, Enter).
  */
@@ -29,7 +29,7 @@ function createMockServer() {
           <article>
             <h1>Keyboard Shortcuts in Modern Web Applications</h1>
             <p>Keyboard shortcuts dramatically improve user productivity and ergonomics for power users.</p>
-            <p>TabSum provides global shortcuts to rapidly archive and access knowledge wiki cards.</p>
+            <p>Tab Squirrel provides global shortcuts to rapidly archive and access knowledge wiki cards.</p>
           </article>
         </body>
         </html>
@@ -44,7 +44,7 @@ function createMockServer() {
 }
 
 async function runShortcutsTests() {
-  console.log('🧪 Starting TabSum Keyboard Shortcuts & Navigation Test Suite...\n');
+  console.log('🧪 Starting Tab Squirrel Keyboard Shortcuts & Navigation Test Suite...\n');
 
   if (fs.existsSync(USER_DATA_DIR)) {
     fs.rmSync(USER_DATA_DIR, { recursive: true, force: true });

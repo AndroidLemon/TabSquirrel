@@ -1,5 +1,5 @@
 /**
- * Automated verification tests for TabSum core logic
+ * Automated verification tests for Tab Squirrel core logic
  */
 
 import assert from 'node:assert';
@@ -7,7 +7,7 @@ import { summarizeWithHeuristics, summarizeContent, normalizeSummary, excerpt } 
 import { extractDomain, DEFAULT_SETTINGS } from '../src/storage/db.js';
 import { withTimeout } from '../src/shared/with-timeout.js';
 
-console.log('--- Running TabSum Core Verification Tests ---');
+console.log('--- Running Tab Squirrel Core Verification Tests ---');
 
 // Test 1: Domain Extraction
 console.log('Testing domain extraction...');

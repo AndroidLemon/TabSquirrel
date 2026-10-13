@@ -1,11 +1,11 @@
 /**
- * TabSum - Chrome Web Store asset generator.
+ * Tab Squirrel - Chrome Web Store asset generator.
  *
  * Produces the screenshots, promo tile and demo GIFs listed in
  * docs/CHROMEWEBSTORE.md section 4, into docs/store/.
  *
  * Run: npm run assets:store   (== node tests/store_assets.js)
- * Needs TABSUM_HEADLESS=1 (see tests/helpers/test-extension.js for why: the default
+ * Needs TAB_SQUIRREL_HEADLESS=1 (see tests/helpers/test-extension.js for why: the default
  * headless Chromium build can't load extensions, so headless runs need channel 'chromium').
  */
 
@@ -21,7 +21,7 @@ import { buildTestExtension, extensionLaunchOptions, waitForServiceWorker } from
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
 const OUT_DIR = process.env.OUT_DIR || path.join(REPO_ROOT, 'docs', 'store');
-const TMP_ROOT = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), 'tabsum-store-'));
+const TMP_ROOT = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), 'tab-squirrel-store-'));
 const USER_DATA_DIR = path.join(TMP_ROOT, 'profile');
 
 const WIDE = { width: 1280, height: 800 };
@@ -409,7 +409,7 @@ async function makePromoTile(context) {
   .tagline { font-size: 14px; line-height: 1.5; color: #475569; }
 </style></head>
 <body>
-  <img src="data:image/png;base64,${iconB64}" alt="TabSum">
+  <img src="data:image/png;base64,${iconB64}" alt="Tab Squirrel">
   <div class="copy">
     <div class="name"><span>Tab</span>Sum</div>
     <div class="tagline">Close the tabs you were never going to read, and keep what was in them.</div>

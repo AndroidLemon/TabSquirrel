@@ -1,4 +1,4 @@
-# TabSum
+# Tab Squirrel
 
 **Close the tabs you were never going to read, and keep what was in them.**
 
@@ -6,7 +6,7 @@
 ![Local first](https://img.shields.io/badge/Storage-Local_first-10B981)
 ![License](https://img.shields.io/badge/License-MIT-gray)
 
-TabSum is a Chrome extension that watches your background tabs. When one has sat untouched for an hour, TabSum reads the article text, writes a short summary, saves it to a searchable local notebook, and then closes or suspends the tab. Anything it closes can be reopened with one click. Nothing leaves your machine unless you point it at a summarizer of your own.
+Tab Squirrel is a Chrome extension that watches your background tabs. When one has sat untouched for an hour, Tab Squirrel reads the article text, writes a short summary, saves it to a searchable local notebook, and then closes or suspends the tab. Anything it closes can be reopened with one click. Nothing leaves your machine unless you point it at a summarizer of your own.
 
 ![Searching the notebook, filtering by tag, opening the reader view, and starring a note](docs/store/demo-notebook.gif)
 
@@ -14,7 +14,7 @@ TabSum is a Chrome extension that watches your background tabs. When one has sat
 
 Tab hoarding is a working-memory problem. Every open tab is a thought you have not finished with, so closing it feels like losing it, and the bar fills up with favicon slivers. Tab suspenders like The Great Suspender and Chrome's memory saver free the RAM but leave the clutter, and neither leaves any record of what you had open.
 
-The bet behind TabSum is that most of those tabs are worth a paragraph, not a slot in your tab strip. If the extension can reliably capture the gist, closing the tab stops being a loss. Most of the engineering effort went into making that "reliably" true: knowing when a page is safe to touch, and getting clean text out of it.
+The bet behind Tab Squirrel is that most of those tabs are worth a paragraph, not a slot in your tab strip. If the extension can reliably capture the gist, closing the tab stops being a loss. Most of the engineering effort went into making that "reliably" true: knowing when a page is safe to touch, and getting clean text out of it.
 
 ## How it works
 
@@ -47,7 +47,7 @@ Smart Hybrid is the default. Two other modes are available under Options:
 
 ### Safety checks
 
-No heuristic is infallible, but before touching a tab TabSum checks for:
+No heuristic is infallible, but before touching a tab Tab Squirrel checks for:
 
 - **Unsaved input.** Standard `<input>`, `<textarea>`, and `<select>` elements, including inside nested Shadow DOM trees.
 - **Rich text editors.** `[role="textbox"]`, `[contenteditable]`, ProseMirror (Google Docs, Notion-style editors), Quill, Draft.js, Monaco (VS Code Web), CodeMirror, and Ace.
@@ -55,7 +55,7 @@ No heuristic is infallible, but before touching a tab TabSum checks for:
 - **Pinned tabs.** Never touched by default.
 - **Whitelisted domains.** A listed domain covers its subdomains, so `google.com` covers `docs.google.com`. Defaults include Gmail, Google Docs, Drive, and Calendar, GitHub, GitLab, Slack, Teams, YouTube, Spotify, and Netflix.
 - **Trusted sites.** The mirror of the whitelist: domains that are closed once summarized even when the safety checks would only suspend them. Set either list from Options or by right-clicking a tab.
-- **Last-moment re-check.** After summarizing, TabSum confirms you have not switched to the tab or started audio in it before saving or closing anything.
+- **Last-moment re-check.** After summarizing, Tab Squirrel confirms you have not switched to the tab or started audio in it before saving or closing anything.
 
 The archive record is fully written before a tab is closed or suspended, so an interrupted service worker cannot lose it. If Chrome refuses to close or suspend a tab, the note is kept as `📑 Saved` with the reason recorded.
 
@@ -113,7 +113,7 @@ The side panel and the full view are one page (`src/app/`), so every feature wor
 
 ## Install
 
-TabSum is not on the Chrome Web Store yet. Load it unpacked:
+Tab Squirrel is not on the Chrome Web Store yet. Load it unpacked:
 
 ```bash
 git clone https://github.com/AndroidLemon/TabSum.git
@@ -121,13 +121,13 @@ git clone https://github.com/AndroidLemon/TabSum.git
 
 1. Open `chrome://extensions/` and turn on **Developer mode**.
 2. Click **Load unpacked** and select the `TabSum` directory.
-3. Click the TabSum icon (or press `Cmd+Shift+S`) to open the side panel, then click **Enable** on the permission banner so TabSum can read article text. You can also do this later from Options.
+3. Click the Tab Squirrel icon (or press `Cmd+Shift+S`) to open the side panel, then click **Enable** on the permission banner so Tab Squirrel can read article text. You can also do this later from Options.
 4. Optional: under **Options → AI Provider**, pick a summarizer. Chrome's on-device model is used automatically if it is downloaded.
 
 To build an upload-ready zip containing only `manifest.json`, `src/`, and `LICENSE`:
 
 ```bash
-npm run package   # → dist/tabsum-<version>.zip
+npm run package   # → dist/tab-squirrel-<version>.zip
 ```
 
 ## Settings
@@ -149,13 +149,13 @@ Right-click the extension icon and choose **Options**, or click **Settings** in 
 
 The full policy is in [PRIVACY.md](PRIVACY.md). The short version:
 
-- All summaries, text, metadata, and tags live in your browser's IndexedDB (`TabSumDB`).
+- All summaries, text, metadata, and tags live in your browser's IndexedDB (`TabSquirrelDB`).
 - No analytics, no trackers, no external logging.
 - Page access is an optional permission you grant with a click, not at install. A local server's address is granted the same way, via **Test Connection**.
 - Favicons come from Chrome's own local favicon cache, never from a page-supplied URL or a third-party service.
 - URLs are validated to `http:` and `https:` before use, which blocks `javascript:` injection.
 - API keys stay in this browser's `chrome.storage.local`. Not synced, and sent only to the provider they belong to. Like all extension storage, unencrypted on disk.
-- With the default Auto provider, TabSum makes no network requests at all. Page text leaves the browser only for the summarizer you choose.
+- With the default Auto provider, Tab Squirrel makes no network requests at all. Page text leaves the browser only for the summarizer you choose.
 
 ## Design decisions
 
@@ -221,11 +221,11 @@ npm run test:browser   # every Playwright suite, headless
 npm run test:all       # unit + browser
 ```
 
-The Playwright suites open a real Chrome window by default. `TABSUM_HEADLESS=1` runs them with no window. Headless needs Playwright's `chromium` channel, because the default headless shell cannot load extensions. `extensionLaunchOptions()` in `tests/helpers/test-extension.js` handles that. If a suite behaves differently headless, `TABSUM_OFFSCREEN=1` parks a real window off-screen instead.
+The Playwright suites open a real Chrome window by default. `TAB_SQUIRREL_HEADLESS=1` runs them with no window. Headless needs Playwright's `chromium` channel, because the default headless shell cannot load extensions. `extensionLaunchOptions()` in `tests/helpers/test-extension.js` handles that. If a suite behaves differently headless, `TAB_SQUIRREL_OFFSCREEN=1` parks a real window off-screen instead.
 
 The Playwright suites load a temporary copy of the extension that adds `localhost` and Wikipedia host permissions, so the shipped manifest does not need them.
 
-The screenshots and GIFs in this README and on the store listing are generated, not hand-captured. `TABSUM_HEADLESS=1 npm run assets:store` seeds a throwaway profile with sample notes and writes everything to `docs/store/`. The GIF step needs `ffmpeg` on your `PATH`.
+The screenshots and GIFs in this README and on the store listing are generated, not hand-captured. `TAB_SQUIRREL_HEADLESS=1 npm run assets:store` seeds a throwaway profile with sample notes and writes everything to `docs/store/`. The GIF step needs `ffmpeg` on your `PATH`.
 
 ## License
 

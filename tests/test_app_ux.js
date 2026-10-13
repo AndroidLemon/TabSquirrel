@@ -1,5 +1,5 @@
 /**
- * TabSum - Knowledge Hub UX Verification (Playwright)
+ * Tab Squirrel - Knowledge Hub UX Verification (Playwright)
  *
  * src/app/index.html is one page loaded both in Chrome's side panel and in a full tab.
  * This suite drives the narrow layout (side-panel width) and the wide layout (full tab),
@@ -19,7 +19,7 @@ const NARROW = { width: 380, height: 800 };
 const WIDE = { width: 1280, height: 800 };
 
 async function runAppUXTests() {
-  console.log('🧪 Starting TabSum Knowledge Hub UX Verification Test Suite...\n');
+  console.log('🧪 Starting Tab Squirrel Knowledge Hub UX Verification Test Suite...\n');
 
   if (fs.existsSync(USER_DATA_DIR)) {
     fs.rmSync(USER_DATA_DIR, { recursive: true, force: true });
@@ -381,19 +381,19 @@ async function runAppUXTests() {
       page.waitForEvent('download', { timeout: 5000 }),
       page.click('.export-option-btn[data-format="obsidian"]')
     ]);
-    assert.match(download.suggestedFilename(), /^tabsum-obsidian-vault-\d+\.zip$/, 'Obsidian export downloads a .zip vault');
+    assert.match(download.suggestedFilename(), /^tab-squirrel-obsidian-vault-\d+\.zip$/, 'Obsidian export downloads a .zip vault');
     console.log(`✓ Export dropdown verified (downloaded ${download.suggestedFilename()})\n`);
 
     // --- TEST 10: Live refresh on TABS_CLOSED ---
     console.log('--- Test 10: "Closed today" refreshes live on TABS_CLOSED ---');
     assert.strictEqual(await page.locator('#closed-today').isHidden(), true, 'Closed today hidden when nothing was closed');
     await page.evaluate(async () => {
-      const { saveArchivedTab, markClosedByTabSum } = await import('/src/storage/db.js');
+      const { saveArchivedTab, markClosedByTabSquirrel } = await import('/src/storage/db.js');
       await saveArchivedTab({
         id: 'closed-note', url: 'https://closed.example/article', title: 'Closed In Background', domain: 'closed.example',
         status: 'archived', summary: { tldr: 'Closed by the sweep', bullets: [], tags: [] }
       });
-      await markClosedByTabSum('closed-note');
+      await markClosedByTabSquirrel('closed-note');
     });
     await background.evaluate(() => chrome.runtime.sendMessage({ type: 'TABS_CLOSED' }).catch(() => {}));
     await page.waitForSelector('#closed-today:not([hidden])', { timeout: 5000 });
