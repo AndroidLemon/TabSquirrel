@@ -531,7 +531,8 @@ export const DEFAULT_SETTINGS = {
   alwaysCloseDomains: [],
   closeRequiresAiSummary: true, // without an AI-written summary, suspend instead of closing
   fadeUnopenedDays: 30, // unstarred, never-reopened notes are deleted this long after capture (0 = never)
-  fadeReopenedDays: 7 // unstarred reopened notes are deleted this long after the last reopen (0 = never)
+  fadeReopenedDays: 7, // unstarred reopened notes are deleted this long after the last reopen (0 = never)
+  removeOnReopen: false // true: reopening a note removes it from the list (soft-deleted) instead of moving it to Reopened
 };
 
 export async function getSettings() {

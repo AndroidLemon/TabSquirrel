@@ -277,6 +277,51 @@ async function runAppUXTests() {
     assert.strictEqual(await page.locator('.tab-card[data-id="test-tab-2"]').count(), 0, 'Deleted card is gone from the feed');
     console.log('✓ Permanent deletion verified after 5s timeout\n');
 
+    // --- TEST 8b: Reopen with Remove Notes When Reopened offers Undo ---
+    console.log('--- Test 8b: Reopen Removes the Note, Undo Brings It Back as Reopened ---');
+    // Own record, so later tests' fixtures keep their status; it is tombstoned again at the end.
+    await page.evaluate(async () => {
+      const { saveArchivedTab } = await import('/src/storage/db.js');
+      await saveArchivedTab({
+        id: 'remove-on-reopen', url: 'https://example.com/remove-on-reopen', title: 'Remove on reopen',
+        domain: 'example.com', capturedAt: Date.now() - 30000, readingTimeMinutes: 1, cleanText: 'x',
+        summary: { tldr: 'Reopen removal fixture.', bullets: ['a'], tags: [] }, status: 'archived'
+      });
+    });
+    await page.reload();
+    const removeCardSel = '.tab-card[data-id="remove-on-reopen"]';
+    await page.waitForSelector(removeCardSel);
+    // Stand in for the service worker with the setting on: soft-delete the note and answer removed: true.
+    await page.evaluate(() => {
+      window.__realSend = chrome.runtime.sendMessage;
+      chrome.runtime.sendMessage = async (msg) => {
+        const { softDeleteTab } = await import('/src/storage/db.js');
+        await softDeleteTab(msg.recordId);
+        return { success: true, restoredInPlace: false, removed: true };
+      };
+    });
+    await page.locator(`${removeCardSel} .restore-btn`).click();
+    await page.waitForFunction(() => /Note removed/.test(document.querySelector('#toast-message')?.textContent || ''));
+    await page.locator('#toast-undo-btn').waitFor({ state: 'visible', timeout: 2000 });
+    await page.waitForFunction((sel) => !document.querySelector(sel), removeCardSel);
+    await page.evaluate(() => { chrome.runtime.sendMessage = window.__realSend; });
+    await page.locator('#toast-undo-btn').click();
+    await page.waitForSelector(removeCardSel);
+    const afterUndo = await page.evaluate(async () => {
+      const { getTabById } = await import('/src/storage/db.js');
+      return getTabById('remove-on-reopen');
+    });
+    assert.ok(!afterUndo.deletedAt, 'Undo clears the tombstone');
+    assert.strictEqual(afterUndo.status, 'restored', 'Undo leaves the note Reopened, as with the setting off');
+    await page.waitForSelector(`${removeCardSel}:not(.undo-restored)`); // let the highlight animation finish
+    await page.evaluate(async () => {
+      const { softDeleteTab } = await import('/src/storage/db.js');
+      await softDeleteTab('remove-on-reopen');
+    });
+    await page.reload();
+    await page.waitForSelector('.tab-card');
+    console.log('✓ Removed-on-reopen note is hidden, then restored as Reopened by Undo\n');
+
     // --- TEST 9: Wide layout (full view) ---
     console.log('--- Test 9: Wide Layout (1280px): Sidebar, Grid, Filters, Export ---');
     await page.setViewportSize(WIDE);

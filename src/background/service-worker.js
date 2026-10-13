@@ -9,6 +9,7 @@ import {
   markClosedByTabSum,
   markTabGone,
   markReopened,
+  softDeleteTab,
   markLeftOpen,
   markStaysSuspended,
   purgeDeletedTabs,
@@ -228,11 +229,28 @@ function takeDiscardedRecord(tabId) {
   });
 }
 
+/**
+ * A record was reopened from the notebook (RESTORE_TAB). Switching to a sleeping tab in the tab strip is not
+ * one of these and only marks it Reopened (see onActivated). With `removeOnReopen` the record leaves the list
+ * (soft-deleted; purgeDeletedTabs hard-deletes it after an hour); otherwise it moves to Reopened. Resolves true when the note was removed, so the
+ * caller can offer Undo (the app UI shows a 5-second Undo toast).
+ */
+async function handleReopened(recordId) {
+  const settings = await getSettings();
+  if (settings.removeOnReopen) {
+    await softDeleteTab(recordId);
+    return true;
+  }
+  await markReopened(recordId);
+  return false;
+}
+
 // Track tab activation; a tab TabSum discarded is back in use
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
   await setTimestamp(activeInfo.tabId, Date.now());
   const recordId = await takeDiscardedRecord(activeInfo.tabId);
   if (recordId) {
+    // Switching to a sleeping tab only marks the note Reopened; removeOnReopen applies to list-initiated reopens.
     await markReopened(recordId).catch(console.error);
   }
 });
@@ -540,7 +558,7 @@ async function processTabArchival(tab, settings, lastActiveTime) {
       await mapDiscardedRecord(discardedTab.id, record.id);
       // Activated while the mapping was being written? onActivated found nothing to restore.
       if (await userReopened(discardedTab.id) && await takeDiscardedRecord(discardedTab.id)) {
-        await markReopened(record.id);
+        await markReopened(record.id).catch(console.error);
       }
     }
 
@@ -654,23 +672,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
           if (existingTab && existingTab.id) {
             // Reactivate discarded or background tab in place!
+            // Consume the discarded mapping first so onActivated doesn't handle this reopen a second time.
+            await takeDiscardedRecord(existingTab.id);
             await chrome.tabs.update(existingTab.id, { active: true });
             if (existingTab.windowId) {
               await chrome.windows.update(existingTab.windowId, { focused: true });
             }
-            if (message.recordId) {
-              await markReopened(message.recordId);
-            }
-            sendResponse({ success: true, restoredInPlace: true, tabId: existingTab.id });
+            const removed = message.recordId ? await handleReopened(message.recordId) : false;
+            sendResponse({ success: true, restoredInPlace: true, tabId: existingTab.id, removed });
             return;
           }
 
           // 2. Tab was closed, open fresh tab
           const newTab = await chrome.tabs.create({ url: message.url, active: true });
-          if (message.recordId) {
-            await markReopened(message.recordId);
-          }
-          sendResponse({ success: true, restoredInPlace: false, tabId: newTab.id });
+          const removed = message.recordId ? await handleReopened(message.recordId) : false;
+          sendResponse({ success: true, restoredInPlace: false, tabId: newTab.id, removed });
           return;
         }
       }
