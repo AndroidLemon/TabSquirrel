@@ -1,5 +1,5 @@
 /**
- * TabSum - Automated End-to-End Dogfooding & Verification Suite (Playwright)
+ * Tab Squirrel - Automated End-to-End Dogfooding & Verification Suite (Playwright)
  * Simulates real browser sessions, multi-tab browsing, safety net guards,
  * background summarization, and Wiki/Sidepanel UI verification.
  */
@@ -94,7 +94,7 @@ function createMockServer() {
 
 // 2. Main Dogfooding Runner
 async function runDogfood() {
-  console.log('🚀 Starting TabSum Playwright Dogfooding Suite...');
+  console.log('🚀 Starting Tab Squirrel Playwright Dogfooding Suite...');
   const server = await createMockServer();
   console.log(`✓ Local mock server listening on http://localhost:${PORT}`);
 
@@ -118,12 +118,12 @@ async function runDogfood() {
     context = await chromium.launchPersistentContext(USER_DATA_DIR,
       extensionLaunchOptions(EXTENSION_PATH, []));
 
-    console.log('✓ Chromium launched with TabSum extension loaded');
+    console.log('✓ Chromium launched with Tab Squirrel extension loaded');
 
     // Wait for Service Worker
     const background = await waitForServiceWorker(context);
     const extensionId = background.url().split('/')[2];
-    console.log(`✓ TabSum Extension ID: ${extensionId}`);
+    console.log(`✓ Tab Squirrel Extension ID: ${extensionId}`);
 
     // Scenario 1: First-run Onboarding & Permission Grant
     console.log('\n--- Scenario 1: First-Run Permission Onboarding ---');
@@ -291,7 +291,7 @@ async function runDogfood() {
     if (download) {
       const filename = download.suggestedFilename();
       console.log(`✓ Triggered browser download: ${filename}`);
-      if (!filename.startsWith('tabsum-wiki-export-') || !filename.endsWith('.md')) {
+      if (!filename.startsWith('tab-squirrel-wiki-export-') || !filename.endsWith('.md')) {
         throw new Error(`Unexpected export filename: ${filename}`);
       }
     } else {
@@ -412,7 +412,7 @@ async function runDogfood() {
 
   // 3. Generate Report
   const reportPath = path.resolve('./logs/dogfood-report.md');
-  const reportMd = `# TabSum Dogfooding & Browser Self-Test Report
+  const reportMd = `# Tab Squirrel Dogfooding & Browser Self-Test Report
 
 **Run Date**: ${telemetry.testStartedAt}  
 **Execution Duration**: ${telemetry.durationMs}ms  

@@ -1,11 +1,11 @@
 /**
- * TabSum - Chrome Web Store asset generator.
+ * Tab Squirrel - Chrome Web Store asset generator.
  *
  * Produces the screenshots, promo tile and demo GIFs listed in
  * docs/CHROMEWEBSTORE.md section 4, into docs/store/.
  *
  * Run: npm run assets:store   (== node tests/store_assets.js)
- * Needs TABSUM_HEADLESS=1 (see tests/helpers/test-extension.js for why: the default
+ * Needs TAB_SQUIRREL_HEADLESS=1 (see tests/helpers/test-extension.js for why: the default
  * headless Chromium build can't load extensions, so headless runs need channel 'chromium').
  */
 
@@ -20,8 +20,8 @@ import { buildTestExtension, extensionLaunchOptions, waitForServiceWorker } from
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
-const OUT_DIR = path.join(REPO_ROOT, 'docs', 'store');
-const TMP_ROOT = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), 'tabsum-store-'));
+const OUT_DIR = process.env.OUT_DIR || path.join(REPO_ROOT, 'docs', 'store');
+const TMP_ROOT = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), 'tab-squirrel-store-'));
 const USER_DATA_DIR = path.join(TMP_ROOT, 'profile');
 
 const WIDE = { width: 1280, height: 800 };
@@ -397,27 +397,31 @@ async function computeOptionsScroll(page) {
 
 async function makePromoTile(context) {
   const iconB64 = fs.readFileSync(path.join(REPO_ROOT, 'src/assets/icons/icon-128.png')).toString('base64');
+  // setContent pages can't reach the extension's bundled fonts, so inline the two the tile uses.
+  const font = (file) => fs.readFileSync(path.join(REPO_ROOT, 'src/fonts', file)).toString('base64');
   const html = `<!doctype html>
 <html><head><meta charset="utf-8"><style>
+  @font-face { font-family: "Newsreader"; font-weight: 600; src: url(data:font/woff2;base64,${font('newsreader-latin-600-normal.woff2')}) format("woff2"); }
+  @font-face { font-family: "IBM Plex Sans"; font-weight: 400; src: url(data:font/woff2;base64,${font('ibm-plex-sans-latin-400-normal.woff2')}) format("woff2"); }
   html, body { margin: 0; padding: 0; width: 440px; height: 280px; }
   body { display: flex; align-items: center; justify-content: center; gap: 22px;
-    background: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-  img { width: 96px; height: 96px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05); }
+    background: #F6F3EC; font-family: "IBM Plex Sans", sans-serif; }
+  img { width: 96px; height: 96px; border-radius: 21px; }
   .copy { max-width: 270px; }
-  .name { font-size: 30px; font-weight: 700; color: #0f172a; margin-bottom: 8px; }
-  .name span { color: #4f46e5; }
-  .tagline { font-size: 14px; line-height: 1.5; color: #475569; }
+  .name { font-family: "Newsreader", serif; font-size: 32px; font-weight: 600; line-height: 1.1; color: #1D1C19; margin-bottom: 8px; }
+  .tagline { font-size: 14px; line-height: 1.5; color: #4A4740; }
 </style></head>
 <body>
-  <img src="data:image/png;base64,${iconB64}" alt="TabSum">
+  <img src="data:image/png;base64,${iconB64}" alt="Tab Squirrel">
   <div class="copy">
-    <div class="name"><span>Tab</span>Sum</div>
+    <div class="name">Tab Squirrel</div>
     <div class="tagline">Close the tabs you were never going to read, and keep what was in them.</div>
   </div>
 </body></html>`;
   const page = await context.newPage();
   await page.setViewportSize(PROMO);
   await page.setContent(html);
+  await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(150);
   await page.screenshot({ path: path.join(OUT_DIR, 'promo-440x280.png') });
   await page.close();
@@ -524,7 +528,7 @@ async function main() {
   grantAllUrlsInTempManifest(EXTENSION_PATH);
   writeSidePanelWrapper(EXTENSION_PATH);
 
-  const baseLaunchOpts = { deviceScaleFactor: 1, viewport: WIDE, ...extensionLaunchOptions(EXTENSION_PATH, ['--no-first-run']) };
+  const baseLaunchOpts = { colorScheme: process.env.SCHEME || 'light', deviceScaleFactor: 1, viewport: WIDE, ...extensionLaunchOptions(EXTENSION_PATH, ['--no-first-run']) };
 
   // ---- Pass 1: screenshots + promo tile ----
   let context = await chromium.launchPersistentContext(USER_DATA_DIR, baseLaunchOpts);
@@ -548,6 +552,41 @@ async function main() {
     // 01: full notebook
     await page.screenshot({ path: path.join(OUT_DIR, '01-notebook.png') });
     console.log('Wrote 01-notebook.png');
+
+    // 06: toast states (normal + Undo, Undo hovered, error, error + Undo), cropped to the toast corner.
+    // Driven by DOM state rather than real actions so the seed data stays intact.
+    const toastShot = async (name) => {
+      const full = path.join(TMP_ROOT, 'toast-full.png');
+      await page.screenshot({ path: full }); // a clip option resets :hover, so crop afterwards
+      execFileSync('magick', [full, '-crop', `520x110+${WIDE.width - 520}+${WIDE.height - 110}`, '+repage', path.join(OUT_DIR, name)]);
+    };
+    const setToast = (msg, error, undo) => page.evaluate(([m, e, u]) => {
+      const t = document.getElementById('toast');
+      document.getElementById('toast-message').textContent = m;
+      t.classList.toggle('error', e);
+      document.getElementById('toast-undo-btn').hidden = !u;
+      const p = document.getElementById('toast-progress');
+      p.style.animation = 'none';
+      p.style.width = u ? '62%' : '0';
+      t.classList.remove('hidden');
+    }, [msg, error, undo]);
+    await setToast('Summary removed', false, true);
+    await page.mouse.move(10, 10);
+    await page.waitForTimeout(350);
+    await toastShot('06-toast.png');
+    await page.hover('#toast-undo-btn');
+    await page.waitForTimeout(250);
+    await toastShot('06-toast-undo-hover.png');
+    await setToast('Error reopening tab: no response', true, false);
+    await page.mouse.move(10, 10);
+    await page.waitForTimeout(350);
+    await toastShot('06-toast-error.png');
+    await setToast('Could not update favorite', true, true);
+    await page.mouse.move(10, 10);
+    await page.waitForTimeout(350);
+    await toastShot('06-toast-error-undo.png');
+    await page.evaluate(() => document.getElementById('toast').classList.add('hidden'));
+    await page.waitForTimeout(300);
 
     // 02: card expanded / reader view
     await page.click('.tab-card[data-id="n1"] .reader-btn');
@@ -607,6 +646,7 @@ async function main() {
     await context.close();
   }
 
+  if (process.env.SKIP_GIFS) { fs.rmSync(TMP_ROOT, { recursive: true, force: true }); return; }
   // ---- Pass 2: demo GIFs (separate context/pages so recordVideo has its own dir) ----
   console.log('Recording demo clips...');
   const videoDir = path.join(TMP_ROOT, 'videos');

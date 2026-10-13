@@ -76,11 +76,11 @@ assert.ok(formatExtractedArticle('').includes('empty-article-text'), 'Empty arti
 // Test 8: Status badges, including the "captured" (saved, tab still open) status
 console.log('Testing status badges for every record status...');
 const badge = (status, closureReason) => getStatusBadge({ status, closureReason });
-assert.ok(badge('discarded').includes('class="badge-status sleeping"') && badge('discarded').includes('💤 Sleeping'), 'discarded -> 💤 Sleeping');
-assert.ok(badge('restored').includes('class="badge-status restored"') && badge('restored').includes('↩ Reopened'), 'restored -> ↩ Reopened');
-assert.ok(badge('captured').includes('class="badge-status captured"') && badge('captured').includes('📑 Saved'), 'captured -> 📑 Saved');
-assert.ok(badge('archived').includes('class="badge-status archived"') && badge('archived').includes('🗄️ Archived'), 'archived -> 🗄️ Archived');
-assert.ok(badge(undefined).includes('🗄️ Archived'), 'Unknown status falls back to 🗄️ Archived');
+assert.ok(badge('discarded').includes('class="badge-status sleeping"') && badge('discarded').includes('>Sleeping</span>'), 'discarded -> Sleeping');
+assert.ok(badge('restored').includes('class="badge-status restored"') && badge('restored').includes('>Reopened</span>'), 'restored -> Reopened');
+assert.ok(badge('captured').includes('class="badge-status captured"') && badge('captured').includes('>Saved</span>'), 'captured -> Saved');
+assert.ok(badge('archived').includes('class="badge-status archived"') && badge('archived').includes('>Archived</span>'), 'archived -> Archived');
+assert.ok(badge(undefined).includes('>Archived</span>'), 'Unknown status falls back to Archived');
 assert.ok(badge('captured', 'Chrome refused to close this tab; summary saved, tab left open').includes('title="Chrome refused to close this tab; summary saved, tab left open"'), 'Badge tooltip is the closureReason');
 assert.ok(!badge('captured', '"><img src=x>').includes('<img'), 'closureReason tooltip must be escaped');
 console.log('✓ Status badges verified (Sleeping, Reopened, Saved, Archived)');

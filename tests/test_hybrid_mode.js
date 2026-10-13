@@ -1,5 +1,5 @@
 /**
- * TabSum - Hybrid Adaptive Archival Mode Verification Suite
+ * Tab Squirrel - Hybrid Adaptive Archival Mode Verification Suite
  * Tests DOM classification heuristics, tiered actions (close vs suspend vs untouchable),
  * background inactivity sweep behavior in hybrid mode, and UI badge rendering.
  */
@@ -197,7 +197,7 @@ async function backdateTabs(background, urlSubstrings, msAgo) {
 }
 
 async function runHybridTests() {
-  console.log('\n🧪 Starting TabSum Hybrid Adaptive Archival Mode Test Suite...\n');
+  console.log('\n🧪 Starting Tab Squirrel Hybrid Adaptive Archival Mode Test Suite...\n');
 
   if (fs.existsSync(USER_DATA_DIR)) {
     fs.rmSync(USER_DATA_DIR, { recursive: true, force: true });
@@ -402,7 +402,7 @@ async function runHybridTests() {
     console.log('✓ Form page record verified: status = "discarded", tier = "suspend_only"');
 
     // --- Test 3: Status badges in both layouts of the Knowledge Hub page ---
-    console.log('\n--- Test 3: UI Badge Status Rendering (🗄️ Archived vs 💤 Sleeping) ---');
+    console.log('\n--- Test 3: UI Badge Status Rendering (Archived vs Sleeping) ---');
 
     // One page serves the side panel (narrow layout) and the full view (wide layout)
     const hubPage = await context.newPage();
@@ -416,9 +416,9 @@ async function runHybridTests() {
         text: b.textContent.trim()
       })));
 
-      assert.ok(badges.some(b => b.className.includes('archived') && b.text.includes('🗄️ Archived')), `${layout} layout must render 🗄️ Archived badge`);
-      assert.ok(badges.some(b => b.className.includes('sleeping') && b.text.includes('💤 Sleeping')), `${layout} layout must render 💤 Sleeping badge`);
-      console.log(`✓ ${layout} layout correctly displays "🗄️ Archived" and "💤 Sleeping" status badges`);
+      assert.ok(badges.some(b => b.className.includes('archived') && b.text.includes('Archived')), `${layout} layout must render Archived badge`);
+      assert.ok(badges.some(b => b.className.includes('sleeping') && b.text.includes('Sleeping')), `${layout} layout must render Sleeping badge`);
+      console.log(`✓ ${layout} layout correctly displays "Archived" and "Sleeping" status badges`);
     }
 
     // --- Test 4: Pinned Tab & Domain Whitelist Safety ---
@@ -559,7 +559,7 @@ async function runHybridTests() {
 
     await trustedDirtyPage.close();
 
-    // --- Test 5: "Closed today" lists the article TabSum closed in Test 2 ---
+    // --- Test 5: "Closed today" lists the article Tab Squirrel closed in Test 2 ---
     console.log('\n--- Test 5: Knowledge Hub "Closed today" ---');
     await hubPage.reload();
     await hubPage.waitForSelector('#closed-today:not([hidden])', { timeout: 5000 });
@@ -603,10 +603,10 @@ async function runHybridTests() {
     assert.strictEqual(gated.rec.closedAt, null, 'Suspended tab must not appear in Closed today');
     console.log('✓ Without an AI summary the article was suspended, not closed');
 
-    // --- Test 7: Hybrid tier 2 closes a tab TabSum suspended once it sits unused for 2x the timeout ---
+    // --- Test 7: Hybrid tier 2 closes a tab Tab Squirrel suspended once it sits unused for 2x the timeout ---
     console.log('\n--- Test 7: Hybrid tier 2 (suspended -> closed) ---');
     // discard() is mocked (see Test 2), so Chrome never flags the tab discarded; report the tabs
-    // TabSum mapped as discarded so the sweep takes the tier-2 branch.
+    // Tab Squirrel mapped as discarded so the sweep takes the tier-2 branch.
     await background.evaluate(() => {
       globalThis.__realTabsQuery = chrome.tabs.query.bind(chrome.tabs);
       chrome.tabs.query = async (q) => {
@@ -705,7 +705,7 @@ async function runHybridTests() {
     assert.strictEqual(removedOnReopen.listed, false, 'With the setting on, the note leaves the list');
     console.log('✓ Reopen keeps the note by default and removes it when removeOnReopen is on');
 
-    // 9b: reopening a TabSum-suspended tab in place must be handled once. Activating it fires
+    // 9b: reopening a Tab Squirrel-suspended tab in place must be handled once. Activating it fires
     // tabs.onActivated, which would otherwise find the discarded mapping and handle the reopen a
     // second time.
     const inPlacePage = await context.newPage();

@@ -1,5 +1,5 @@
 /**
- * TabSum - IndexedDB Storage & Local Settings Management
+ * Tab Squirrel - IndexedDB Storage & Local Settings Management
  */
 
 // Storage depends on the closure policy, not the other way round: what counts as an AI
@@ -8,7 +8,7 @@
 import { AI_SUMMARY_SOURCES } from '../shared/closure-policy.js';
 import { getExpiry } from '../shared/fade.js';
 
-const DB_NAME = 'TabSumDB';
+const DB_NAME = 'TabSquirrelDB';
 const DB_VERSION = 1;
 const STORE_NAME = 'archived_tabs';
 const TEXT_STORE = 'tab_text'; // { id, cleanText } kept apart so list/stat queries never deserialize page text
@@ -128,7 +128,7 @@ export async function saveArchivedTab(tabData) {
         summary: sanitizeSummary(tabData.summary),
         // Unknown values (JSON import) must not pass the AI-only close gate
         summarySource: AI_SUMMARY_SOURCES.has(tabData.summarySource) ? tabData.summarySource : 'heuristic',
-        closedAt: timestamp(tabData.closedAt, null), // set only when TabSum itself closed the tab
+        closedAt: timestamp(tabData.closedAt, null), // set only when Tab Squirrel itself closed the tab
         wordCount: tabData.wordCount || 0,
         // 'discarded' (suspended) | 'archived' (closed) | 'restored' (reopened) |
         // 'captured' (summary saved, tab still open: manual archive or Chrome refused to close/suspend)
@@ -175,7 +175,7 @@ export async function getArchivedTabs(filters = {}) {
     timeRange = '',
     status = '',
     favoriteOnly = false,
-    closedSince = 0, // only records TabSum closed at/after this time
+    closedSince = 0, // only records Tab Squirrel closed at/after this time
     view = '', // 'inbox' (never reopened) | 'reopened' | '' (all)
     includeText = false,
     sortBy = 'newest', // 'newest' | 'oldest' | 'reading-time-asc' | 'reading-time-desc' | 'title-asc' | 'domain' | 'expiring-soon'
@@ -334,21 +334,21 @@ async function updateRecord(id, mutate) {
  * states:
  *
  *   captured   summary saved, tab still fully open (manual archive, or Chrome refused)
- *   discarded  tab suspended by TabSum, still in the tab strip
- *   archived   the tab is gone. `closedAt` is set only when TabSum itself closed it, which
+ *   discarded  tab suspended by Tab Squirrel, still in the tab strip
+ *   archived   the tab is gone. `closedAt` is set only when Tab Squirrel itself closed it, which
  *              is exactly what "Closed today" counts
  *   restored   the user reopened it
  */
 
-/** TabSum closed the tab itself. Feeds "Closed today". */
-export async function markClosedByTabSum(id) {
+/** Tab Squirrel closed the tab itself. Feeds "Closed today". */
+export async function markClosedByTabSquirrel(id) {
   return updateRecord(id, (record) => {
     record.status = 'archived';
     record.closedAt = Date.now();
   });
 }
 
-/** The tab is gone but TabSum did not close it, so it must not count as closed today. */
+/** The tab is gone but Tab Squirrel did not close it, so it must not count as closed today. */
 export async function markTabGone(id) {
   return updateRecord(id, (record) => {
     record.status = 'archived';
@@ -373,7 +373,7 @@ export async function markLeftOpen(id, reason) {
   });
 }
 
-/** Chrome refused to close a tab TabSum had suspended, so it stays suspended. */
+/** Chrome refused to close a tab Tab Squirrel had suspended, so it stays suspended. */
 export async function markStaysSuspended(id, reason) {
   return updateRecord(id, (record) => {
     record.status = 'discarded';
@@ -415,7 +415,7 @@ export async function restoreDeletedTab(id) {
 }
 
 /**
- * Tombstone notes past their fade date. Skips keepIds (records of tabs TabSum suspended that
+ * Tombstone notes past their fade date. Skips keepIds (records of tabs Tab Squirrel suspended that
  * are still open): hybrid mode's second tier needs that record to close the tab.
  */
 export async function fadeExpiredTabs(settings, keepIds = new Set()) {
@@ -536,14 +536,14 @@ export const DEFAULT_SETTINGS = {
 };
 
 export async function getSettings() {
-  const res = await chrome.storage.local.get('tabsum_settings');
-  return Object.assign({}, DEFAULT_SETTINGS, res.tabsum_settings || {});
+  const res = await chrome.storage.local.get('tab_squirrel_settings');
+  return Object.assign({}, DEFAULT_SETTINGS, res.tab_squirrel_settings || {});
 }
 
 export async function saveSettings(settings) {
   const current = await getSettings();
   const updated = Object.assign({}, current, settings);
-  await chrome.storage.local.set({ tabsum_settings: updated });
+  await chrome.storage.local.set({ tab_squirrel_settings: updated });
   return updated;
 }
 

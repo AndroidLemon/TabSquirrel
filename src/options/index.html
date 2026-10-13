@@ -3,16 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TabSum Settings & Permissions</title>
+  <title>Tab Squirrel Settings & Permissions</title>
+  <link rel="stylesheet" href="../fonts/fonts.css">
   <link rel="stylesheet" href="options.css">
 </head>
 <body>
   <div class="options-container">
     <header class="options-header">
       <div class="brand">
-        <img src="../assets/icons/icon-48.png" alt="TabSum" class="brand-icon">
+        <img src="../assets/icons/icon-48.png" alt="Tab Squirrel" class="brand-icon">
         <div>
-          <h1>TabSum Settings</h1>
+          <h1>Tab Squirrel Settings</h1>
           <p class="subtitle">Customize tab inactivity, privacy, and summarization rules.</p>
         </div>
       </div>
@@ -28,8 +29,8 @@
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
       </div>
       <div class="card-content">
-        <h3>Page Content Extraction Access</h3>
-        <p>To summarize background tabs automatically, TabSum needs permission to extract reading text from web pages. Your content is parsed directly on your device and never uploaded to external servers without your consent.</p>
+        <h2>Page Content Extraction Access</h2>
+        <p>To summarize background tabs automatically, Tab Squirrel needs permission to extract reading text from web pages. Your content is parsed directly on your device and never uploaded to external servers without your consent.</p>
         <div class="permission-status" id="permission-status">Checking permission status...</div>
       </div>
       <button id="grant-perm-btn" class="primary-btn">Enable Extraction</button>
@@ -37,12 +38,12 @@
 
     <!-- Inactivity & Archival Mode -->
     <section class="settings-card">
-      <h3>Tab Inactivity & Behavior</h3>
+      <h2>Tab Inactivity & Behavior</h2>
       
       <div class="setting-row">
         <div class="setting-label-group">
           <label for="timeout-select">Inactivity Threshold</label>
-          <span class="setting-desc">How long a tab can remain untouched before TabSum archives it.</span>
+          <span class="setting-desc">How long a tab can remain untouched before Tab Squirrel archives it.</span>
         </div>
         <select id="timeout-select" class="form-select">
           <option value="15">15 minutes</option>
@@ -57,7 +58,7 @@
       <div class="setting-row">
         <div class="setting-label-group">
           <label>Archival Action</label>
-          <span class="setting-desc">Choose how TabSum cleans up your tabs once summarized.</span>
+          <span class="setting-desc">Choose how Tab Squirrel cleans up your tabs once summarized.</span>
         </div>
         <div class="radio-group">
           <label class="radio-option">
@@ -123,7 +124,7 @@
 
     <!-- AI Summarization Provider -->
     <section class="settings-card">
-      <h3>AI Summarization Engine</h3>
+      <h2>AI Summarization Engine</h2>
 
       <div class="setting-row">
         <div class="setting-label-group">
@@ -164,7 +165,7 @@
       <div class="setting-row hidden local-llm-row">
         <div class="setting-label-group">
           <label>Connection</label>
-          <span class="setting-desc" id="openai-test-status">Grants TabSum access to the server and checks it responds.</span>
+          <span class="setting-desc" id="openai-test-status">Grants Tab Squirrel access to the server and checks it responds.</span>
         </div>
         <button id="openai-test-btn" class="secondary-btn">Test Connection</button>
       </div>
@@ -180,7 +181,7 @@
 
     <!-- Excluded Domains -->
     <section class="settings-card">
-      <h3>Domain Whitelist (Never Archive)</h3>
+      <h2>Domain Whitelist (Never Archive)</h2>
       <p class="section-desc">Tabs from these domains will NEVER be automatically summarized or closed.</p>
       
       <div class="domain-input-row">
@@ -195,7 +196,7 @@
 
     <!-- Trusted Sites -->
     <section class="settings-card">
-      <h3>Trusted Sites (Always Close)</h3>
+      <h2>Trusted Sites (Always Close)</h2>
       <p class="section-desc">Tabs from these domains are closed once summarized even when the safety checks would only suspend them. A page with unsaved text is still kept. Only applies in Smart Hybrid mode.</p>
 
       <div class="domain-input-row">
@@ -210,7 +211,7 @@
 
     <!-- Storage -->
     <section class="settings-card" id="storage-section">
-      <h3>Storage</h3>
+      <h2>Storage</h2>
       <p class="section-desc">Notes live only in this browser. Old notes fade automatically (see "Notes Fade After").</p>
 
       <div class="storage-meter-box">
@@ -228,7 +229,7 @@
 
     <!-- Data Management -->
     <section class="settings-card danger-zone">
-      <h3>Data & Backups</h3>
+      <h2>Data & Backups</h2>
       <div class="setting-row">
         <div>
           <strong>Export Knowledge Wiki</strong>

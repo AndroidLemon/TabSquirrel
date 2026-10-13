@@ -1,5 +1,5 @@
 /**
- * TabSum - In-Tab Content Extractor
+ * Tab Squirrel - In-Tab Content Extractor
  * Injected into background tabs via chrome.scripting.executeScript.
  * Runs in the isolated world against the live, hydrated DOM.
  */

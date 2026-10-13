@@ -1,12 +1,12 @@
 /**
- * TabSum - Background Service Worker (Manifest V3)
+ * Tab Squirrel - Background Service Worker (Manifest V3)
  * Handles tab activity tracking, periodic inactivity sweeps, safe extraction,
  * soft suspension / auto-archival, and badge indicators.
  */
 
 import {
   recordCapture,
-  markClosedByTabSum,
+  markClosedByTabSquirrel,
   markTabGone,
   markReopened,
   softDeleteTab,
@@ -32,7 +32,7 @@ import {
 } from '../shared/closure-policy.js';
 import { withTimeout } from '../shared/with-timeout.js';
 
-const ALARM_NAME = 'tabsum-inactivity-sweep';
+const ALARM_NAME = 'tab-squirrel-inactivity-sweep';
 const SWEEP_INTERVAL_MINUTES = 1;
 const IDLE_DETECTION_SECONDS = 60;
 const SLEEP_GAP_MS = 5 * 60 * 1000; // sweep gap that means the machine was asleep
@@ -48,13 +48,13 @@ chrome.idle.setDetectionInterval(IDLE_DETECTION_SECONDS);
 
 // Initialize on install or startup
 chrome.runtime.onInstalled.addListener(async () => {
-  console.log('[TabSum] Installed.');
+  console.log('[Tab Squirrel] Installed.');
 
   // Open side panel when clicking action icon
   try {
     await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
   } catch (err) {
-    console.warn('[TabSum] Could not set panel behavior:', err);
+    console.warn('[Tab Squirrel] Could not set panel behavior:', err);
   }
 
   // removeAll first: onInstalled also fires on update, and create() rejects a duplicate id.
@@ -63,9 +63,9 @@ chrome.runtime.onInstalled.addListener(async () => {
   // Explicit parent, rather than letting Chrome auto-nest under the manifest name: that name
   // contains an '&', which the auto-generated submenu eats as a mnemonic.
   await chrome.contextMenus.removeAll();
-  chrome.contextMenus.create({ id: 'tabsum', title: 'TabSum', contexts: ['tab'] });
-  chrome.contextMenus.create({ id: 'excludedDomains', parentId: 'tabsum', title: 'Never archive this site', contexts: ['tab'] });
-  chrome.contextMenus.create({ id: 'alwaysCloseDomains', parentId: 'tabsum', title: 'Always close this site', contexts: ['tab'] });
+  chrome.contextMenus.create({ id: 'tab-squirrel', title: 'Tab Squirrel', contexts: ['tab'] });
+  chrome.contextMenus.create({ id: 'excludedDomains', parentId: 'tab-squirrel', title: 'Never archive this site', contexts: ['tab'] });
+  chrome.contextMenus.create({ id: 'alwaysCloseDomains', parentId: 'tab-squirrel', title: 'Always close this site', contexts: ['tab'] });
 
   await initialize();
 });
@@ -90,7 +90,7 @@ async function initialize() {
 
 /**
  * The tabId -> record map lives in session storage, which a browser restart (or extension
- * update) clears, and tab ids change across restarts. Relink records TabSum left suspended to
+ * update) clears, and tab ids change across restarts. Relink records Tab Squirrel left suspended to
  * an open tab with the same URL, or mark them archived if that tab is gone.
  */
 async function reconcileDiscardedRecords() {
@@ -114,7 +114,7 @@ async function reconcileDiscardedRecords() {
  */
 let storageLock = Promise.resolve();
 function withStorageLock(fn) {
-  storageLock = storageLock.then(fn).catch(err => console.error('[TabSum] Storage lock error:', err));
+  storageLock = storageLock.then(fn).catch(err => console.error('[Tab Squirrel] Storage lock error:', err));
   return storageLock;
 }
 
@@ -178,7 +178,7 @@ function compensateAwayTime() {
     const gapMs = lastSweepAt && now - lastSweepAt > SLEEP_GAP_MS ? now - lastSweepAt : 0;
     const awayMs = Math.max(idleMs, gapMs);
     if (awayMs > 0) {
-      console.log(`[TabSum] User was away ${Math.round(awayMs / 1000)}s; pausing inactivity clocks.`);
+      console.log(`[Tab Squirrel] User was away ${Math.round(awayMs / 1000)}s; pausing inactivity clocks.`);
       await shiftTimestamps(awayMs);
     }
     await chrome.storage.session.set({ lastSweepAt: now });
@@ -198,7 +198,7 @@ chrome.idle.onStateChanged.addListener(async (state) => {
 });
 
 /**
- * tabId -> recordId for tabs TabSum discarded, so later tiers/events can find the record.
+ * tabId -> recordId for tabs Tab Squirrel discarded, so later tiers/events can find the record.
  * Session storage is cleared on restart; reconcileDiscardedRecords() rebuilds it by URL.
  */
 async function getDiscardedMap() {
@@ -245,7 +245,7 @@ async function handleReopened(recordId) {
   return false;
 }
 
-// Track tab activation; a tab TabSum discarded is back in use
+// Track tab activation; a tab Tab Squirrel discarded is back in use
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
   await setTimestamp(activeInfo.tabId, Date.now());
   const recordId = await takeDiscardedRecord(activeInfo.tabId);
@@ -363,7 +363,7 @@ async function performInactivitySweep() {
         if (!granted) continue;
       }
 
-      console.log(`[TabSum] Tab ${tab.id} (${tab.url}) is ${verdict.reason}. Archiving...`);
+      console.log(`[Tab Squirrel] Tab ${tab.id} (${tab.url}) is ${verdict.reason}. Archiving...`);
       await processTabArchival(tab, settings, lastActive);
     }
   } finally {
@@ -380,7 +380,7 @@ async function fadeHourly(settings) {
   await chrome.storage.session.set({ lastFadeAt: Date.now() });
   const { fadedCount } = await fadeExpiredTabs(settings, new Set(Object.values(await getDiscardedMap())));
   if (fadedCount) {
-    console.log(`[TabSum] ${fadedCount} note(s) faded.`);
+    console.log(`[Tab Squirrel] ${fadedCount} note(s) faded.`);
     await updateBadge();
   }
 }
@@ -395,7 +395,7 @@ async function revertIfStillOpen(tabId, recordId, stillSuspended, reason) {
   } catch {
     return; // tab is gone after all; the committed record stands
   }
-  console.warn(`[TabSum] ${reason} (tab ${tabId}).`);
+  console.warn(`[Tab Squirrel] ${reason} (tab ${tabId}).`);
   await (stillSuspended ? markStaysSuspended(recordId, reason) : markLeftOpen(recordId, reason));
   await setTimestamp(tabId, Date.now());
 }
@@ -411,7 +411,7 @@ async function userReopened(tabId) {
 }
 
 /**
- * Hybrid tier 2: close a tab TabSum discarded earlier. No re-extraction (discarded tabs
+ * Hybrid tier 2: close a tab Tab Squirrel discarded earlier. No re-extraction (discarded tabs
  * can't be scripted); the record captured at discard time becomes the archive.
  */
 async function closeDiscardedTab(tab, recordId, settings) {
@@ -428,13 +428,13 @@ async function closeDiscardedTab(tab, recordId, settings) {
       await revertIfStillOpen(tab.id, recordId, true, 'Chrome refused to close this tab; it stays suspended');
       return;
     }
-    await markClosedByTabSum(recordId);
-    console.log(`[TabSum] Closed long-discarded tab ${tab.id} (${tab.url}).`);
+    await markClosedByTabSquirrel(recordId);
+    console.log(`[Tab Squirrel] Closed long-discarded tab ${tab.id} (${tab.url}).`);
     // Refresh the side panel's "Closed today"; no page open is fine.
     chrome.runtime.sendMessage({ type: 'TABS_CLOSED' }).catch(() => {});
     await updateBadge();
   } catch (err) {
-    console.error(`[TabSum] Error closing discarded tab ${tab.id}:`, err);
+    console.error(`[Tab Squirrel] Error closing discarded tab ${tab.id}:`, err);
   }
 }
 
@@ -475,12 +475,12 @@ async function processTabArchival(tab, settings, lastActiveTime) {
     // 2. Skip empty extractions and tabs with unsaved work; look again after another full timeout
     const extracted = mergeFrameExtractions(results);
     if (!extracted) {
-      console.warn(`[TabSum] Extraction returned empty for tab ${tab.id} (${tab.url})`);
+      console.warn(`[Tab Squirrel] Extraction returned empty for tab ${tab.id} (${tab.url})`);
       await setTimestamp(tab.id, Date.now());
       return;
     }
     if (extracted.isDirty) {
-      console.log(`[TabSum] Tab ${tab.id} has unsaved work: ${extracted.reason}. Skipping.`);
+      console.log(`[Tab Squirrel] Tab ${tab.id} has unsaved work: ${extracted.reason}. Skipping.`);
       await setTimestamp(tab.id, Date.now());
       return;
     }
@@ -541,7 +541,7 @@ async function processTabArchival(tab, settings, lastActiveTime) {
         }), EXTRACT_TIMEOUT_MS, 'Title injection');
         addedPrefix = res?.result === true;
       } catch (titleErr) {
-        console.debug('[TabSum] Could not prefix title with sleeping symbol:', titleErr);
+        console.debug('[Tab Squirrel] Could not prefix title with sleeping symbol:', titleErr);
       }
       // discard() resolves undefined when Chrome refuses to discard
       const discardedTab = await chrome.tabs.discard(tab.id).catch(() => null);
@@ -564,7 +564,7 @@ async function processTabArchival(tab, settings, lastActiveTime) {
 
     await updateBadge();
   } catch (err) {
-    console.error(`[TabSum] Error archiving tab ${tab.id}:`, err);
+    console.error(`[Tab Squirrel] Error archiving tab ${tab.id}:`, err);
   }
 }
 
@@ -619,10 +619,10 @@ async function handleCommand(command) {
       if (result?.success && result?.record) {
         showArchivedNotification(result.record.title || activeTab.title || 'Page');
       } else if (!result?.success) {
-        console.warn('[TabSum] Could not archive tab via shortcut:', result?.error);
+        console.warn('[Tab Squirrel] Could not archive tab via shortcut:', result?.error);
       }
     } catch (err) {
-      console.error('[TabSum] Error executing archive_active_tab command:', err);
+      console.error('[Tab Squirrel] Error executing archive_active_tab command:', err);
     }
   }
 }
@@ -636,7 +636,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   chrome.notifications.create({
     type: 'basic',
     iconUrl: chrome.runtime.getURL('src/assets/icons/icon-128.png'),
-    title: 'TabSum',
+    title: 'Tab Squirrel',
     message: info.menuItemId === 'excludedDomains' ? `${domain} will never be archived` : `${domain} will always be closed`
   });
 });
@@ -709,7 +709,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           }
           sendResponse({ success: true });
         } catch (err) {
-          console.debug('[TabSum] Close side panel error:', err);
+          console.debug('[Tab Squirrel] Close side panel error:', err);
           sendResponse({ success: false, error: err.message });
         }
         return;
@@ -717,7 +717,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       sendResponse({ success: false, error: 'Unknown message type' });
     } catch (err) {
-      console.error('[TabSum] Message handling error:', err);
+      console.error('[Tab Squirrel] Message handling error:', err);
       sendResponse({ success: false, error: err.message });
     }
   })();

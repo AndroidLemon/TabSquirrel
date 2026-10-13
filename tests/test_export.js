@@ -22,7 +22,7 @@ import {
 } from '../src/shared/export.js';
 import { escapeHtml } from '../src/shared/html.js';
 
-console.log('--- Running TabSum Knowledge Wiki Export Unit Tests ---');
+console.log('--- Running Tab Squirrel Knowledge Wiki Export Unit Tests ---');
 
 const mockTab1 = {
   id: 'tab-001',
@@ -87,7 +87,7 @@ assert.ok(standalone.includes('reading_time_minutes: 4'), 'Frontmatter should in
 assert.ok(standalone.includes('tags: ["AI", "Databases", "Search"]'), 'Obsidian frontmatter tags must NOT include the # prefix');
 assert.ok(!standalone.includes('"#AI"'), 'Frontmatter tags must not be hash-prefixed');
 assert.ok(standalone.includes('# Modern Vector Databases & Semantic Retrieval'));
-assert.ok(standalone.endsWith('*Captured via TabSum*'));
+assert.ok(standalone.endsWith('*Captured via Tab Squirrel*'));
 console.log('✓ formatStandaloneNote frontmatter verified (no # in frontmatter tags)');
 
 // Test 4: Tag normalization - strips any pre-existing '#'
@@ -186,7 +186,7 @@ console.log('✓ Obsidian ZIP structure, filenames, frontmatter and CRC-32 verif
 // Test 10: Cross-check the ZIP with the system `unzip` tool when available
 console.log('Cross-checking ZIP with system unzip (if available)...');
 try {
-  const tmpFile = path.join(os.tmpdir(), `tabsum-obsidian-test-${Date.now()}.zip`);
+  const tmpFile = path.join(os.tmpdir(), `tab-squirrel-obsidian-test-${Date.now()}.zip`);
   fs.writeFileSync(tmpFile, zipBytes);
   const listing = execFileSync('unzip', ['-l', tmpFile], { encoding: 'utf-8' });
   fs.unlinkSync(tmpFile);

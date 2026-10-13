@@ -1,10 +1,10 @@
 /**
- * TabSum - Knowledge Hub controller.
+ * Tab Squirrel - Knowledge Hub controller.
  *
  * One page serves both Chrome's side panel and the full view in a tab. Layout adapts to
  * width in app.css (narrow: single column + Filters drawer; wide: sidebar + card grid).
  * Only a few controls depend on the surface: "Archive current tab" and "Open full view"
- * exist in the side panel only (in a tab, the current tab is TabSum itself).
+ * exist in the side panel only (in a tab, the current tab is Tab Squirrel itself).
  *
  * Importable in Node for unit tests: all DOM/chrome access is behind the document guard.
  */
@@ -42,7 +42,7 @@ const state = {
   density: 'comfortable' // 'comfortable' | 'compact'
 };
 
-const TIME_LABELS = { favorites: 'Favorites ⭐', today: 'Captured today', yesterday: 'Yesterday', week: 'Past 7 days' };
+const TIME_LABELS = { favorites: 'Favorites', today: 'Captured today', yesterday: 'Yesterday', week: 'Past 7 days' };
 const DENSITY_KEY = 'sidepanel_density'; // pre-merge storage key, kept so saved preferences survive
 
 let fadeSettings = null;
@@ -73,7 +73,7 @@ if (typeof document !== 'undefined') {
     init();
   }
 
-  // TabSum closes idle tabs in the background; refresh stats/feed/"Closed today" when that
+  // Tab Squirrel closes idle tabs in the background; refresh stats/feed/"Closed today" when that
   // happens. Must not call sendResponse or return true (no response expected here).
   chrome.runtime.onMessage.addListener((message) => {
     if (message?.type === 'TABS_CLOSED') refresh();
@@ -132,7 +132,7 @@ async function updateStats() {
 async function renderSidebarFilters() {
   const [tags, domains] = await Promise.all([getAllTags(), getAllDomains()]);
   const list = (items, key) => items.map(({ value, label, count }) =>
-    `<button class="filter-item-btn${state[key] === value ? ' active' : ''}" data-${key}="${escapeHtml(value)}"><span>${escapeHtml(label)}</span><span class="badge">${count}</span></button>`
+    `<button class="filter-item-btn${state[key] === value ? ' active' : ''}" aria-pressed="${state[key] === value}" data-${key}="${escapeHtml(value)}"><span>${escapeHtml(label)}</span><span class="badge">${count}</span></button>`
   ).join('') || '<p class="filter-empty">None yet</p>';
   $('sidebar-tags').innerHTML = list(tags.slice(0, 12).map(({ tag, count }) => ({ value: tag, label: `#${tag}`, count })), 'tag');
   $('sidebar-domains').innerHTML = list(domains.slice(0, 8).map(({ domain, count }) => ({ value: domain, label: domain, count })), 'domain');
@@ -224,10 +224,10 @@ function emptyStateHtml() {
  */
 export function getStatusBadge(tab) {
   const [cls, label, fallback] = {
-    discarded: ['sleeping', '💤 Sleeping', 'Sleeping tab (RAM suspended)'],
-    restored: ['restored', '↩ Reopened', 'Tab was reopened'],
-    captured: ['captured', '📑 Saved', 'Summary saved; tab left open']
-  }[tab.status] || ['archived', '🗄️ Archived', 'Archived to knowledge base'];
+    discarded: ['sleeping', 'Sleeping', 'Sleeping tab (RAM suspended)'],
+    restored: ['restored', 'Reopened', 'Tab was reopened'],
+    captured: ['captured', 'Saved', 'Summary saved; tab left open']
+  }[tab.status] || ['archived', 'Archived', 'Archived to knowledge base'];
   return `<span class="badge-status ${cls}" title="${escapeHtml(tab.closureReason || fallback)}">${label}</span>`;
 }
 
@@ -246,11 +246,10 @@ function cardHtml(tab) {
         <div class="card-source">
           <img class="favicon" src="${escapeHtml(faviconUrl(tab.url))}" alt="">
           <span class="card-domain">${highlightSearch(tab.domain, q)}</span>
-          <span class="card-reading-time">${tab.readingTimeMinutes || 1}m read</span>
           ${getStatusBadge(tab)}
           ${fadeChipHtml(tab, fadeSettings, state.sortBy)}
         </div>
-        <span class="card-time">${formatTimeAgo(tab.capturedAt)}</span>
+        <span class="card-time" title="${tab.readingTimeMinutes || 1} min read">${tab.readingTimeMinutes || 1}m · ${formatTimeAgo(tab.capturedAt)}</span>
       </div>
       <h3 class="card-title" title="${escapeHtml(tab.title)}">${highlightSearch(tab.title, q)}</h3>
       ${tab.summary?.tldr ? `<div class="card-tldr">${highlightSearch(tab.summary.tldr, q)}</div>` : '<div class="card-tldr card-tldr-empty">No AI summary for this tab</div>'}
@@ -430,12 +429,21 @@ function syncControls() {
       ? item.dataset.time === state.time
       : !state.time && item.dataset.view === state.view;
     item.classList.toggle('active', active);
+    item.setAttribute('aria-pressed', String(active));
   });
   document.querySelectorAll('.view-tab-btn').forEach(btn => {
     btn.setAttribute('aria-pressed', String(btn.dataset.view === state.view));
   });
-  document.querySelectorAll('#sidebar-tags [data-tag]').forEach(b => b.classList.toggle('active', b.dataset.tag === state.tag));
-  document.querySelectorAll('#sidebar-domains [data-domain]').forEach(b => b.classList.toggle('active', b.dataset.domain === state.domain));
+  document.querySelectorAll('#sidebar-tags [data-tag]').forEach(b => {
+    const on = b.dataset.tag === state.tag;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-pressed', String(on));
+  });
+  document.querySelectorAll('#sidebar-domains [data-domain]').forEach(b => {
+    const on = b.dataset.domain === state.domain;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-pressed', String(on));
+  });
 
   const label = state.tag ? `Filtered by topic: #${state.tag}`
     : state.domain ? `Filtered by domain: ${state.domain}`
@@ -522,13 +530,13 @@ export async function performExport(format = 'markdown') {
   }
   const stamp = Date.now();
   if (format === 'json') {
-    triggerDownload(exportToJSON(tabs), `tabsum-wiki-export-${stamp}.json`, 'application/json;charset=utf-8');
+    triggerDownload(exportToJSON(tabs), `tab-squirrel-wiki-export-${stamp}.json`, 'application/json;charset=utf-8');
     showToast('Exported Wiki Backup (JSON)!');
   } else if (format === 'obsidian') {
-    triggerDownload(exportToObsidianZip(tabs), `tabsum-obsidian-vault-${stamp}.zip`, 'application/zip');
+    triggerDownload(exportToObsidianZip(tabs), `tab-squirrel-obsidian-vault-${stamp}.zip`, 'application/zip');
     showToast('Exported Obsidian vault (.zip)!');
   } else {
-    triggerDownload(exportToMarkdown(tabs), `tabsum-wiki-export-${stamp}.md`, 'text/markdown;charset=utf-8');
+    triggerDownload(exportToMarkdown(tabs), `tab-squirrel-wiki-export-${stamp}.md`, 'text/markdown;charset=utf-8');
     showToast('Exported Wiki to Markdown!');
   }
 }

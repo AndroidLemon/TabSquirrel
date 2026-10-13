@@ -14,7 +14,7 @@
  * host_permissions for only the TOP-LEVEL origin of each corpus URL - one
  * pattern per URL, computed with the same originPatternFor() the extension
  * itself uses. This is "per-origin" mode: it simulates a user who has
- * granted TabSum access to the site they're reading, which is the
+ * granted Tab Squirrel access to the site they're reading, which is the
  * realistic steady state (nobody grants <all_urls> by default;
  * optional_host_permissions in manifest.json has to be requested). It
  * deliberately does NOT grant permission for any cross-origin child
@@ -51,7 +51,7 @@ function copyDir(src, dest) {
  * never <all_urls>. Returns the temp dir.
  */
 function buildPerOriginExtension(urls) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tabsum-framegap-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tab-squirrel-framegap-'));
   copyDir(path.join(REPO_ROOT, 'src'), path.join(dir, 'src'));
   const manifest = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'manifest.json'), 'utf8'));
   const patterns = new Set();

@@ -1,5 +1,5 @@
 /**
- * TabSum - Closure Policy
+ * Tab Squirrel - Closure Policy
  *
  * The one place that decides whether a tab is skipped, captured, closed or suspended.
  * Every function here is pure: no chrome.*, no storage, no async, no imports. The sweep
@@ -71,7 +71,7 @@ export function decideSweepAction(tab, ctx = {}) {
   const idleDuration = now - (lastActive ?? now);
   if (idleDuration < timeoutMs) return skip('not stale yet');
 
-  // Discarded tabs can't be scripted. Hybrid's second tier closes tabs TabSum itself
+  // Discarded tabs can't be scripted. Hybrid's second tier closes tabs Tab Squirrel itself
   // suspended once they've sat unused for twice the timeout.
   if (tab.discarded) {
     if (settings.archiveMode === 'hybrid' && idleDuration >= 2 * timeoutMs && discardedRecordId) {

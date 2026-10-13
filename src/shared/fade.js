@@ -1,5 +1,5 @@
 /**
- * TabSum - Fade policy.
+ * Tab Squirrel - Fade policy.
  *
  * When a saved note deletes itself, and how long before that we warn about it. Pure: the
  * storage module walks the records and the UI draws the chip, but the rule lives here, so
