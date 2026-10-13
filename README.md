@@ -116,11 +116,11 @@ The side panel and the full view are one page (`src/app/`), so every feature wor
 Tab Squirrel is not on the Chrome Web Store yet. Load it unpacked:
 
 ```bash
-git clone https://github.com/AndroidLemon/TabSum.git
+git clone https://github.com/AndroidLemon/TabSquirrel.git
 ```
 
 1. Open `chrome://extensions/` and turn on **Developer mode**.
-2. Click **Load unpacked** and select the `TabSum` directory.
+2. Click **Load unpacked** and select the `TabSquirrel` directory.
 3. Click the Tab Squirrel icon (or press `Cmd+Shift+S`) to open the side panel, then click **Enable** on the permission banner so Tab Squirrel can read article text. You can also do this later from Options.
 4. Optional: under **Options → AI Provider**, pick a summarizer. Chrome's on-device model is used automatically if it is downloaded.
 

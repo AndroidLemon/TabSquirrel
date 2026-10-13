@@ -3,7 +3,7 @@
   "name": "Tab Squirrel: Inactive Tab Summarizer & Knowledge Wiki",
   "version": "1.0.0",
   "description": "Automatically summarizes neglected tabs and archives them into an in-browser knowledge wiki with 1-click restore.",
-  "homepage_url": "https://github.com/AndroidLemon/TabSum",
+  "homepage_url": "https://github.com/AndroidLemon/TabSquirrel",
   "minimum_chrome_version": "141",
   "icons": {
     "16": "src/assets/icons/icon-16.png",

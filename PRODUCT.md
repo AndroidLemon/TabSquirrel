@@ -39,7 +39,7 @@ Tab suspenders free memory but leave the clutter and keep no record. Read-later 
 
 ## Brand Commitments
 
-- Name: **Tab Squirrel** (committed 2026-10-12). The rename landed 2026-10-13; the only remaining "TabSum" is the GitHub repository name and URL.
+- Name: **Tab Squirrel** (committed 2026-10-12). The rename landed 2026-10-13, including the GitHub repository (AndroidLemon/TabSquirrel). Icon: an acorn whose cap is a browser-tab shape (src/assets/icons/icon.svg).
 - Icon: an acorn whose cap is a browser-tab shape. This is provisional, not final.
 - Voice: plain, specific and honest about limits. For example, the README says "No heuristic is infallible", and the UI says there is no Undo when there isn't one.
 

@@ -5,7 +5,7 @@
 **Version**: 1.0.0  
 **Category**: Productivity / Tools  
 **Minimum Chrome**: 141 (side panel close API; the on-device model needs a recent Chrome too)  
-**Homepage**: https://github.com/AndroidLemon/TabSum  
+**Homepage**: https://github.com/AndroidLemon/TabSquirrel  
 
 Everything the dashboard asks for, in the order it asks. Sections 2 and 3 are
 pasted verbatim into the permission-justification and privacy-practices tabs.
@@ -89,7 +89,7 @@ For the dashboard's data-use checkboxes:
 - **No analytics, no telemetry, no remote code.**
 
 ### Privacy policy URL
-https://github.com/AndroidLemon/TabSum/blob/main/PRIVACY.md
+https://github.com/AndroidLemon/TabSquirrel/blob/main/PRIVACY.md
 
 ---
 

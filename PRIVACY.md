@@ -59,4 +59,4 @@ If this policy changes, the effective date above changes and the new version is 
 
 ## Contact
 
-Questions about this policy can be raised as an issue on the project repository: https://github.com/AndroidLemon/TabSum/issues
+Questions about this policy can be raised as an issue on the project repository: https://github.com/AndroidLemon/TabSquirrel/issues
