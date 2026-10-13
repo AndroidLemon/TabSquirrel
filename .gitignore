@@ -10,3 +10,6 @@ logs/closure-ratio-*.md
 # Impeccable engine binary: platform-specific, re-downloaded by the launcher on first run
 .claude/skills/impeccable/scripts/bin/
 .impeccable/config.local.json
+
+# Toast crops written by tests/store_assets.js for design review; not store assets
+docs/store/06-toast*.png

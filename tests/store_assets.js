@@ -397,27 +397,31 @@ async function computeOptionsScroll(page) {
 
 async function makePromoTile(context) {
   const iconB64 = fs.readFileSync(path.join(REPO_ROOT, 'src/assets/icons/icon-128.png')).toString('base64');
+  // setContent pages can't reach the extension's bundled fonts, so inline the two the tile uses.
+  const font = (file) => fs.readFileSync(path.join(REPO_ROOT, 'src/fonts', file)).toString('base64');
   const html = `<!doctype html>
 <html><head><meta charset="utf-8"><style>
+  @font-face { font-family: "Newsreader"; font-weight: 600; src: url(data:font/woff2;base64,${font('newsreader-latin-600-normal.woff2')}) format("woff2"); }
+  @font-face { font-family: "IBM Plex Sans"; font-weight: 400; src: url(data:font/woff2;base64,${font('ibm-plex-sans-latin-400-normal.woff2')}) format("woff2"); }
   html, body { margin: 0; padding: 0; width: 440px; height: 280px; }
   body { display: flex; align-items: center; justify-content: center; gap: 22px;
-    background: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-  img { width: 96px; height: 96px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05); }
+    background: #F6F3EC; font-family: "IBM Plex Sans", sans-serif; }
+  img { width: 96px; height: 96px; border-radius: 21px; }
   .copy { max-width: 270px; }
-  .name { font-size: 30px; font-weight: 700; color: #0f172a; margin-bottom: 8px; }
-  .name span { color: #4f46e5; }
-  .tagline { font-size: 14px; line-height: 1.5; color: #475569; }
+  .name { font-family: "Newsreader", serif; font-size: 32px; font-weight: 600; line-height: 1.1; color: #1D1C19; margin-bottom: 8px; }
+  .tagline { font-size: 14px; line-height: 1.5; color: #4A4740; }
 </style></head>
 <body>
   <img src="data:image/png;base64,${iconB64}" alt="Tab Squirrel">
   <div class="copy">
-    <div class="name"><span>Tab</span>Sum</div>
+    <div class="name">Tab Squirrel</div>
     <div class="tagline">Close the tabs you were never going to read, and keep what was in them.</div>
   </div>
 </body></html>`;
   const page = await context.newPage();
   await page.setViewportSize(PROMO);
   await page.setContent(html);
+  await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(150);
   await page.screenshot({ path: path.join(OUT_DIR, 'promo-440x280.png') });
   await page.close();
