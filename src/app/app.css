@@ -1,4 +1,4 @@
-/* Tab Squirrel Knowledge Hub — one stylesheet for the side panel and the full view.
+/* Tab Squirrel notebook — one stylesheet for the side panel and the full view.
    Narrow (< 720px): single column + Filters drawer. Wide: persistent sidebar + card grid. */
 
 :root {
@@ -29,6 +29,7 @@
   --chip-moss: 63 107 69;
   --chip-accent: 46 74 122;
   --chip-ochre: 138 90 18;
+  --chip-brick: 166 61 47;
   color-scheme: light dark;
   --font-sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-serif: "Newsreader", Georgia, "Times New Roman", serif;
@@ -55,8 +56,11 @@
   --sidebar-width: 264px;
 }
 
+/* Dark tokens, written twice because CSS cannot share a block between a media query and an attribute
+   selector: once for System (unless Light is chosen), once for an explicit Dark choice.
+   Keep the two identical; tests/test_app_unit.js compares them. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg-primary: #161513;
     --bg-surface: #1F1E1B;
     --bg-surface-hover: #272622;
@@ -83,12 +87,56 @@
     --chip-moss: 141 191 147;
     --chip-accent: 157 180 222;
     --chip-ochre: 217 166 80;
+    --chip-brick: 224 138 124;
     --shadow-md: 0 2px 8px rgb(0 0 0 / 0.4), 0 1px 2px rgb(0 0 0 / 0.3);
     --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.55), 0 2px 6px rgb(0 0 0 / 0.4);
     --focus-ring: 0 0 0 3px rgb(157 180 222 / 0.3);
     --toast-bg: #2E2D29;
     --toast-border: var(--border-strong);
   }
+}
+
+:root[data-theme="dark"] {
+  --bg-primary: #161513;
+  --bg-surface: #1F1E1B;
+  --bg-surface-hover: #272622;
+  --bg-muted: #2B2A26;
+  --border-color: #34322D;
+  --border-strong: #4A4740;
+  --text-primary: #EDE9E0;
+  --text-secondary: #B5AFA3;
+  --text-muted: #9A9487;
+  --accent: #9DB4DE;
+  --accent-hover: #B8C9E8;
+  --accent-light: #232C3F;
+  --accent-text: #B8C9E8;
+  --accent-fill: #3E5C8F;
+  --accent-fill-hover: #476699;
+  --accent-fill-ink: #EDE9E0;
+  --border-input: #7D7869;
+  --danger: #E08A7C;
+  --danger-contrast: #161513;
+  --danger-light: #3A201C;
+  --star: #D9A650;
+  --success: #8DBF93;
+  --success-light: #1F2E22;
+  --chip-moss: 141 191 147;
+  --chip-accent: 157 180 222;
+  --chip-ochre: 217 166 80;
+  --chip-brick: 224 138 124;
+  --shadow-md: 0 2px 8px rgb(0 0 0 / 0.4), 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.55), 0 2px 6px rgb(0 0 0 / 0.4);
+  --focus-ring: 0 0 0 3px rgb(157 180 222 / 0.3);
+  --toast-bg: #2E2D29;
+  --toast-border: var(--border-strong);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 ::placeholder {
@@ -104,6 +152,16 @@
 
 [hidden] {
   display: none !important;
+}
+
+/* Read by screen readers, invisible to everyone else */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 body {
@@ -233,8 +291,6 @@ button {
 }
 
 .filter-item-btn span:first-child,
-.closed-today-title,
-.closed-today-tldr,
 .card-domain,
 .compact .card-title {
   white-space: nowrap;
@@ -253,11 +309,28 @@ button {
   color: var(--text-primary);
 }
 
-.nav-item.active,
-.filter-item-btn.active {
+.nav-item[aria-current="page"] {
   background: var(--accent-light);
   color: var(--accent-text);
   font-weight: 600;
+}
+
+/* An applied tag/domain filter: quieter than the current view (no fill, ink and a marker). */
+.filter-item-btn.applied {
+  color: var(--accent-text);
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--accent-text);
+}
+
+.filter-more summary {
+  padding: 5px 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.filter-more summary:hover {
+  color: var(--text-primary);
 }
 
 .badge {
@@ -280,6 +353,7 @@ button {
   padding: 12px;
   border-top: 1px solid var(--border-color);
   display: flex;
+  flex-wrap: wrap; /* Export on its own row, then Settings beside the two icon buttons */
   gap: 8px;
 }
 
@@ -308,7 +382,12 @@ button {
 
 /* Export dropdown (opens upward from the sidebar footer) */
 .export-dropdown {
-  flex: 1;
+  flex: 1 1 100%;
+}
+
+#settings-btn {
+  flex: 1 1 auto;
+  width: auto;
 }
 
 .dropdown-chevron {
@@ -401,42 +480,6 @@ button {
   flex: 1;
 }
 
-.stats-banner {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: space-around;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  padding: 8px 12px;
-}
-
-.stat-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.stat-num {
-  font-family: var(--font-mono);
-  font-size: 14px;
-  color: var(--text-primary);
-}
-
-.stat-label {
-  font-size: 12px;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.stat-divider {
-  width: 1px;
-  height: 20px;
-  background: var(--border-color);
-}
-
 .icon-btn {
   background: transparent;
   border: none;
@@ -450,27 +493,6 @@ button {
   transition: background 120ms cubic-bezier(.2, .7, .2, 1), color 120ms cubic-bezier(.2, .7, .2, 1), border-color 120ms cubic-bezier(.2, .7, .2, 1);
 }
 
-.primary-btn {
-  background: var(--accent-fill);
-  color: var(--accent-fill-ink);
-  border: none;
-  padding: 8px 12px;
-  border-radius: var(--radius-sm);
-  font-weight: 600;
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  cursor: pointer;
-  box-shadow: var(--shadow-sm);
-  transition: background 120ms cubic-bezier(.2, .7, .2, 1);
-}
-
-.primary-btn:hover {
-  background: var(--accent-fill-hover);
-}
-
 .perm-banner,
 .filter-banner {
   background: var(--accent-light);
@@ -478,6 +500,7 @@ button {
   border-radius: var(--radius-sm);
   padding: 8px 12px;
   display: flex;
+  flex-wrap: wrap; /* the action drops below the text at 200% zoom */
   align-items: center;
   justify-content: space-between;
   gap: 10px;
@@ -492,6 +515,38 @@ button {
   font-size: 12px;
   opacity: 0.85;
   margin-top: 2px;
+}
+
+/* Once any note exists the permission note steps back: hairline, no fill, and it can be dismissed */
+.perm-banner.quiet {
+  background: transparent;
+  border-color: var(--border-color);
+  color: var(--text-secondary);
+}
+
+.perm-banner.quiet strong {
+  display: none;
+}
+
+.perm-banner.quiet p {
+  margin-top: 0;
+  opacity: 1;
+}
+
+.perm-banner.quiet .perm-btn {
+  background: transparent;
+  color: var(--accent-text);
+  padding: 4px 8px;
+}
+
+.perm-banner > div {
+  flex: 1 1 12em;
+}
+
+.perm-dismiss-btn {
+  flex: none;
+  min-width: 24px;
+  margin-left: -4px;
 }
 
 .perm-btn {
@@ -517,6 +572,7 @@ button {
   font-weight: 600;
   cursor: pointer;
   padding: 2px 6px;
+  min-height: 24px;
   white-space: nowrap;
 }
 
@@ -530,6 +586,15 @@ button {
   gap: 8px;
 }
 
+.search-row {
+  flex-wrap: wrap; /* Filters drops below the search box when the row is too narrow for both */
+}
+
+.feed-controls {
+  position: relative;
+  margin-left: auto;
+}
+
 .controls-row {
   flex-wrap: wrap;
   justify-content: space-between;
@@ -537,7 +602,8 @@ button {
 
 .search-box {
   position: relative;
-  flex: 1;
+  flex: 1 1 120px;
+  min-width: 120px; /* never squeezed to a sliver beside Filters */
   display: flex;
   align-items: center;
 }
@@ -576,6 +642,8 @@ button {
   background: transparent;
   border: none;
   cursor: pointer;
+  min-width: 24px;
+  min-height: 24px;
   padding: 2px 6px;
   color: var(--text-muted);
   border-radius: 50%;
@@ -652,19 +720,81 @@ button {
   border-color: var(--accent);
 }
 
+.view-options > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  list-style: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 12px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.view-options > summary::-webkit-details-marker {
+  display: none;
+}
+
+.view-options > summary::after {
+  content: '▾';
+}
+
+.view-options[open] > summary::after {
+  content: '▴';
+}
+
+/* Narrow: the view tabs, count and Sort and view share one row, so the label gives way to its icon */
+@media (max-width: 719.98px) {
+  .view-options-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+.view-options > summary:hover {
+  color: var(--text-primary);
+}
+
+.view-options > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.view-options-body {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 8px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+}
+
 .view-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   padding: 3px;
-  flex: 1;
-  max-width: 320px;
+  flex: 1 1 auto;
 }
 
 .view-tab-btn {
-  flex: 1;
+  flex: 1 1 auto;
+  white-space: nowrap;
   background: transparent;
   border: none;
   padding: 4px 8px;
@@ -675,7 +805,7 @@ button {
   cursor: pointer;
 }
 
-.view-tab-btn[aria-pressed="true"] {
+.view-tab-btn[aria-current="page"] {
   background: var(--accent-light);
   color: var(--accent-text);
 }
@@ -687,82 +817,229 @@ button {
   white-space: nowrap;
 }
 
-/* ---------- Closed today ---------- */
+/* ---------- Closed today (top of the feed) and the feed heading ---------- */
 
-.closed-today {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-}
-
-.closed-today summary {
-  padding: 8px 12px;
+/* Quiet sans headings over the two parts of the feed: more room above than below. */
+.feed-heading {
+  margin: 0;
+  font-family: var(--font-sans);
   font-size: 12px;
   font-weight: 600;
+  line-height: 1.4;
   color: var(--text-secondary);
+}
+
+#feed-heading {
+  margin-top: 6px;
+}
+
+.closed-today {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.closed-today-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 8px;
+}
+
+.closed-today-heading {
+  flex: 1 1 14em;
+  min-width: 0;
+}
+
+.closed-today-toggle {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 24px;
+  padding: 2px 4px 2px 0;
+  overflow-wrap: anywhere; /* the heading wraps cleanly at any width */
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: inherit;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
-  list-style: none;
-  user-select: none;
 }
 
-.closed-today summary::-webkit-details-marker {
-  display: none;
-}
-
-.closed-today summary::before {
+.closed-today-toggle::before {
   content: "▶";
-  display: inline-block;
+  flex-shrink: 0;
   font-size: 12px;
-  margin-right: 6px;
   color: var(--text-muted);
   transition: transform 120ms cubic-bezier(.2, .7, .2, 1);
 }
 
-.closed-today[open] summary::before {
+.closed-today-toggle[aria-expanded="true"]::before {
   transform: rotate(90deg);
 }
 
-.closed-today summary:hover {
-  background: var(--bg-surface-hover);
+.closed-today-toggle:hover {
+  color: var(--text-primary);
 }
 
-.closed-today-row {
+.closed-today-toggle:focus-visible,
+.closed-today-more:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.closed-today-confirm {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.closed-today-cancel-btn {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  padding: 3px 8px;
+  min-height: 24px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.closed-today-cancel-btn:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.closed-today-more {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 2px 0;
+  min-height: 24px;
+  font-size: 12px;
+  color: var(--accent-text);
+  cursor: pointer;
+}
+
+.closed-today-more:hover {
+  text-decoration: underline;
+}
+
+/* What a Closed today card adds: when it closed (data), and a reason only when it is unusual */
+.card-closed {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.card-closed-when {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+.card-closed-reason {
+  color: var(--text-secondary);
+}
+
+/* Compact density keeps a Closed today card to its row: the closed time, not the idle span or reason */
+.compact .card-closed-idle,
+.compact .card-closed-reason {
+  display: none;
+}
+
+/* Seen once today: one line per note (title, closed time, Reopen) in a single ruled list. */
+#closed-today-list.lines {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+#closed-today-list.lines .tab-card {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  min-height: 40px;
   padding: 6px 12px;
+  border: none;
   border-top: 1px solid var(--border-color);
+  border-radius: 0;
 }
 
-.closed-today-info {
-  flex: 1;
+#closed-today-list.lines .tab-card:first-child {
+  border-top: none;
+}
+
+#closed-today-list.lines .tab-card.keyboard-selected {
+  outline-offset: -2px;
+}
+
+#closed-today-list.lines .card-title {
+  order: -1;
+  flex: 1 1 12em;
   min-width: 0;
-}
-
-.closed-today-title {
-  font-family: var(--font-serif);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 400;
 }
 
-.closed-today-meta {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  min-width: 0;
-  font-size: 12px;
+#closed-today-list.lines .card-title-btn {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.closed-today-domain {
-  font-family: var(--font-mono);
-  color: var(--text-muted);
-  flex-shrink: 0;
+#closed-today-list.lines .card-closed { order: 0; }
+#closed-today-list.lines .card-header { order: 1; flex-wrap: nowrap; }
+#closed-today-list.lines .card-footer { order: 2; }
+
+#closed-today-list.lines .card-header:not(:has(.card-flags)) {
+  display: none;
 }
 
-.closed-today-tldr {
-  color: var(--text-secondary);
-  min-width: 0;
+#closed-today-list.lines .card-source,
+#closed-today-list.lines .card-time,
+#closed-today-list.lines .fade-chip,
+#closed-today-list.lines .card-closed-reason,
+#closed-today-list.lines .card-closed-idle,
+#closed-today-list.lines .card-tldr,
+#closed-today-list.lines .takeaways-toggle,
+#closed-today-list.lines .card-bullets,
+#closed-today-list.lines .card-tags,
+#closed-today-list.lines .card-actions {
+  display: none;
+}
+
+#closed-today-list.lines .card-flags {
+  flex-basis: auto;
+  flex-wrap: nowrap;
+}
+
+#closed-today-list.lines .card-footer {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+#closed-today-list.lines .restore-btn {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .closed-today-reopen-btn,
@@ -804,6 +1081,7 @@ button {
   flex-direction: column;
   gap: 8px;
   box-shadow: var(--shadow-sm);
+  overflow-wrap: anywhere; /* a long word or address wraps instead of widening the panel */
   transition: border-color 120ms cubic-bezier(.2, .7, .2, 1);
 }
 
@@ -813,17 +1091,32 @@ button {
 
 .card-header {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 8px;
+  gap: 4px 8px;
 }
 
 .card-source {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: 6px;
   min-width: 0;
+}
+
+/* Status badge and fade chip: their own row under the domain and meta */
+.card-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex-basis: 100%;
+}
+
+/* Narrow: domain on the first line at full width, meta on its own line beneath */
+@media (max-width: 719.98px) {
+  .card-source {
+    flex-basis: 100%;
+  }
 }
 
 .favicon {
@@ -838,6 +1131,10 @@ button {
   font-size: 12px;
   color: var(--text-primary);
   max-width: 180px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .card-tag {
@@ -854,7 +1151,6 @@ button {
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--text-muted);
-  white-space: nowrap;
 }
 
 .badge-status,
@@ -879,15 +1175,11 @@ button {
 .badge-status.sleeping { --chip: var(--chip-accent); }
 .badge-status.restored { --chip: var(--chip-moss); }
 .badge-status.captured { --chip: var(--chip-ochre); }
-/* Archived is the default state, so it is the quiet one: neutral, no hue */
-.badge-status.archived {
-  background: var(--bg-muted);
-  color: var(--text-secondary);
-  border-color: var(--border-color);
-}
+.badge-status.failed { --chip: var(--chip-brick); }
 .fade-chip { --chip: var(--chip-ochre); }
 
 .card-title {
+  min-width: 0;
   font-family: var(--font-serif);
   font-size: 15px;
   font-weight: 600;
@@ -895,7 +1187,23 @@ button {
   cursor: pointer;
 }
 
-.card-title:hover {
+/* The title is a real button that opens the reader; it looks like the heading it sits in */
+.card-title-btn {
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.card-title-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.card-title-btn:hover {
   color: var(--accent);
   text-decoration: underline;
 }
@@ -925,6 +1233,9 @@ button {
   background: none;
   border: none;
   cursor: pointer;
+  /* A 25px target that takes the 17px of room it always did: the padding is pulled back out by the margin */
+  padding-block: 4px;
+  margin-block: -4px;
 }
 
 .takeaways-toggle:hover {
@@ -987,8 +1298,10 @@ button {
 
 .card-footer {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  gap: 4px 8px;
   margin-top: auto;
   padding-top: 6px;
   border-top: 1px solid var(--border-color);
@@ -1003,10 +1316,14 @@ button {
   background: transparent;
   border: none;
   cursor: pointer;
-  padding: 5px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   color: var(--text-muted);
   border-radius: var(--radius-sm);
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
   transition: color 120ms cubic-bezier(.2, .7, .2, 1), background 120ms cubic-bezier(.2, .7, .2, 1);
 }
 
@@ -1036,6 +1353,11 @@ button {
 button:active:not(:disabled) {
   transform: scale(0.96);
   transition: transform 120ms cubic-bezier(.2, .7, .2, 1);
+}
+
+/* j/k focus the card itself; the selection halo below is its one focus treatment */
+.tab-card:focus {
+  outline: none;
 }
 
 .tab-card.keyboard-selected {
@@ -1081,11 +1403,33 @@ button:active:not(:disabled) {
   max-width: 80px;
 }
 
+.compact .card-header {
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+.compact .card-source {
+  flex-basis: auto;
+}
+
+.compact .card-flags {
+  flex-basis: auto;
+  flex-wrap: nowrap;
+}
+
 .compact .card-title {
   flex: 1;
   min-width: 0;
   font-size: 14px;
   font-weight: 400;
+}
+
+.compact .card-title-btn {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .compact .card-time,
@@ -1151,8 +1495,10 @@ button:active:not(:disabled) {
 }
 
 .empty-icon {
-  color: var(--accent);
-  opacity: 0.5;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  opacity: 0.6;
 }
 
 .empty-title {
@@ -1162,8 +1508,28 @@ button:active:not(:disabled) {
 }
 
 .empty-desc {
+  max-width: 34ch;
   font-size: 12px;
   line-height: 1.5;
+}
+
+.empty-desc p + p {
+  margin-top: 6px;
+}
+
+.empty-action-btn {
+  background: var(--bg-surface);
+  color: var(--accent-text);
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.empty-action-btn:hover {
+  border-color: var(--accent);
 }
 
 /* ---------- Reader dialog ---------- */
@@ -1208,16 +1574,15 @@ dialog.reader-dialog[open] {
 
 .modal-header {
   padding: 16px 20px;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   border-bottom: 1px solid var(--border-color);
 }
 
 .modal-title-group {
   min-width: 0;
-  flex: 1;
 }
 
 .modal-title {
@@ -1225,13 +1590,24 @@ dialog.reader-dialog[open] {
   font-size: 22px;
   font-weight: 600;
   line-height: 1.3;
+  overflow-wrap: anywhere;
 }
 
+/* Focus starts here when the reader opens; it is not a control, so it shows no ring */
+.modal-title:focus {
+  outline: none;
+}
+
+/* The domain, not the address: the full URL stays in href and title. */
 .modal-source-link {
+  display: block;
+  overflow: hidden;
   font-size: 12px;
   color: var(--accent);
   text-decoration: none;
-  word-break: break-all;
+  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .modal-source-link[href]:hover {
@@ -1240,18 +1616,21 @@ dialog.reader-dialog[open] {
 
 .modal-header-actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
   gap: 8px;
-  flex-shrink: 0;
 }
 
+/* Reader actions by weight: Reopen / Go to tab is primary (ink), Delete a secondary in brick text,
+   and Star and Copy stay quiet (no fill, no border until hover). */
 .modal-copy-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  background: var(--bg-muted);
-  border: 1px solid var(--border-color);
+  background: transparent;
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
   font-size: 12px;
@@ -1260,9 +1639,31 @@ dialog.reader-dialog[open] {
 }
 
 .modal-copy-btn:hover {
-  background: var(--accent-light);
-  border-color: var(--accent);
-  color: var(--accent-text);
+  background: var(--bg-muted);
+  color: var(--text-primary);
+}
+
+.modal-btn-primary {
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
+  color: var(--accent-fill-ink);
+}
+
+.modal-btn-primary:hover {
+  background: var(--accent-fill-hover);
+  color: var(--accent-fill-ink);
+}
+
+.modal-btn-danger {
+  background: var(--bg-surface);
+  border-color: var(--border-color);
+  color: var(--danger);
+}
+
+.modal-btn-danger:hover {
+  background: var(--danger-light);
+  border-color: var(--danger);
+  color: var(--danger);
 }
 
 .modal-copy-btn.copied {
@@ -1301,16 +1702,34 @@ dialog.reader-dialog[open] {
   font-size: 18px;
 }
 
-.modal-summary-box strong {
-  font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 600;
-}
-
 .modal-summary-box p {
   font-size: 16px;
-  margin-top: 6px;
   color: var(--text-secondary);
+}
+
+.modal-summary-box p + ul {
+  margin-top: 10px;
+}
+
+.modal-bullets {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 15px;
+  color: var(--text-secondary);
+}
+
+.modal-bullets li {
+  position: relative;
+  padding-left: 14px;
+}
+
+.modal-bullets li::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  color: var(--accent);
 }
 
 /* Distraction-free reading typography */
@@ -1353,8 +1772,13 @@ dialog.reader-dialog[open] {
 
 /* ---------- Toast ---------- */
 
+/* A popover="manual" element, so it sits in the top layer above the open reader dialog. */
 .toast {
   position: fixed;
+  inset: auto;
+  margin: 0;
+  width: auto;
+  height: auto;
   bottom: 16px;
   left: 50%;
   transform: translateX(-50%);
@@ -1369,9 +1793,10 @@ dialog.reader-dialog[open] {
   z-index: 1000;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px 10px;
+  flex-wrap: wrap; /* Undo drops below a long message at 200% zoom */
   overflow: hidden;
-  transition: opacity 200ms cubic-bezier(.2, .7, .2, 1), transform 200ms cubic-bezier(.2, .7, .2, 1);
+  transition: opacity 200ms cubic-bezier(.2, .7, .2, 1), transform 200ms cubic-bezier(.2, .7, .2, 1), visibility 0s;
 }
 
 .toast.error {
@@ -1382,14 +1807,17 @@ dialog.reader-dialog[open] {
 
 .toast.hidden {
   opacity: 0;
+  visibility: hidden; /* leaves the tab order once the fade-out ends */
   pointer-events: none;
   transform: translate(-50%, 8px);
+  transition-delay: 0s, 0s, 200ms;
 }
 
+
 .toast-message {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex: 1 1 8em;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .toast-undo-btn {
@@ -1426,6 +1854,11 @@ dialog.reader-dialog[open] {
   background: var(--toast-bar);
 }
 
+/* Timer held while hovered or focused: show the bar full instead of draining. */
+.toast.paused .toast-progress {
+  width: 100%;
+}
+
 @keyframes toastCountdown {
   from { width: 100%; }
   to { width: 0%; }
@@ -1459,21 +1892,6 @@ dialog.reader-dialog[open] {
     background: var(--scrim);
   }
 
-  /* Stats drop below the brand row */
-  .topbar .stats-banner {
-    order: 3;
-    flex-basis: 100%;
-  }
-
-  .view-tabs {
-    max-width: none;
-    flex-basis: 100%;
-  }
-
-  .feed-controls {
-    margin-left: auto;
-  }
-
   /* Reader view fills the panel */
   dialog.reader-dialog {
     width: 100vw;
@@ -1488,8 +1906,17 @@ dialog.reader-dialog[open] {
     max-height: 100vh;
   }
 
+  /* Title group and the close button share the first row; the actions drop to their own row. */
   .modal-header {
     padding: 12px 14px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+  }
+
+  .modal-header-actions {
+    grid-row: 2;
+    grid-column: 1 / -1;
+    justify-content: flex-start;
   }
 
   .modal-title {
@@ -1515,10 +1942,6 @@ dialog.reader-dialog[open] {
   .main {
     padding: 20px 28px;
     gap: 14px;
-  }
-
-  .stats-banner {
-    max-width: 520px;
   }
 
   .topbar {
@@ -1599,7 +2022,7 @@ dialog.reader-dialog[open] {
   /* State-indicator chevrons snap instead of rotating */
   .dropdown-chevron,
   .takeaways-chevron,
-  .closed-today summary::before {
+  .closed-today-toggle::before {
     transition: none;
   }
 
@@ -1651,4 +2074,125 @@ dialog.reader-dialog[open] {
     opacity: 1;
     transition: opacity 200ms cubic-bezier(.2, .7, .2, 1);
   }
+}
+
+/* ---------- Fade explanation, fade date, reader actions, shortcuts legend ---------- */
+
+.fade-note {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.shortcuts-dialog .fade-note {
+  padding: 10px 16px 14px;
+  border-top: 1px solid var(--border-color);
+}
+
+.fade-date,
+.offline-summary {
+  color: var(--text-muted);
+}
+
+.modal-summary-box p.summary-source {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.modal-fade {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.modal-fade:empty {
+  display: none;
+}
+
+.shortcuts-btn,
+.theme-btn {
+  width: auto;
+  flex: none;
+  padding: 8px 12px;
+}
+
+dialog.shortcuts-dialog {
+  border: none;
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  width: min(90vw, 420px);
+  padding: 0;
+  box-shadow: var(--shadow-lg);
+  margin: auto;
+}
+
+dialog.shortcuts-dialog::backdrop {
+  background: var(--scrim);
+}
+
+.shortcuts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.shortcuts-title {
+  font-family: var(--font-serif);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.shortcuts-list {
+  margin: 0;
+  padding: 8px 16px 14px;
+  font-size: 13px;
+}
+
+.shortcuts-list > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  padding: 5px 0;
+}
+
+/* Keys in a fixed column, so the descriptions line up on their left edge */
+.shortcuts-list dt {
+  flex: 0 0 10.5em;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.shortcuts-list dd {
+  flex: 1 1 12em;
+  min-width: 0;
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.shortcuts-list kbd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 1px 5px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-muted);
+  color: var(--text-secondary);
+}
+
+
+/* A note in Closed today that has left the Inbox (read or starred): the Inbox view says so, quietly. */
+.filed-cue {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.inbox-empty-line {
+  margin: 0;
+  padding: 8px 4px;
+  font-size: 13px;
+  color: var(--text-muted);
 }

@@ -254,7 +254,7 @@
   }
 
   // Page Title
-  const rawTitle = ogTitle || document.title || 'Untitled Document';
+  const rawTitle = ogTitle || document.title || 'Untitled page';
 
   // TITLE_SEPARATOR_REGEX: strip a trailing " <sep> Site Name" suffix, but only
   // when the separator is surrounded by whitespace (so "self-driving" survives)

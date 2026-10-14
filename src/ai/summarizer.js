@@ -33,6 +33,20 @@ const SYSTEM_PROMPT =
   'bullets should be an array of up to 5 distinct key takeaways, and tags should be an array of up to 4 topic tags.';
 
 /**
+ * Which tier the settings point at. 'prompt-api' is only a plan: it writes the summary
+ * only if Chrome's on-device model is already downloaded, which is known only by asking
+ * Chrome (async). A provider missing its key or server falls through to 'heuristic'.
+ * @returns {'gemini-api'|'openai-compatible'|'prompt-api'|'heuristic'}
+ */
+export function plannedSource(settings = {}) {
+  const provider = settings.aiProvider || 'auto';
+  if (provider === 'gemini-api' && settings.geminiApiKey) return 'gemini-api';
+  if (provider === 'openai-compatible' && settings.openaiBaseUrl && settings.openaiModel) return 'openai-compatible';
+  if (provider === 'auto' || provider === 'prompt-api') return 'prompt-api';
+  return 'heuristic';
+}
+
+/**
  * Main summarization dispatcher
  * @param {Object} extractedData { title, cleanText, meta, domain, isLowConfidence }
  * @param {Object} settings { aiProvider, geminiApiKey, openaiBaseUrl, openaiModel, openaiApiKey }
@@ -48,7 +62,7 @@ export async function summarizeContent(extractedData, settings = {}) {
     const desc = meta?.description || '';
     return {
       ...normalizeSummary({
-        tldr: desc || `Quick bookmark saved from ${domain}.`,
+        tldr: desc || `Saved from ${domain}. Too little text to summarize.`,
         bullets: [],
         tags: []
       }),
@@ -56,14 +70,13 @@ export async function summarizeContent(extractedData, settings = {}) {
     };
   }
 
-  const provider = settings.aiProvider || 'auto';
-
-  const tier = provider === 'gemini-api' && settings.geminiApiKey
-    ? { source: 'gemini-api', run: () => summarizeWithGeminiAPI(extractedData, settings.geminiApiKey) }
-    : provider === 'openai-compatible' && settings.openaiBaseUrl && settings.openaiModel
-    ? { source: 'openai-compatible', timeoutMs: LOCAL_TIMEOUT_MS, run: () => summarizeWithOpenAICompatible(extractedData, settings) }
-    : provider === 'auto' || provider === 'prompt-api'
-    ? { source: 'prompt-api', run: () => summarizeWithChromePromptAPI(extractedData) }
+  const source = plannedSource(settings);
+  const tier = source === 'gemini-api'
+    ? { source, run: () => summarizeWithGeminiAPI(extractedData, settings.geminiApiKey) }
+    : source === 'openai-compatible'
+    ? { source, timeoutMs: LOCAL_TIMEOUT_MS, run: () => summarizeWithOpenAICompatible(extractedData, settings) }
+    : source === 'prompt-api'
+    ? { source, run: () => summarizeWithChromePromptAPI(extractedData) }
     : null;
 
   if (tier) {

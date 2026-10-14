@@ -1,6 +1,6 @@
 /**
  * Tab Squirrel - Shared export helpers (Markdown, Obsidian vault, JSON backup) for the
- * wiki dashboard and options page. Keeping this in one place avoids the two pages
+ * notebook and options page. Keeping this in one place avoids the two pages
  * producing two different, incompatible export formats.
  */
 
@@ -33,7 +33,7 @@ function getReadingTime(tab) {
  * (only the first block is recognized by parsers).
  */
 export function formatNoteSection(tab) {
-  const title = tab.title || 'Untitled Tab';
+  const title = tab.title || 'Untitled page';
   const url = tab.url || '';
   const domain = tab.domain || '';
   const readingTime = getReadingTime(tab);
@@ -45,9 +45,9 @@ export function formatNoteSection(tab) {
   const label = title.replace(/[\\[\]]/g, '\\$&');
   const dest = url.replace(/[\\()]/g, '\\$&').replace(/ /g, '%20');
   let section = `## [${label}](${dest})\n`;
-  section += `*Captured: ${new Date(capturedAt).toLocaleDateString()} | Domain: ${domain} | Est. Read: ${readingTime} min*\n\n`;
+  section += `*Captured: ${new Date(capturedAt).toLocaleDateString()} | Domain: ${domain} | Reading time: ${readingTime} min*\n\n`;
   section += `**TL;DR**: ${tab.summary?.tldr || 'No overview available.'}\n\n`;
-  section += `### Key Takeaways\n`;
+  section += `### Key takeaways\n`;
   section += bullets.length ? bullets.map(b => `- ${b}`).join('\n') : '- No key takeaways recorded';
   if (tags.length) {
     section += `\n\n**Tags**: ${tags.map(t => `#${t}`).join(' ')}`;
@@ -62,7 +62,7 @@ export function formatNoteSection(tab) {
  */
 export function exportToMarkdown(tabs) {
   if (tabs.length === 0) return '';
-  const header = `# Tab Squirrel Knowledge Wiki Export\n*Exported on ${new Date().toLocaleString()}*\n\n`;
+  const header = `# Tab Squirrel Notes Export\n*Exported on ${new Date().toLocaleString()}*\n\n`;
   return header + tabs.map(formatNoteSection).join('\n\n---\n\n');
 }
 
@@ -74,7 +74,7 @@ export function exportToMarkdown(tabs) {
  * @returns {string}
  */
 export function formatStandaloneNote(tab) {
-  const title = tab.title || 'Untitled Tab';
+  const title = tab.title || 'Untitled page';
   const url = tab.url || '';
   const capturedAt = toIsoDate(tab);
   const readingTime = getReadingTime(tab);
@@ -94,7 +94,7 @@ tags: ${tagsFormatted}
 # ${title}
 > TL;DR: ${tab.summary?.tldr || 'No overview available.'}
 
-## Key Takeaways
+## Key takeaways
 ${bulletsContent}
 
 *Captured via Tab Squirrel*`;

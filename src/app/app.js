@@ -1,9 +1,9 @@
 /**
- * Tab Squirrel - Knowledge Hub controller.
+ * Tab Squirrel - notebook controller.
  *
  * One page serves both Chrome's side panel and the full view in a tab. Layout adapts to
  * width in app.css (narrow: single column + Filters drawer; wide: sidebar + card grid).
- * Only a few controls depend on the surface: "Archive current tab" and "Open full view"
+ * Only a few controls depend on the surface: "Save current tab" and "Open full view"
  * exist in the side panel only (in a tab, the current tab is Tab Squirrel itself).
  *
  * Importable in Node for unit tests: all DOM/chrome access is behind the document guard.
@@ -18,10 +18,16 @@ import {
   restoreDeletedTab,
   markReopened,
   getTabById,
+  markFiled,
+  isInInbox,
   toggleFavoriteTab,
-  getSettings
+  getSettings,
+  DEFAULT_SETTINGS
 } from '../storage/db.js';
-import { escapeHtml, highlightSearch, faviconUrl, fadeChipHtml } from '../shared/html.js';
+import { escapeHtml, highlightSearch, faviconUrl, fadeChipHtml, fadeDateHtml, reasonLabel, offlineSummaryHtml, isOfflineSummary } from '../shared/html.js';
+import { plannedSource } from '../ai/summarizer.js';
+import { fadeChipLabel, fadeDateLabel, fadeExplanation } from '../shared/fade.js';
+import { THEME_LABELS, nextTheme, setTheme, startTheme } from '../shared/theme.js';
 import {
   exportToMarkdown,
   exportToObsidianZip,
@@ -42,16 +48,45 @@ const state = {
   density: 'comfortable' // 'comfortable' | 'compact'
 };
 
-const TIME_LABELS = { favorites: 'Favorites', today: 'Captured today', yesterday: 'Yesterday', week: 'Past 7 days' };
+const TIME_LABELS = { favorites: 'Starred', today: 'Today', yesterday: 'Yesterday', week: 'Past 7 days' };
+const SIDEBAR_TAGS_VISIBLE = 8;
+const SIDEBAR_DOMAINS_VISIBLE = 5;
+const SIDEBAR_LIST_MAX = 50; // visible plus the "More" disclosure
+const SORT_KEY = 'notebook_sort';
 const DENSITY_KEY = 'sidepanel_density'; // pre-merge storage key, kept so saved preferences survive
+const RECEIPT_SEEN_KEY = 'closed_today_seen'; // { day, upTo }: Closed today was shown up to this lastClosedAt
+const CLOSED_TODAY_VISIBLE = 6; // more closures than this and the rest sit behind "Show all"
+const REOPEN_ALL_CONFIRM_ABOVE = 5; // more still-closed notes than this and Reopen all asks first
+const PERM_DISMISSED_KEY = 'perm_banner_dismissed'; // the quiet permission note was dismissed
+const PERM_TEXT = {
+  loud: 'Without it, tabs from sites you haven\'t allowed stay open and get no note.',
+  quiet: 'Tab Squirrel can\'t read sites you haven\'t allowed, so their tabs stay open with no note.' // no heading above it, so it carries its own subject
+};
+const SAVE_FAILED = 'Couldn\'t save this page. Tab Squirrel can\'t read browser pages, or sites you haven\'t allowed.';
+const VIEW_LABELS = { inbox: 'Inbox', reopened: 'Reopened' };
 
 let fadeSettings = null;
 let tabsById = new Map();
 let renderSeq = 0;
-let selectedIndex = -1;
+let selectedId = null; // the j/k-selected note, by id so a refresh that reorders the feed keeps it
+let openUrls = new Set(); // addresses of the tabs open right now: decides Go to tab vs Reopen tab
 let searchTimer = null;
 let toastTimer = null;
+let announceTimer = null;
+let toastDuration = 2600;
 let readerTab = null;
+let receiptSeenUpTo = null; // newest lastClosedAt already shown today; null until read from storage
+let closedTodayTabs = []; // every note closed today, shown or behind Show all: Reopen all works from these
+let closedTodayExpanded = null; // full cards (true) or one line each (false); null until the first render
+let closedTodayShowAll = false; // past CLOSED_TODAY_VISIBLE, Show all was pressed
+let closedTodayShowAllKey = ''; // the view, filters and day Show all was pressed in
+let reopenFailedIds = new Set(); // notes the last Reopen all could not reopen
+let readerFiled = false; // opening the reader just took its note out of the Inbox view on screen
+let readerFiling = null; // the markFiled write, so the redraw on close sees it
+let closedTodayCappedOut = 0; // notes closed today behind Show all, for the results count
+let permMissing = false; // the all-sites permission is not granted
+let permDismissed = false; // the user dismissed the quiet permission note
+let noteTotal = null; // every note, whatever the view: decides how loud the permission note is; null until read
 
 const ICONS = {
   reopen: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>',
@@ -59,8 +94,24 @@ const ICONS = {
   reader: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>',
   copy: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>',
   trash: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>',
-  empty: '<svg class="empty-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>'
+  empty: '<img class="empty-icon" src="../assets/icons/icon-48.png" alt="" width="40" height="40">',
+  // The theme button shows the current choice: a monitor for System, a sun, a moon.
+  theme: {
+    system: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>',
+    light: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>',
+    dark: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>'
+  }
 };
+
+// Keys that act on the j/k-selected card.
+const CARD_KEYS = {
+  s: (tab, card) => toggleStar(tab, card),
+  o: (tab) => openReader(tab),
+  Delete: (tab, card, opts) => deleteCard(tab, card, opts),
+  Backspace: (tab, card, opts) => deleteCard(tab, card, opts)
+};
+
+const INBOX_EMPTY_LINE = 'Nothing new in your Inbox. Notes leave it when you read, star or reopen them.';
 
 const SKELETONS = '<div class="skeleton-card"><div class="skeleton-line" style="width:40%"></div><div class="skeleton-line" style="width:75%;height:16px"></div><div class="skeleton-line" style="height:32px"></div></div>'.repeat(3);
 
@@ -73,7 +124,7 @@ if (typeof document !== 'undefined') {
     init();
   }
 
-  // Tab Squirrel closes idle tabs in the background; refresh stats/feed/"Closed today" when that
+  // Tab Squirrel closes idle tabs in the background; refresh stats and the feed (Closed today included) when that
   // happens. Must not call sendResponse or return true (no response expected here).
   chrome.runtime.onMessage.addListener((message) => {
     if (message?.type === 'TABS_CLOSED') refresh();
@@ -87,13 +138,16 @@ async function init() {
     currentTab = await chrome.tabs.getCurrent();
   } catch {}
   state.surface = currentTab ? 'tab' : 'panel';
-  state.view = state.surface === 'panel' ? 'inbox' : '';
+  state.view = 'inbox';
   document.body.dataset.surface = state.surface;
   document.querySelectorAll('.panel-only').forEach(el => { el.hidden = state.surface !== 'panel'; });
 
   setupEventListeners();
   syncControls();
+  renderThemeButton('system'); // named at once; startTheme corrects it when the stored choice arrives
+  startTheme(renderThemeButton);
   await loadDensity();
+  await loadSort();
   checkPermissions();
   await refresh(true);
 }
@@ -103,7 +157,7 @@ async function init() {
 // ---------------------------------------------------------------------------
 
 async function refresh(showSkeletons = false) {
-  await Promise.all([updateStats(), renderSidebarFilters(), renderClosedToday(), renderFeed(showSkeletons)]);
+  await Promise.all([updateStats(), renderSidebarFilters(), renderFeed(showSkeletons)]);
 }
 
 function currentFilters() {
@@ -121,21 +175,35 @@ function currentFilters() {
 async function updateStats() {
   const stats = await getStats();
   const set = (id, value) => { $(id).textContent = value; };
-  set('stat-total', stats.total);
-  set('stat-today', stats.today);
-  set('stat-time', `${stats.totalReadingMinutes}m`);
   set('count-all', stats.total);
+  set('count-inbox', stats.inbox);
+  set('count-reopened', stats.reopened);
   set('count-today', stats.today);
+  set('count-yesterday', stats.yesterday);
+  set('count-week', stats.week);
   set('count-favorites', stats.favorites || 0);
+  noteTotal = stats.total;
+  syncPermBanner();
 }
 
 async function renderSidebarFilters() {
   const [tags, domains] = await Promise.all([getAllTags(), getAllDomains()]);
-  const list = (items, key) => items.map(({ value, label, count }) =>
-    `<button class="filter-item-btn${state[key] === value ? ' active' : ''}" aria-pressed="${state[key] === value}" data-${key}="${escapeHtml(value)}"><span>${escapeHtml(label)}</span><span class="badge">${count}</span></button>`
-  ).join('') || '<p class="filter-empty">None yet</p>';
-  $('sidebar-tags').innerHTML = list(tags.slice(0, 12).map(({ tag, count }) => ({ value: tag, label: `#${tag}`, count })), 'tag');
-  $('sidebar-domains').innerHTML = list(domains.slice(0, 8).map(({ domain, count }) => ({ value: domain, label: domain, count })), 'domain');
+  // The first few show; the rest sit behind a native "More" disclosure (kept open across re-renders,
+  // and forced open when the applied filter is hidden inside it).
+  const list = (container, items, key, visible) => {
+    const wasOpen = container.querySelector('details')?.open;
+    const button = ({ value, label, count }) =>
+      `<button class="filter-item-btn${state[key] === value ? ' applied' : ''}" aria-pressed="${state[key] === value}" data-${key}="${escapeHtml(value)}"><span>${escapeHtml(label)}</span><span class="badge">${count}</span></button>`;
+    const rest = items.slice(visible, SIDEBAR_LIST_MAX);
+    const open = wasOpen || rest.some(item => item.value === state[key]);
+    container.innerHTML = items.slice(0, visible).map(button).join('') || '<p class="filter-empty">None yet</p>';
+    if (rest.length) {
+      container.insertAdjacentHTML('beforeend',
+        `<details class="filter-more"${open ? ' open' : ''}><summary>More</summary>${rest.map(button).join('')}</details>`);
+    }
+  };
+  list($('sidebar-tags'), tags.map(({ tag, count }) => ({ value: tag, label: `#${tag}`, count })), 'tag', SIDEBAR_TAGS_VISIBLE);
+  list($('sidebar-domains'), domains.map(({ domain, count }) => ({ value: domain, label: domain, count })), 'domain', SIDEBAR_DOMAINS_VISIBLE);
 }
 
 function startOfLocalDay() {
@@ -144,72 +212,364 @@ function startOfLocalDay() {
   return d.getTime();
 }
 
-async function renderClosedToday() {
-  let tabs = [];
-  try {
-    tabs = await getArchivedTabs({ closedSince: startOfLocalDay(), limit: 50 });
-  } catch (err) {
-    console.debug('Failed to load closed-today tabs:', err);
-  }
-  $('closed-today-count').textContent = tabs.length;
-  $('closed-today').hidden = tabs.length === 0;
-  $('closed-today-list').innerHTML = tabs.map(tab => `
-    <div class="closed-today-row">
-      <img class="favicon" src="${escapeHtml(faviconUrl(tab.url))}" alt="">
-      <div class="closed-today-info">
-        <div class="closed-today-title" title="${escapeHtml(tab.title)}">${escapeHtml(tab.title)}</div>
-        <div class="closed-today-meta">
-          <span class="closed-today-domain">${escapeHtml(tab.domain)}</span>
-          ${tab.summary?.tldr ? `<span class="closed-today-tldr">${escapeHtml(tab.summary.tldr)}</span>` : ''}
-        </div>
-      </div>
-      <button class="closed-today-reopen-btn" data-url="${escapeHtml(tab.url)}" data-id="${escapeHtml(tab.id)}">Reopen</button>
-    </div>`).join('');
+function localDayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 }
 
-async function renderFeed(showSkeletons = false) {
+async function loadReceiptSeen() {
+  try {
+    const seen = (await chrome.storage.local.get(RECEIPT_SEEN_KEY))[RECEIPT_SEEN_KEY];
+    return seen?.day === localDayKey() && Number.isFinite(seen.upTo) ? seen.upTo : 0;
+  } catch (err) {
+    console.debug('Failed to load receipt state:', err);
+    return 0;
+  }
+}
+
+/**
+ * Plain reason a tab was closed, from what the record holds. Records in "Closed today" were all
+ * closed by Tab Squirrel's idle sweep (a manual save leaves the tab open), so the reason is
+ * which path closed it: a trusted domain, a tab that slept first and then sat idle longer
+ * (hybrid mode: closeDiscardedTab stamps closedFrom 'suspended'), or plain idleness.
+ */
+export function closedReason(tab) {
+  if (tab.closureReason === 'Closed: trusted domain') return 'On your always-close list';
+  if (tab.closedFrom === 'suspended') return 'Slept first, then closed after sitting idle longer';
+  return 'Sat idle, so it was closed';
+}
+
+/**
+ * The reason a card in Closed today states, or '' for the common one. Sitting idle past the
+ * threshold is true of every closure, so the heading says it once (closedTodayHeading).
+ */
+export function closedException(tab) {
+  const reason = closedReason(tab);
+  return reason === closedReason({}) ? '' : reason;
+}
+
+/** "closed 10:42 · idle 64 min", from what the record holds; no idle time unless both stamps are real. */
+export function closedWhen(tab) {
+  if (!Number.isFinite(tab.lastClosedAt)) return '';
+  const time = new Date(tab.lastClosedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const idle = idleMinutes(tab);
+  if (!(idle >= 1)) return `closed ${time}`;
+  const hours = Math.floor(idle / 60);
+  const minutes = idle % 60;
+  const span = idle < 120 ? `${idle} min` : minutes ? `${hours} h ${minutes} min` : `${hours} h`;
+  return `closed ${time} · idle ${span}`;
+}
+
+/** Whole minutes between the last use and the close; NaN when lastActiveAt is missing. */
+const idleMinutes = (tab) => Math.round((tab.lastClosedAt - tab.lastActiveAt) / 60000);
+
+/**
+ * The Closed today heading: "Closed 8 tabs for you today, all idle 60+ min · 2 reopened".
+ * Every closure comes from the idle sweep, and a tab that slept first sat idle twice as long,
+ * so "idle {timeout}+ min" holds whatever the mix of reasons. It is dropped if any record shows
+ * a shorter idle time (the threshold was raised since), so the line never overstates.
+ * The common reason lives here; cards state only the exceptions (closedException).
+ */
+export function closedTodayHeading(tabs, timeoutMinutes) {
+  const n = tabs.length;
+  const reopened = tabs.filter(tab => tab.status === 'restored').length;
+  const timeout = Number(timeoutMinutes);
+  // Under a minute (or no stamp) is no idle data, as in closedWhen; only real data can contradict.
+  const holds = timeout > 0 && tabs.every(tab => !(idleMinutes(tab) >= 1 && idleMinutes(tab) < timeout));
+  const span = timeout >= 120 && timeout % 60 === 0 ? `${timeout / 60}+ h` : `${timeout}+ min`;
+  const idle = holds ? `, ${n === 1 ? 'idle' : 'all idle'} ${span}` : '';
+  return `Closed ${n} ${n === 1 ? 'tab' : 'tabs'} for you today${idle}${reopened ? ` · ${reopened} reopened` : ''}`;
+}
+
+/**
+ * Closed today shows only in the plain Inbox or All notes view: any search, tag, domain or time
+ * filter (Starred included) hides it, and so does Reopened, which is its own list.
+ */
+function showsClosedToday() {
+  return !state.query && !state.tag && !state.domain && !state.time && (state.view === 'inbox' || state.view === '');
+}
+
+/**
+ * Today's closures, newest first, except that any the last Reopen all could not reopen come first,
+ * so a failure never hides behind Show all. [] when the section is not shown in this view.
+ */
+async function loadClosedToday() {
+  if (!showsClosedToday()) return [];
+  try {
+    const tabs = await getArchivedTabs({ closedSince: startOfLocalDay(), limit: Infinity });
+    const failed = (tab) => (tab.closedAt && reopenFailedIds.has(String(tab.id)) ? 1 : 0);
+    return tabs.sort((a, b) => failed(b) - failed(a) || b.lastClosedAt - a.lastClosedAt);
+  } catch (err) {
+    console.debug('Failed to load closed-today tabs:', err);
+    return [];
+  }
+}
+
+/**
+ * Expanded when the section holds closures not yet shown today (the first open of the day, or new
+ * closures since), one line per note on later opens; the toggle switches for this page only.
+ */
+async function syncClosedTodaySeen(tabs) {
+  if (receiptSeenUpTo === null) receiptSeenUpTo = await loadReceiptSeen();
+  const newest = Math.max(0, ...tabs.map(tab => tab.lastClosedAt));
+  if (tabs.length && newest > receiptSeenUpTo) {
+    closedTodayExpanded = true;
+    receiptSeenUpTo = newest;
+    chrome.storage.local.set({ [RECEIPT_SEEN_KEY]: { day: localDayKey(), upTo: newest } })
+      .catch(err => console.debug('Failed to save receipt state:', err));
+  } else if (closedTodayExpanded === null) {
+    closedTodayExpanded = false;
+  }
+}
+
+/** The section's heading, Reopen all, list layout and Show all, from the day's records. */
+function renderClosedTodayFrame(tabs, settings) {
+  const section = $('closed-today');
+  section.hidden = tabs.length === 0;
+  closedTodayTabs = tabs;
+  closedTodayCappedOut = 0;
+  if (!tabs.length) {
+    $('closed-today-list').innerHTML = '';
+    return [];
+  }
+  const toggle = $('closed-today-toggle');
+  toggle.textContent = closedTodayHeading(tabs, { ...DEFAULT_SETTINGS, ...settings }.timeoutMinutes);
+  toggle.setAttribute('aria-expanded', String(closedTodayExpanded));
+  $('closed-today-list').classList.toggle('lines', !closedTodayExpanded);
+  setReopenAllConfirm(0); // also hides Reopen all when nothing is left to reopen
+  const capped = tabs.length > CLOSED_TODAY_VISIBLE;
+  const more = $('closed-today-more');
+  more.hidden = !capped;
+  more.setAttribute('aria-expanded', String(closedTodayShowAll));
+  more.textContent = closedTodayShowAll ? 'Show fewer' : `Show all ${tabs.length} closed today`;
+  const shown = capped && !closedTodayShowAll ? tabs.slice(0, CLOSED_TODAY_VISIBLE) : tabs;
+  closedTodayCappedOut = tabs.slice(shown.length).filter(countsInResults).length;
+  return shown;
+}
+
+/** In the Inbox view a Closed today note counts as a result only while it is still in the Inbox. */
+const countsInResults = (tab) => state.view !== 'inbox' || isInInbox(tab);
+
+/** What a Closed today card adds: when it closed, a reason only when unusual, and its state today. */
+function closedTodayExtras(tab) {
+  const failed = tab.closedAt && reopenFailedIds.has(String(tab.id));
+  // The card's own status badge says Reopened (restored) or Saved/Sleeping; only Inbox-view cues are added here.
+  const filed = !countsInResults(tab) && !tab.restoredAt; // read or starred: still the day's record, no longer in the Inbox
+  const exception = closedException(tab);
+  const [time, idle] = closedWhen(tab).split(' · ');
+  return {
+    flags: (filed ? `<span class="filed-cue">${tab.isFavorite ? 'Starred' : 'Read'}</span>` : '') +
+      (failed ? '<span class="badge-status failed">Could not reopen</span>' : ''),
+    // The one-line view keeps the time and drops the idle span, so the two are separate spans.
+    line: `<p class="card-closed"><span class="card-closed-when">${escapeHtml(time)}${idle ? `<span class="card-closed-idle"> · ${escapeHtml(idle)}</span>` : ''}</span>${exception ? `<span class="card-closed-reason">${escapeHtml(exception)}</span>` : ''}</p>`
+  };
+}
+
+const stillClosedToday = () => closedTodayTabs.filter(tab => tab.closedAt);
+
+/** Show "Reopen N tabs?" with Reopen / Cancel in place of the Reopen all button; 0 puts the button back. */
+function setReopenAllConfirm(count, { focus = false } = {}) {
+  const asking = count > 0;
+  $('closed-today-confirm').hidden = !asking;
+  $('closed-today-reopen-all').hidden = asking || !stillClosedToday().length;
+  if (asking) $('closed-today-confirm-text').textContent = `Reopen ${count} tabs?`;
+  if (focus) (asking ? $('closed-today-confirm-yes') : $('closed-today-reopen-all')).focus();
+}
+
+function onReopenAllClick() {
+  const count = stillClosedToday().length;
+  if (count > REOPEN_ALL_CONFIRM_ABOVE) setReopenAllConfirm(count, { focus: true });
+  else reopenAllClosedToday();
+}
+
+/** Reopen every note closed today that is still closed (shown or behind Show all), one after another with progress in the button, then refresh once and say how it went. */
+async function reopenAllClosedToday() {
+  const rows = stillClosedToday().map(tab => ({ url: tab.url, id: String(tab.id) }));
+  const button = $('closed-today-reopen-all');
+  setReopenAllConfirm(0);
+  button.hidden = false;
+  button.disabled = true;
+  reopenFailedIds = new Set();
+  let reopened = 0;
+  const removedIds = []; // notes dropped by Remove Notes When Reopened
+  for (const [i, { url, id }] of rows.entries()) {
+    button.textContent = `Reopening ${i + 1} of ${rows.length}…`;
+    try {
+      const res = await chrome.runtime.sendMessage({ type: 'RESTORE_TAB', url, recordId: id });
+      if (res?.success) reopened++;
+      else reopenFailedIds.add(id);
+      if (res?.success && res.removed) removedIds.push(id);
+    } catch (err) {
+      console.error('Error reopening tab:', err);
+      reopenFailedIds.add(id);
+    }
+  }
+  button.disabled = false;
+  button.textContent = 'Reopen all';
+  await refresh();
+  if (document.activeElement === document.body) { // the confirm that held focus is gone
+    (button.checkVisibility() ? button : $('closed-today-toggle')).focus();
+  }
+  const failed = rows.length - reopened;
+  const done = `Reopened ${reopened} ${reopened === 1 ? 'tab' : 'tabs'}.`;
+  const summary = failed ? `${done} ${failed} could not be reopened.` : done;
+  if (removedIds.length) showRemovedOnReopenToast(removedIds, `${summary} ${removedIds.length === 1 ? 'Its note was' : 'Their notes were'} removed.`);
+  else showToast(summary, failed > 0);
+}
+
+/**
+ * The feed. In the plain Inbox or All notes view, today's closures come first as their own
+ * section (each note once, as its card), then the rest of the view under a quiet heading,
+ * without those notes. Any filter or search renders the plain filtered feed.
+ * `keepIndex`: if the selected note left the view (read or starred out of the Inbox), select
+ * the card now at its position instead of dropping the selection.
+ */
+async function renderFeed(showSkeletons = false, { keepIndex = false } = {}) {
   const feed = $('tabs-feed');
   const seq = ++renderSeq;
-  if (showSkeletons || feed.children.length === 0) feed.innerHTML = SKELETONS;
+  if (showSkeletons || (feed.children.length === 0 && $('closed-today').hidden)) feed.innerHTML = SKELETONS;
 
   // Settings first: the 'expiring-soon' sort needs the fade windows, and passing them in
   // keeps getArchivedTabs free of a hidden settings dependency. One read per render, not two.
-  const settings = await getSettings().catch(() => null);
+  const [settings] = await Promise.all([getSettings().catch(() => null), loadOpenUrls()]);
   // ponytail: newest 200 matches only (search/filters still reach older notes); fading keeps
   // most libraries under this. Add a "Load more" button if real libraries outgrow it.
-  const tabs = await getArchivedTabs({
-    ...currentFilters(), sortBy: state.sortBy, limit: 200, fadeSettings: settings
-  });
+  const [tabs, today] = await Promise.all([
+    getArchivedTabs({ ...currentFilters(), sortBy: state.sortBy, limit: 200, fadeSettings: settings }),
+    loadClosedToday()
+  ]);
   if (seq !== renderSeq) return; // a newer render started while this one was loading
+  if (today.length) await syncClosedTodaySeen(today);
+  if (seq !== renderSeq) return;
   fadeSettings = settings;
-  tabsById = new Map(tabs.map(tab => [String(tab.id), tab]));
-  setResultsCount(tabs.length);
+  const todayIds = new Set(today.map(tab => String(tab.id)));
+  const rest = tabs.filter(tab => !todayIds.has(String(tab.id)));
+  tabsById = new Map([...today, ...rest].map(tab => [String(tab.id), tab]));
+  // Show all belongs to one view of one day: any change of view, filter or day starts it closed again.
+  const showAllKey = [state.view, state.query, state.tag, state.domain, state.time, localDayKey()].join('\n');
+  if (showAllKey !== closedTodayShowAllKey) closedTodayShowAll = false;
+  closedTodayShowAllKey = showAllKey;
+  // In the Inbox the section also keeps notes read or starred today; they are not in the Inbox,
+  // so they stay out of its count, which then matches the sidebar badge.
+  const todayInInbox = today.filter(countsInResults).length;
+  setResultsCount(todayInInbox + rest.length);
 
-  if (tabs.length === 0) {
-    feed.innerHTML = emptyStateHtml();
+  // Re-rendering destroys the focused card; take focus back only if it was in the feed (or
+  // nowhere), never from the search box or another control the user moved to.
+  const active = document.activeElement;
+  const hadFeedFocus = !active || active === document.body || inFeed(active);
+  const prevIndex = liveCards().findIndex(card => card.dataset.id === selectedId);
+
+  const shown = renderClosedTodayFrame(today, settings);
+  $('closed-today-list').innerHTML = shown.map(tab => cardHtml(tab, closedTodayExtras(tab))).join('');
+  const heading = $('feed-heading');
+  heading.hidden = !today.length || !rest.length;
+  heading.textContent = state.view === 'inbox' ? 'Rest of your Inbox' : 'Other notes';
+
+  if (today.length === 0 && rest.length === 0) {
+    const total = (await getStats().catch(() => null))?.total ?? 1; // unknown: don't claim a first run
+    if (seq !== renderSeq) return;
+    const nano = total === 0 ? await nanoReady() : undefined; // only the first-run copy depends on it
+    if (seq !== renderSeq) return;
+    feed.innerHTML = emptyStateHtml(settings, total, nano);
+    clearSelection();
     return;
   }
-  feed.innerHTML = tabs.map(cardHtml).join('');
-  if (selectedIndex >= 0) selectCard(selectedIndex);
+  // The section can hold only notes already read or starred: say so rather than leave the Inbox looking unfinished.
+  feed.innerHTML = state.view === 'inbox' && !rest.length && !todayInInbox
+    ? `<p class="inbox-empty-line">${INBOX_EMPTY_LINE}</p>`
+    : rest.map(tab => cardHtml(tab)).join('');
+  if (selectedId !== null) {
+    const cards = liveCards();
+    const index = cards.findIndex(card => card.dataset.id === selectedId);
+    if (index >= 0) selectCard(index, { focus: hadFeedFocus });
+    else if (keepIndex && prevIndex >= 0 && cards.length) selectCard(prevIndex, { focus: hadFeedFocus });
+    else clearSelection(); // the selected note is gone
+  }
 }
 
 function setResultsCount(n) {
-  $('results-count').textContent = `${n} ${n === 1 ? 'summary' : 'summaries'}`;
+  $('results-count').textContent = `${n} ${n === 1 ? 'note' : 'notes'}`;
 }
 
-function emptyStateHtml() {
-  const hasFilter = Boolean(state.query || state.tag || state.domain || state.time);
-  let title = 'Your knowledge wiki is ready';
-  let desc = 'Tabs you leave open will be automatically distilled here' +
-    (state.surface === 'panel' ? ', or click "Archive Current Tab" to save this page now.' : '.');
-  if (state.view === 'inbox' && !hasFilter) {
-    title = 'Inbox zero — nothing waiting.';
-    desc = 'New captures land here until you reopen, star, or delete them.';
-  } else if (hasFilter || state.view) {
-    title = 'No matching summaries';
-    desc = 'Try adjusting your search terms or filters.';
+/**
+ * Whether Chrome's on-device model is downloaded, the one thing the Auto provider needs that only
+ * Chrome can say (asynchronously). Anything unexpected counts as no: the summarizer treats it the same way.
+ */
+async function nanoReady() {
+  try {
+    return typeof LanguageModel !== 'undefined' && (await LanguageModel.availability()) === 'available';
+  } catch {
+    return false;
   }
-  return `<div class="empty-state">${ICONS.empty}<div class="empty-title">${title}</div><div class="empty-desc">${desc}</div></div>`;
+}
+
+/** True when the settings resolve to the offline heuristic, so the AI-summary rule means nothing is closed. */
+export function resolvesToHeuristic(settings, nano) {
+  const source = plannedSource(settings);
+  return source === 'heuristic' || (source === 'prompt-api' && !nano);
+}
+
+/** "2 hours" from two hours up when it is whole hours, else "45 minutes"; the way the Closed today heading reads. */
+function idleSpan(minutes) {
+  if (minutes >= 120 && minutes % 60 === 0) return `${minutes / 60} hours`;
+  return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`;
+}
+
+/**
+ * What the notebook says before it holds any note: what will happen, with the user's own
+ * threshold. "Save current tab" exists only in the side panel, so only the panel names it.
+ * `nano` is whether Chrome's on-device model is downloaded; with it unknown (undefined) the
+ * copy makes no claim about what writes the summaries.
+ */
+export function firstRunCopy(settings, surface, nano) {
+  const merged = { ...DEFAULT_SETTINGS, ...settings };
+  const { timeoutMinutes, archiveMode } = merged;
+  const idle = idleSpan(timeoutMinutes);
+  const asleep = archiveMode === 'discard';
+  const lines = [
+    asleep ? `Tabs left idle for ${idle} are put to sleep.`
+      : archiveMode === 'close' ? `Tabs left idle for ${idle} are closed once a summary is written. Tabs with unsaved typing are left alone.`
+      : `Tabs left idle for ${idle} are closed once a summary is written. Pages that look like apps are put to sleep instead, and tabs with unsaved typing are left alone.`,
+    'A short note of each is kept here.',
+    asleep ? 'Any note reopens its tab in one click.' : 'Anything closed reopens in one click.'
+  ];
+  if (!asleep && merged.closeRequiresAiSummary !== false && nano !== undefined && resolvesToHeuristic(merged, nano)) {
+    lines.splice(1, 0, 'Without an AI summarizer, tabs are put to sleep rather than closed. Choose one in Settings.');
+  }
+  if (surface === 'panel') lines.push('To keep a page now, press the bookmark button at the top (Save current tab).');
+  return { title: 'Nothing here yet', lines };
+}
+
+/** The view a search is limited to, named for the user; '' for All notes and the date ranges. */
+function searchScope() {
+  return state.time === 'favorites' ? 'Starred' : state.time ? '' : VIEW_LABELS[state.view] || '';
+}
+
+function emptyStateHtml(settings, total, nano) {
+  const hasFilter = Boolean(state.query || state.tag || state.domain || state.time);
+  const scope = searchScope();
+  let title;
+  let lines;
+  let action = '';
+  if (total === 0 && !hasFilter) {
+    ({ title, lines } = firstRunCopy(settings, state.surface, nano));
+  } else if (state.view === 'inbox' && !hasFilter) {
+    title = 'Nothing new in your Inbox';
+    lines = ['Notes leave it when you read, star or reopen them.'];
+  } else if (state.query && scope) {
+    title = `No matches in ${scope}`;
+    lines = [`Searched ${scope} only for “${escapeHtml(state.query)}”.`];
+    action = '<button class="empty-action-btn" type="button" data-action="search-all">Search all notes</button>';
+  } else {
+    title = 'No matching notes';
+    lines = ['Clear the search or a filter to see more.'];
+  }
+  // Fading is explained in the shortcuts list and when an Inbox empties, not above every feed or on the
+  // first run, where nothing can fade yet and the sentence only lengthens a promise that is already three lines.
+  const fade = !hasFilter && total > 0 && fadeExplanation(settings);
+  if (fade) lines.push(`<span id="fade-note" class="fade-note">${escapeHtml(fade)}</span>`);
+  return `<div class="empty-state">${ICONS.empty}<div class="empty-title" tabindex="-1">${title}</div><div class="empty-desc">${lines.map(line => `<p>${line}</p>`).join('')}</div>${action}</div>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -218,77 +578,106 @@ function emptyStateHtml() {
 
 /**
  * Status badge for a record: sleeping (discarded), reopened (restored), saved (captured:
- * summary saved but the tab is still open), otherwise archived. Tooltip = closureReason.
+ * summary saved but the tab is still open). Closed is the default state, so it gets no badge
+ * (empty string). Tooltip = reasonLabel (plain wording for the record's closureReason).
  * @param {Object} tab
  * @returns {string}
  */
 export function getStatusBadge(tab) {
-  const [cls, label, fallback] = {
-    discarded: ['sleeping', 'Sleeping', 'Sleeping tab (RAM suspended)'],
-    restored: ['restored', 'Reopened', 'Tab was reopened'],
-    captured: ['captured', 'Saved', 'Summary saved; tab left open']
-  }[tab.status] || ['archived', 'Archived', 'Archived to knowledge base'];
-  return `<span class="badge-status ${cls}" title="${escapeHtml(tab.closureReason || fallback)}">${label}</span>`;
+  const entry = {
+    discarded: ['sleeping', 'Sleeping'],
+    restored: ['restored', 'Reopened'],
+    captured: ['captured', 'Saved']
+  }[tab.status];
+  if (!entry) return '';
+  const [cls, label] = entry;
+  return `<span class="badge-status ${cls}" title="${escapeHtml(reasonLabel(tab))}">${label}</span>`;
 }
 
-function starLabel(isFavorite) {
-  return isFavorite ? 'Unstar' : 'Keep (never fades)';
+/** "Star" / "Unstar", with what that changes only while notes fade at all (with fading off it changes nothing). */
+export function starLabel(isFavorite, settings = fadeSettings) {
+  const fading = Boolean(settings && (settings.fadeUnopenedDays || settings.fadeReopenedDays));
+  if (isFavorite) return fading ? 'Unstar: let this note fade again' : 'Unstar';
+  return fading ? 'Star: keep this note; it won\'t fade' : 'Star';
 }
 
-function cardHtml(tab) {
+/**
+ * Read the addresses of every open tab. RESTORE_TAB switches to a tab whose url or pendingUrl equals the
+ * note's address exactly, so the labels use the same match. Without tab addresses nothing counts as open.
+ */
+async function loadOpenUrls() {
+  try {
+    const tabs = await chrome.tabs.query({});
+    openUrls = new Set(tabs.flatMap(t => [t.url, t.pendingUrl]).filter(Boolean));
+  } catch (err) {
+    console.debug('Failed to read open tabs:', err);
+    openUrls = new Set();
+  }
+}
+
+/** A note has a tab to switch to only while its address is open; otherwise Reopen tab opens a new one. */
+const hasLiveTab = (tab) => openUrls.has(tab.url);
+
+/** One note's card. `extras` (Closed today only) adds flags and a line saying when and why it closed. */
+function cardHtml(tab, extras = null) {
   const q = state.query;
   const bullets = toSafeStringArray(tab.summary?.bullets);
   const tags = toSafeStringArray(tab.summary?.tags).map(t => t.replace(/^#/, ''));
   const star = starLabel(tab.isFavorite);
+  const flags = (extras?.flags || '') + getStatusBadge(tab) + fadeChipHtml(tab, fadeSettings, state.sortBy);
   return `
-    <article class="tab-card" data-id="${escapeHtml(tab.id)}">
+    <article class="tab-card" data-id="${escapeHtml(tab.id)}" tabindex="-1" aria-label="${escapeHtml(tab.title)}">
       <div class="card-header">
         <div class="card-source">
           <img class="favicon" src="${escapeHtml(faviconUrl(tab.url))}" alt="">
           <span class="card-domain">${highlightSearch(tab.domain, q)}</span>
-          ${getStatusBadge(tab)}
-          ${fadeChipHtml(tab, fadeSettings, state.sortBy)}
         </div>
-        <span class="card-time" title="${tab.readingTimeMinutes || 1} min read">${tab.readingTimeMinutes || 1}m · ${formatTimeAgo(tab.capturedAt)}</span>
+        <span class="card-time" title="Saved ${escapeHtml(new Date(tab.capturedAt).toLocaleString())}">${tab.readingTimeMinutes || 1} min read · saved ${formatTimeAgo(tab.capturedAt)}${offlineSummaryHtml(tab)}${fadeDateHtml(tab, fadeSettings, state.sortBy)}</span>
+        ${flags ? `<div class="card-flags">${flags}</div>` : ''}
       </div>
-      <h3 class="card-title" title="${escapeHtml(tab.title)}">${highlightSearch(tab.title, q)}</h3>
-      ${tab.summary?.tldr ? `<div class="card-tldr">${highlightSearch(tab.summary.tldr, q)}</div>` : '<div class="card-tldr card-tldr-empty">No AI summary for this tab</div>'}
+      ${extras?.line || ''}
+      <h3 class="card-title"><button class="card-title-btn" type="button" title="${escapeHtml(tab.title)}" aria-label="Read note: ${escapeHtml(tab.title)}">${highlightSearch(tab.title, q)}</button></h3>
+      ${tab.summary?.tldr ? `<div class="card-tldr">${highlightSearch(tab.summary.tldr, q)}</div>` : '<div class="card-tldr card-tldr-empty">No summary could be written for this page.</div>'}
       ${bullets.length ? `
-        <button class="takeaways-toggle" type="button" aria-expanded="false"><span class="takeaways-chevron">▶</span> Key Takeaways (${bullets.length})</button>
+        <button class="takeaways-toggle" type="button" aria-expanded="false"><span class="takeaways-chevron">▶</span> Key takeaways (${bullets.length})</button>
         <ul class="card-bullets collapsed">${bullets.map(b => `<li>${highlightSearch(b, q)}</li>`).join('')}</ul>` : ''}
       ${tags.length ? `<div class="card-tags">${tags.map(t => `<button type="button" class="card-tag" data-tag="${escapeHtml(t)}" title="Filter by #${escapeHtml(t)}">#${highlightSearch(t, q)}</button>`).join('')}</div>` : ''}
       <div class="card-footer">
-        <button class="restore-btn">${ICONS.reopen} Reopen Tab</button>
+        <button class="restore-btn">${ICONS.reopen} ${hasLiveTab(tab) ? 'Go to tab' : 'Reopen tab'}</button>
         <div class="card-actions">
           <button class="action-icon-btn star-btn${tab.isFavorite ? ' active' : ''}" title="${star}" aria-label="${star}">${ICONS.star}</button>
-          <button class="action-icon-btn reader-btn" title="Reader view (full text)" aria-label="Reader view">${ICONS.reader}</button>
-          <button class="action-icon-btn copy-btn" title="Copy summary (Markdown)" aria-label="Copy summary">${ICONS.copy}</button>
-          <button class="action-icon-btn delete-btn" title="Delete summary" aria-label="Delete summary">${ICONS.trash}</button>
+          <button class="action-icon-btn reader-btn" title="Read note" aria-label="Read note">${ICONS.reader}</button>
+          <button class="action-icon-btn copy-btn" title="Copy note as Markdown" aria-label="Copy note as Markdown">${ICONS.copy}</button>
+          <button class="action-icon-btn delete-btn" title="Delete note" aria-label="Delete note">${ICONS.trash}</button>
         </div>
       </div>
     </article>`;
 }
 
 async function onFeedClick(e) {
+  if (e.target.closest('[data-action="search-all"]')) {
+    await applyFilters({ view: '', time: '', tag: '', domain: '' }); // the query stays
+    return;
+  }
   const card = e.target.closest('.tab-card');
-  const target = e.target.closest('button, .card-title');
+  const target = e.target.closest('button');
   const tab = card && tabsById.get(card.dataset.id);
   if (!tab || !target || card.classList.contains('removing')) return;
 
-  if (target.matches('.restore-btn, .card-title')) {
+  if (target.matches('.restore-btn')) {
     await reopenTab(tab.url, tab.id);
+  } else if (target.matches('.card-title-btn, .reader-btn')) {
+    await openReader(tab);
   } else if (target.matches('.takeaways-toggle')) {
     const open = target.classList.toggle('open');
     target.setAttribute('aria-expanded', String(open));
     card.querySelector('.card-bullets')?.classList.toggle('collapsed', !open);
   } else if (target.matches('.star-btn')) {
-    await toggleStar(tab, card, target);
-  } else if (target.matches('.reader-btn')) {
-    await openReader(tab);
+    await toggleStar(tab, card);
   } else if (target.matches('.copy-btn')) {
-    await copyText(formatNoteSection(tab), 'Copied summary Markdown!', target);
+    await copyText(formatNoteSection(tab), 'Copied the note as Markdown.', target);
   } else if (target.matches('.delete-btn')) {
-    await deleteCard(tab, card);
+    await deleteCard(tab, card, { viaKeyboard: e.detail === 0 }); // detail 0: Enter or Space on the button
   } else if (target.matches('.card-tag')) {
     await applyFilters({ tag: target.dataset.tag, domain: '' });
   }
@@ -296,41 +685,65 @@ async function onFeedClick(e) {
 
 async function reopenTab(url, recordId) {
   if (!url) {
-    showToast('This note has no web address to reopen', true);
+    showToast('This note has no web address to reopen.', true);
     return;
   }
   try {
     const res = await chrome.runtime.sendMessage({ type: 'RESTORE_TAB', url, recordId });
     if (!res?.success) throw new Error(res?.error || 'no response');
-    showToast(res.restoredInPlace ? 'Focused existing sleeping tab!' : 'Tab reopened!');
+    reopenFailedIds.delete(String(recordId));
+    showToast(res.restoredInPlace ? 'Switched to that tab.' : 'Tab reopened.');
     await refresh(); // status, inbox/reopened membership and Closed today all changed
     if (res.removed) showRemovedOnReopenToast(recordId);
   } catch (err) {
-    showToast('Error reopening tab: ' + err.message, true);
+    console.error('Error reopening tab:', err);
+    showToast('Couldn\'t reopen that tab. Try again.', true);
   }
 }
 
-async function toggleStar(tab, card, btn) {
+async function toggleStar(tab, card) {
+  const wasInInbox = isInInbox(tab);
   try {
     const updated = await toggleFavoriteTab(tab.id);
     tab.isFavorite = updated ? updated.isFavorite : !tab.isFavorite;
+    if (updated) tab.filedAt = updated.filedAt;
   } catch (err) {
     console.error('Error toggling favorite:', err);
-    showToast('Could not update favorite', true);
+    showToast('Couldn\'t update the star.', true);
     return;
   }
-  btn.classList.toggle('active', tab.isFavorite);
-  btn.title = starLabel(tab.isFavorite);
-  btn.setAttribute('aria-label', btn.title);
-  showToast(tab.isFavorite ? 'Starred — kept forever' : 'Unstarred');
+  const btn = card?.querySelector('.star-btn');
+  if (btn) {
+    btn.classList.toggle('active', tab.isFavorite);
+    btn.title = starLabel(tab.isFavorite);
+    btn.setAttribute('aria-label', btn.title);
+  }
+  const leftInbox = wasInInbox && !isInInbox(tab); // starring files a note; unstarring never puts it back
+  showToast(tab.isFavorite ? `Starred. This note will not fade.${leftInbox ? ' It left your Inbox.' : ''}` : 'Unstarred.');
   updateStats();
-  if (state.time === 'favorites' && !tab.isFavorite) {
+  // No card (the reader outlived it) in Starred means the note has to come back, or go, with the feed.
+  if (state.time === 'favorites' && (!tab.isFavorite || !card)) {
     await renderFeed();
     return;
   }
-  // The fade chip depends on isFavorite; refresh it without a full re-render.
+  // Starred out of the Inbox: the card goes, and the selection stays at its place in the list.
+  if (leftInbox && state.view === 'inbox') {
+    await renderFeed(false, { keepIndex: true });
+    return;
+  }
+  if (!card) return;
+  // The fade chip and date depend on isFavorite; refresh them without a full re-render.
   card.querySelector('.fade-chip')?.remove();
-  card.querySelector('.card-source').insertAdjacentHTML('beforeend', fadeChipHtml(tab, fadeSettings, state.sortBy));
+  card.querySelector('.fade-date')?.remove();
+  // Same place as cardHtml: the last chip in .card-flags, which exists only while the card has a flag.
+  let flags = card.querySelector('.card-flags');
+  if (!flags) {
+    card.querySelector('.card-header').insertAdjacentHTML('beforeend', '<div class="card-flags"></div>');
+    flags = card.querySelector('.card-flags');
+  }
+  flags.insertAdjacentHTML('beforeend', fadeChipHtml(tab, fadeSettings, state.sortBy));
+  if (!flags.children.length) flags.remove();
+  card.querySelector('.card-time').insertAdjacentHTML('beforeend', fadeDateHtml(tab, fadeSettings, state.sortBy));
 }
 
 async function copyText(text, message, btn) {
@@ -338,7 +751,7 @@ async function copyText(text, message, btn) {
     await navigator.clipboard.writeText(text);
   } catch (err) {
     console.error('Clipboard write failed:', err);
-    showToast('Could not copy to clipboard', true);
+    showToast('Couldn\'t copy to clipboard.', true);
     return;
   }
   showToast(message);
@@ -356,57 +769,97 @@ async function copyText(text, message, btn) {
  * Delete is durable immediately (tombstone via softDeleteTab), with a 5-second Undo toast
  * that calls restoreDeletedTab.
  */
-async function deleteCard(tab, card) {
+async function deleteCard(tab, card = null, { viaKeyboard = false } = {}) {
+  // Closed today's heading counts its notes, so a delete there redraws the section. Read before any
+  // await: a refresh landing meanwhile replaces the card element.
+  const fromClosedToday = Boolean(card?.closest('#closed-today'));
+  const position = card ? liveCards().indexOf(card) : -1;
+  const keyboard = Boolean(card) && viaKeyboard; // a pointer delete leaves no halo on the next card
   // Animate synchronously for instant feedback, before the IndexedDB write lands.
-  card.classList.add('removing');
+  card?.classList.add('removing');
+  // Hand the selection to the card that now sits at this position (the last card if this was last),
+  // before the write lands: a fast second Delete then acts on it, never on the card being deleted.
+  if (keyboard && position >= 0) selectCard(position);
+  else clearSelection();
   try {
     await softDeleteTab(tab.id);
   } catch (err) {
     console.error('Error deleting tab:', err);
-    card.classList.remove('removing');
-    showToast('Error deleting summary', true);
+    card?.classList.remove('removing');
+    if (keyboard && position >= 0) selectCard(liveCards().indexOf(card));
+    showToast('Couldn\'t delete that note.', true);
     return;
   }
-  clearSelection();
-  setResultsCount($('tabs-feed').querySelectorAll('.tab-card:not(.removing)').length);
+  setResultsCount(liveCards().length + closedTodayCappedOut);
   updateStats();
   renderSidebarFilters();
-  setTimeout(() => {
-    card.remove();
-    if (!$('tabs-feed').querySelector('.tab-card')) renderFeed();
+  setTimeout(async () => {
+    const stale = card && !card.isConnected; // a refresh drew the list again before the delete landed
+    card?.remove();
+    if (fromClosedToday || stale || !$('tabs-feed').querySelector('.tab-card')) await renderFeed();
+    // The last note is gone and so is the focused card: land on the empty state, not on <body>.
+    const active = document.activeElement;
+    if (!liveCards().length && (!active || active === document.body)) {
+      ($('tabs-feed').querySelector('.empty-title') || $('search-input')).focus({ preventScroll: true });
+    }
   }, 260);
 
-  showUndoToast('Summary removed', tab.id, () => restoreDeletedTab(tab.id));
+  showUndoToast('Note deleted.', tab.id, () => restoreDeletedTab(tab.id));
 }
 
 /**
  * Undo toast for a note removed because it was reopened (Remove Notes When Reopened). Undo restores it
  * the way it would have been with the setting off: back in the list, marked Reopened.
  */
-function showRemovedOnReopenToast(recordId) {
-  showUndoToast('Note removed (reopened)', recordId, async () => {
-    await restoreDeletedTab(recordId);
-    await markReopened(recordId);
-  });
+function showRemovedOnReopenToast(recordIds, message = 'Tab reopened. Its note was removed.') {
+  const ids = [].concat(recordIds);
+  showUndoToast(message, ids[0], async () => {
+    let failed = 0;
+    for (const id of ids) {
+      try {
+        const restored = await restoreDeletedTab(id);
+        if (!restored || !await markReopened(id)) failed++;
+      } catch (err) {
+        console.error('Error restoring tab:', err);
+        failed++;
+      }
+    }
+    if (ids.length === 1) return failed === 0;
+    return failed ? `Couldn\'t restore ${failed} of ${ids.length} notes. They may already be gone.` : true;
+  }, ids.length === 1 ? 'Note restored.' : 'Notes restored.');
 }
 
-/** 5-second toast whose Undo runs `restore`, then refreshes and highlights the returned card. */
-function showUndoToast(message, id, restore) {
+/**
+ * 5-second toast whose Undo runs `restore`, then refreshes and highlights the returned card.
+ * `restore` resolves truthy on success, falsy on failure, or a string to fail with that message.
+ */
+function showUndoToast(message, id, restore, restoredMessage = 'Note restored.') {
   showToast(message, false, async () => {
     hideToast();
+    let restoredOk = false;
+    let failMessage = 'Couldn\'t restore that note. It may already be gone.';
     try {
-      await restore();
+      const result = await restore();
+      restoredOk = Boolean(result) && typeof result !== 'string';
+      if (typeof result === 'string') failMessage = result;
     } catch (err) {
       console.error('Error restoring tab:', err);
     }
     await refresh();
-    const restored = $('tabs-feed').querySelector(`.tab-card[data-id="${CSS.escape(String(id))}"]`);
+    const restored = cardById(id);
     if (restored) {
       restored.classList.add('undo-restored');
-      restored.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       setTimeout(() => restored.classList.remove('undo-restored'), 1200);
+      // Put the keyboard back on the returned note, unless the user has since moved to another control.
+      const active = document.activeElement;
+      if (!active || active === document.body || inFeed(active) || $('toast').contains(active)) {
+        selectCard(liveCards().indexOf(restored));
+      } else {
+        restored.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
     }
-    showToast('Summary restored');
+    if (restoredOk) showToast(restoredMessage);
+    else showToast(failMessage, true);
   }, 5000);
 }
 
@@ -422,30 +875,29 @@ async function applyFilters(patch) {
   await renderFeed();
 }
 
-/** Reflect `state` in every control (nav, view tabs, tag/domain lists, banner, sort). */
+/** Reflect `state` in every control (view switch, tag/domain lists, banner, sort). */
 function syncControls() {
-  document.querySelectorAll('.nav-item').forEach(item => {
-    const active = item.dataset.time
+  // The sidebar's Views/When items and the narrow view switch share one rule: the current page.
+  document.querySelectorAll('.nav-item, .view-tab-btn').forEach(item => {
+    const current = item.dataset.time
       ? item.dataset.time === state.time
       : !state.time && item.dataset.view === state.view;
-    item.classList.toggle('active', active);
-    item.setAttribute('aria-pressed', String(active));
+    if (current) item.setAttribute('aria-current', 'page');
+    else item.removeAttribute('aria-current');
   });
-  document.querySelectorAll('.view-tab-btn').forEach(btn => {
-    btn.setAttribute('aria-pressed', String(btn.dataset.view === state.view));
-  });
+  // Tag and domain are applied filters on top of the current view, styled quieter than it.
   document.querySelectorAll('#sidebar-tags [data-tag]').forEach(b => {
     const on = b.dataset.tag === state.tag;
-    b.classList.toggle('active', on);
+    b.classList.toggle('applied', on);
     b.setAttribute('aria-pressed', String(on));
   });
   document.querySelectorAll('#sidebar-domains [data-domain]').forEach(b => {
     const on = b.dataset.domain === state.domain;
-    b.classList.toggle('active', on);
+    b.classList.toggle('applied', on);
     b.setAttribute('aria-pressed', String(on));
   });
 
-  const label = state.tag ? `Filtered by topic: #${state.tag}`
+  const label = state.tag ? `Filtered by tag: #${state.tag}`
     : state.domain ? `Filtered by domain: ${state.domain}`
     : TIME_LABELS[state.time] ? `Filtered by: ${TIME_LABELS[state.time]}` : '';
   $('filter-banner').hidden = !label;
@@ -472,24 +924,44 @@ async function clearSearch() {
 // Keyboard selection
 // ---------------------------------------------------------------------------
 
+/** Every card on screen, Closed today first, as one list for j/k and the card keys. */
 function liveCards() {
-  return Array.from(document.querySelectorAll('#tabs-feed .tab-card:not(.removing)'));
+  return Array.from(document.querySelectorAll('#closed-today-list .tab-card:not(.removing), #tabs-feed .tab-card:not(.removing)'));
 }
 
-function selectCard(index) {
+/** Whether an element sits in one of the two card lists (Closed today or the feed). */
+function inFeed(el) {
+  return $('tabs-feed').contains(el) || $('closed-today-list').contains(el);
+}
+
+function cardById(id) {
+  const sel = `.tab-card[data-id="${CSS.escape(String(id))}"]`;
+  return document.querySelector(`#closed-today-list ${sel}, #tabs-feed ${sel}`);
+}
+
+function selectCard(index, { focus = true } = {}) {
   const cards = liveCards();
   if (cards.length === 0) {
-    selectedIndex = -1;
+    selectedId = null;
     return;
   }
-  selectedIndex = Math.max(0, Math.min(index, cards.length - 1));
-  cards.forEach((card, i) => card.classList.toggle('keyboard-selected', i === selectedIndex));
-  cards[selectedIndex].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  const selected = cards[Math.max(0, Math.min(index, cards.length - 1))];
+  selectedId = selected.dataset.id;
+  cards.forEach(card => card.classList.toggle('keyboard-selected', card === selected));
+  selected.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  // Real focus on the card so screen readers announce the selected note by its title.
+  if (focus) selected.focus({ preventScroll: true });
+}
+
+/** The card a key acts on: the one holding focus (a Tab-ed to star button counts), else the j/k selection. */
+function keyCard() {
+  const focused = document.activeElement?.closest?.('.tab-card:not(.removing)');
+  return (focused && inFeed(focused) ? focused : null) || liveCards().find(card => card.dataset.id === selectedId) || null;
 }
 
 function clearSelection() {
-  selectedIndex = -1;
-  document.querySelectorAll('#tabs-feed .keyboard-selected').forEach(c => c.classList.remove('keyboard-selected'));
+  selectedId = null;
+  document.querySelectorAll('.tab-card.keyboard-selected').forEach(c => c.classList.remove('keyboard-selected'));
 }
 
 // ---------------------------------------------------------------------------
@@ -499,7 +971,7 @@ function clearSelection() {
 function openDrawer() {
   document.body.classList.add('drawer-open');
   $('filters-btn').setAttribute('aria-expanded', 'true');
-  document.querySelector('#sidebar .nav-item.active, #sidebar .nav-item')?.focus();
+  document.querySelector('#sidebar .nav-item[aria-current], #sidebar .nav-item')?.focus();
 }
 
 function closeDrawer() {
@@ -515,7 +987,7 @@ function toggleExportMenu(open) {
 
 /**
  * Export in the chosen format. Markdown / Obsidian respect the active search, view, tag,
- * domain and time filters; JSON is always a full backup. Formatting lives in shared/export.js.
+ * domain and time filters; JSON is always a full backup of every note (the control says so). Formatting lives in shared/export.js.
  * @param {'markdown'|'obsidian'|'json'} format
  */
 export async function performExport(format = 'markdown') {
@@ -525,19 +997,19 @@ export async function performExport(format = 'markdown') {
 
   if (!tabs.length) {
     const filtered = Boolean(state.query || state.tag || state.domain || state.time || state.view);
-    showToast(filtered && format !== 'json' ? 'No summaries match the active filter to export.' : 'No summaries to export yet.');
+    showToast(filtered && format !== 'json' ? 'No notes match the active filter to export.' : 'No notes to export yet.');
     return;
   }
   const stamp = Date.now();
   if (format === 'json') {
-    triggerDownload(exportToJSON(tabs), `tab-squirrel-wiki-export-${stamp}.json`, 'application/json;charset=utf-8');
-    showToast('Exported Wiki Backup (JSON)!');
+    triggerDownload(exportToJSON(tabs), `tab-squirrel-notes-${stamp}.json`, 'application/json;charset=utf-8');
+    showToast('Exported a JSON backup.');
   } else if (format === 'obsidian') {
-    triggerDownload(exportToObsidianZip(tabs), `tab-squirrel-obsidian-vault-${stamp}.zip`, 'application/zip');
-    showToast('Exported Obsidian vault (.zip)!');
+    triggerDownload(exportToObsidianZip(tabs), `tab-squirrel-notes-${stamp}.zip`, 'application/zip');
+    showToast('Exported an Obsidian vault.');
   } else {
-    triggerDownload(exportToMarkdown(tabs), `tab-squirrel-wiki-export-${stamp}.md`, 'text/markdown;charset=utf-8');
-    showToast('Exported Wiki to Markdown!');
+    triggerDownload(exportToMarkdown(tabs), `tab-squirrel-notes-${stamp}.md`, 'text/markdown;charset=utf-8');
+    showToast('Exported notes as Markdown.');
   }
 }
 
@@ -547,15 +1019,33 @@ export async function performExport(format = 'markdown') {
 
 async function openReader(tab) {
   readerTab = tab;
+  // Reading files the note: it leaves the Inbox. In the Inbox view its card goes when the reader closes.
+  if (isInInbox(tab)) {
+    readerFiled = state.view === 'inbox';
+    readerFiling = markFiled(tab.id)
+      .then(() => { tab.filedAt = Date.now(); return updateStats(); })
+      .catch(err => { readerFiled = false; console.error('Failed to file the note:', err); });
+  }
   const dialog = $('reader-dialog');
-  $('modal-title').textContent = tab.title || 'Untitled Tab';
+  $('modal-title').textContent = tab.title || 'Untitled page';
   const link = $('modal-source-link');
-  link.textContent = tab.url || '';
+  link.textContent = tab.domain || tab.url || ''; // the domain reads at any width; href and title keep the full address
+  link.title = tab.url || '';
   if (/^https?:\/\//i.test(tab.url)) link.href = tab.url; // only http(s) links are clickable
   else link.removeAttribute('href');
-  $('modal-summary-box').innerHTML = `<strong>Summary Overview</strong><p>${escapeHtml(tab.summary?.tldr || 'No overview available')}</p>`;
+  updateReaderActions();
+  const bullets = toSafeStringArray(tab.summary?.bullets);
+  $('modal-summary-box').innerHTML = (tab.summary?.tldr || bullets.length)
+    ? (tab.summary?.tldr ? `<p>${escapeHtml(tab.summary.tldr)}</p>` : '') +
+      (bullets.length ? `<ul class="modal-bullets">${bullets.map(b => `<li>${escapeHtml(b)}</li>`).join('')}</ul>` : '') +
+      (isOfflineSummary(tab) ? '<p class="summary-source">offline summary</p>' : '')
+    : '<p>No overview available</p>';
   $('modal-text-content').innerHTML = '<p class="empty-article-text">Loading article text…</p>';
   dialog.showModal();
+  // Start at the title, not the first focusable element (the external source link, where Enter would
+  // leave the notebook). A heading is what a screen reader reads first, in the dialog named by it, and
+  // Tab then goes on to the source link and the actions in order. Close would make a stray Enter close it.
+  $('modal-title').focus({ preventScroll: true });
 
   // List results omit cleanText; fetch the full record for the article body.
   try {
@@ -569,6 +1059,41 @@ async function openReader(tab) {
   }
 }
 
+/** Reader header: the fade line and the Star button's label follow the note's current star state. */
+function updateReaderActions() {
+  if (!readerTab) return;
+  $('modal-fade').textContent = fadeChipLabel(readerTab, fadeSettings, state.sortBy) || fadeDateLabel(readerTab, fadeSettings);
+  const live = hasLiveTab(readerTab); // the same labels as the card's button
+  $('modal-reopen-btn').querySelector('.btn-label').textContent = live ? 'Go to tab' : 'Reopen tab';
+  $('modal-reopen-btn').title = live ? 'Switch to this tab' : 'Reopen this tab';
+  const star = starLabel(readerTab.isFavorite);
+  const btn = $('modal-star-btn');
+  btn.title = star;
+  btn.setAttribute('aria-label', star);
+  btn.querySelector('.btn-label').textContent = readerTab.isFavorite ? 'Unstar' : 'Star';
+}
+
+/**
+ * Reader Reopen / Star / Delete reuse the card handlers, working from the note itself: the card
+ * may be gone (a re-render after Unstar in Starred drops it) and its actions must still work.
+ */
+async function onReaderAction(action, viaKeyboard = false) {
+  if (!readerTab) return;
+  const tab = tabsById.get(String(readerTab.id)) || readerTab;
+  const card = cardById(tab.id);
+  if (card?.classList.contains('removing')) return;
+  if (action === 'star') {
+    await toggleStar(tab, card);
+    readerTab.isFavorite = tab.isFavorite;
+    updateReaderActions();
+    return;
+  }
+  readerFiled = false; // reopen and delete update the feed themselves
+  $('reader-dialog').close();
+  if (action === 'reopen') await reopenTab(tab.url, tab.id);
+  else await deleteCard(tab, card, { viaKeyboard });
+}
+
 /**
  * Format raw article snapshot text into readable semantic HTML paragraphs and headings.
  * @param {string} text
@@ -576,7 +1101,7 @@ async function openReader(tab) {
  */
 export function formatExtractedArticle(text) {
   if (!text || typeof text !== 'string' || !text.trim()) {
-    return '<p class="empty-article-text">No snapshot text saved for this article.</p>';
+    return '<p class="empty-article-text">Only the summary was kept for this page.</p>';
   }
   return text.split(/\n\s*\n+/).map(block => {
     const trimmed = block.trim();
@@ -613,22 +1138,23 @@ async function closeSidePanel() {
 }
 
 async function archiveCurrentTab(btn) {
-  const label = btn.innerHTML;
   btn.disabled = true;
-  btn.textContent = 'Archiving...';
+  btn.setAttribute('aria-busy', 'true');
   try {
     const response = await chrome.runtime.sendMessage({ type: 'ARCHIVE_ACTIVE_TAB' });
     if (response?.success) {
-      showToast('Tab archived & summarized!');
+      showToast('Saved a note. The tab is still open.');
       await refresh();
     } else {
-      showToast(response?.error || 'Could not archive tab', true);
+      console.error('Archive failed:', response?.error);
+      showToast(SAVE_FAILED, true);
     }
   } catch (err) {
-    showToast('Error archiving tab: ' + err.message, true);
+    console.error('Error archiving tab:', err);
+    showToast(SAVE_FAILED, true);
   } finally {
     btn.disabled = false;
-    btn.innerHTML = label;
+    btn.removeAttribute('aria-busy');
   }
 }
 
@@ -642,20 +1168,65 @@ async function loadDensity() {
   applyDensity();
 }
 
+async function loadSort() {
+  try {
+    const data = await chrome.storage.local.get(SORT_KEY);
+    const saved = data[SORT_KEY];
+    if ([...$('sort-select').options].some(o => o.value === saved)) {
+      state.sortBy = saved;
+      syncControls();
+    }
+  } catch (err) {
+    console.debug('Failed to load sort preference:', err);
+  }
+}
+
 function applyDensity() {
   const compact = state.density === 'compact';
   $('tabs-feed').classList.toggle('compact', compact);
+  $('closed-today-list').classList.toggle('compact', compact);
   const btn = $('density-toggle-btn');
   btn.classList.toggle('active', compact);
   btn.setAttribute('aria-pressed', String(compact));
-  btn.title = compact ? 'Switch to Comfortable View' : 'Switch to Compact View';
+  btn.title = 'Compact view'; // a toggle: aria-pressed carries the state, the name stays put
+  btn.setAttribute('aria-label', 'Compact view');
 }
 
 async function checkPermissions() {
   try {
-    $('perm-banner').hidden = await chrome.permissions.contains({ origins: ['<all_urls>'] });
+    permDismissed = Boolean((await chrome.storage.local.get(PERM_DISMISSED_KEY))[PERM_DISMISSED_KEY]);
+  } catch (err) {
+    console.debug('Failed to load permission note state:', err);
+  }
+  try {
+    permMissing = !(await chrome.permissions.contains({ origins: ['<all_urls>'] }));
   } catch (err) {
     console.debug('Permission check error:', err);
+  }
+  syncPermBanner();
+}
+
+/**
+ * The permission note is loud while the notebook is empty (nothing works without it), then a quiet
+ * hairline note once any note exists, which the user can dismiss for good.
+ */
+function syncPermBanner() {
+  if (noteTotal === null) return; // the note count decides loud or quiet; stay hidden until it is known
+  const quiet = noteTotal > 0;
+  const banner = $('perm-banner');
+  banner.classList.toggle('quiet', quiet);
+  $('perm-dismiss-btn').hidden = !quiet;
+  $('perm-text').textContent = quiet ? PERM_TEXT.quiet : PERM_TEXT.loud;
+  banner.hidden = !permMissing || (quiet && permDismissed);
+}
+
+async function dismissPermBanner() {
+  permDismissed = true;
+  syncPermBanner();
+  try {
+    await chrome.storage.local.set({ [PERM_DISMISSED_KEY]: true });
+  } catch (err) {
+    console.debug('Failed to save permission note state:', err);
   }
 }
 
@@ -669,6 +1240,7 @@ function showToast(message, isError = false, onUndo = null, duration = 2600) {
   const progress = $('toast-progress');
   clearTimeout(toastTimer);
   $('toast-message').textContent = message;
+  announce(onUndo ? `${message.replace(/[.!?]$/, '')}. Press U to undo.` : message);
   toast.classList.toggle('error', isError);
   undoBtn.hidden = !onUndo;
   undoBtn.onclick = onUndo ? (e) => { e.stopPropagation(); onUndo(); } : null;
@@ -676,13 +1248,82 @@ function showToast(message, isError = false, onUndo = null, duration = 2600) {
   progress.style.animation = 'none';
   void progress.offsetWidth;
   progress.style.animation = onUndo ? `toastCountdown ${duration}ms linear forwards` : 'none';
-  toast.classList.remove('hidden');
+  toast.classList.remove('hidden', 'paused');
+  // Top layer: re-showing moves it above any modal dialog that opened since.
+  if (toast.matches(':popover-open')) toast.hidePopover();
+  toast.showPopover();
+  toastDuration = duration;
   toastTimer = setTimeout(hideToast, duration);
+}
+
+/**
+ * Say a toast out loud. The toast itself is display:none until shown, which makes it a poor live
+ * region, so a visually hidden one that is always present carries the message. Clearing first and
+ * writing a moment later makes a repeated message announce again.
+ */
+function announce(text) {
+  const live = liveRegion();
+  clearAnnouncement();
+  announceTimer = setTimeout(() => { live.textContent = text; }, 60);
+}
+
+/** An open modal dialog makes the rest of the page inert, so its own region speaks instead of #toast-live. */
+function liveRegion() {
+  return document.querySelector('dialog[open] .dialog-live') || $('toast-live');
+}
+
+/** Cancel a pending announcement and blank every region, so a stale message cannot linger or fire late. */
+function clearAnnouncement() {
+  clearTimeout(announceTimer);
+  document.querySelectorAll('#toast-live, .dialog-live').forEach(el => { el.textContent = ''; });
+}
+
+/** Press the visible toast's Undo, if it has one. */
+function undoFromKeyboard() {
+  const btn = $('toast-undo-btn');
+  if ($('toast').classList.contains('hidden') || btn.hidden) return false;
+  btn.click();
+  return true;
+}
+
+/** The theme button names the current choice and the one a press switches to. */
+function renderThemeButton(theme) {
+  const btn = $('theme-btn');
+  const label = `Theme: ${THEME_LABELS[theme]}. Switch to ${THEME_LABELS[nextTheme(theme)]}.`;
+  btn.innerHTML = ICONS.theme[theme];
+  btn.dataset.theme = theme;
+  btn.title = label;
+  btn.setAttribute('aria-label', label);
+}
+
+/** Hold the auto-dismiss while the toast is hovered or focused (WCAG 2.2.1); restart it on leave. */
+function setToastPaused(paused) {
+  const toast = $('toast');
+  if (toast.classList.contains('hidden')) return;
+  clearTimeout(toastTimer);
+  toast.classList.toggle('paused', paused);
+  if (paused) $('toast-progress').style.animation = 'none';
+  if (paused || toast.matches(':hover, :focus-within')) return;
+  // Leaving restarts the full countdown, bar included, so the two stay in step.
+  const progress = $('toast-progress');
+  if (!$('toast-undo-btn').hidden) {
+    progress.style.animation = 'none';
+    void progress.offsetWidth;
+    progress.style.animation = `toastCountdown ${toastDuration}ms linear forwards`;
+  }
+  toastTimer = setTimeout(hideToast, toastDuration);
 }
 
 function hideToast() {
   clearTimeout(toastTimer);
-  $('toast').classList.add('hidden');
+  clearAnnouncement();
+  const toast = $('toast');
+  toast.classList.add('hidden');
+  toast.classList.remove('paused');
+  // Let the fade-out finish before leaving the top layer.
+  setTimeout(() => {
+    if (toast.classList.contains('hidden') && toast.matches(':popover-open')) toast.hidePopover();
+  }, 220);
   $('toast-progress').style.animation = 'none';
 }
 
@@ -699,10 +1340,38 @@ function setupEventListeners() {
     if (e.target instanceof HTMLImageElement && e.target.classList.contains('favicon')) e.target.hidden = true;
   }, true);
 
-  feed.addEventListener('click', onFeedClick);
-  $('closed-today-list').addEventListener('click', (e) => {
-    const btn = e.target.closest('.closed-today-reopen-btn');
-    if (btn) reopenTab(btn.dataset.url, btn.dataset.id);
+  // Closed today's cards and the feed's are one list: same clicks, same focus model.
+  for (const list of [feed, $('closed-today-list')]) {
+    list.addEventListener('click', onFeedClick);
+    // Focus moving into a card (Tab to its star button, a click) makes it the selected one.
+    list.addEventListener('focusin', (e) => {
+      const card = e.target.closest('.tab-card:not(.removing)');
+      if (!card || card.dataset.id === selectedId) return;
+      selectedId = card.dataset.id;
+      liveCards().forEach(c => c.classList.toggle('keyboard-selected', c === card));
+    });
+  }
+  const toastEl = $('toast');
+  toastEl.addEventListener('mouseenter', () => setToastPaused(true));
+  toastEl.addEventListener('mouseleave', () => setToastPaused(false));
+  toastEl.addEventListener('focusin', () => setToastPaused(true));
+  toastEl.addEventListener('focusout', () => setToastPaused(false));
+  $('closed-today-reopen-all').addEventListener('click', onReopenAllClick);
+  $('closed-today-confirm-yes').addEventListener('click', reopenAllClosedToday);
+  $('closed-today-confirm-no').addEventListener('click', () => setReopenAllConfirm(0, { focus: true }));
+  $('closed-today-confirm').addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    e.stopPropagation();
+    setReopenAllConfirm(0, { focus: true });
+  });
+  $('closed-today-toggle').addEventListener('click', () => {
+    closedTodayExpanded = !closedTodayExpanded;
+    $('closed-today-toggle').setAttribute('aria-expanded', String(closedTodayExpanded));
+    $('closed-today-list').classList.toggle('lines', !closedTodayExpanded);
+  });
+  $('closed-today-more').addEventListener('click', () => {
+    closedTodayShowAll = !closedTodayShowAll;
+    renderFeed();
   });
 
   // Surface-specific actions
@@ -712,14 +1381,24 @@ function setupEventListeners() {
     await closeSidePanel();
   });
   $('settings-btn').addEventListener('click', () => chrome.runtime.openOptionsPage());
+  $('theme-btn').addEventListener('click', () => {
+    const choice = nextTheme($('theme-btn').dataset.theme);
+    renderThemeButton(choice);
+    setTheme(choice);
+  });
+  $('perm-dismiss-btn').addEventListener('click', dismissPermBanner);
   $('enable-perm-btn').addEventListener('click', async () => {
     try {
       if (await chrome.permissions.request({ origins: ['<all_urls>'] })) {
-        $('perm-banner').hidden = true;
-        showToast('Extraction permissions enabled!');
+        permMissing = false;
+        syncPermBanner();
+        showToast('Tab Squirrel can now read pages.');
+      } else {
+        showToast('Permission was not granted, so page text can\'t be read yet.', true);
       }
     } catch (err) {
       console.error('Permission request failed:', err);
+      showToast('Couldn\'t ask for permission. Try again.', true);
     }
   });
 
@@ -745,7 +1424,14 @@ function setupEventListeners() {
     if (btn) applyFilters({ domain: state.domain === btn.dataset.domain ? '' : btn.dataset.domain, tag: '' });
   });
   $('clear-filter-btn').addEventListener('click', () => applyFilters({ tag: '', domain: '', time: '' }));
-  $('sort-select').addEventListener('change', (e) => applyFilters({ sortBy: e.target.value }));
+  $('sort-select').addEventListener('change', async (e) => {
+    applyFilters({ sortBy: e.target.value });
+    try {
+      await chrome.storage.local.set({ [SORT_KEY]: state.sortBy });
+    } catch (err) {
+      console.debug('Failed to save sort preference:', err);
+    }
+  });
 
   $('density-toggle-btn').addEventListener('click', async () => {
     state.density = state.density === 'compact' ? 'comfortable' : 'compact';
@@ -769,11 +1455,12 @@ function setupEventListeners() {
   });
   searchInput.addEventListener('keydown', async (e) => {
     if (e.key === 'Enter') {
-      // Reopen the top filtered result
+      // Jump to the first result; reopening stays a deliberate second step
       e.preventDefault();
       clearTimeout(searchTimer);
       await applyFilters({ query: searchInput.value });
-      feed.querySelector('.restore-btn')?.click();
+      searchInput.blur();
+      selectCard(0);
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
       searchInput.blur();
@@ -815,19 +1502,39 @@ function setupEventListeners() {
   // Reader dialog: close button, light-dismiss on backdrop, copy full note
   const dialog = $('reader-dialog');
   $('modal-close-btn').addEventListener('click', () => dialog.close());
+  dialog.addEventListener('close', async () => {
+    if (!readerFiled) return;
+    readerFiled = false;
+    await readerFiling;
+    await renderFeed(false, { keepIndex: true }); // the note left the Inbox; the selection keeps its place
+  });
   dialog.addEventListener('click', (e) => {
     if (e.target !== dialog) return;
     const r = dialog.getBoundingClientRect();
     const inside = r.top <= e.clientY && e.clientY <= r.bottom && r.left <= e.clientX && e.clientX <= r.right;
     if (!inside) dialog.close();
   });
+  $('modal-reopen-btn').addEventListener('click', () => onReaderAction('reopen'));
+  $('modal-star-btn').addEventListener('click', () => onReaderAction('star'));
+  $('modal-delete-btn').addEventListener('click', (e) => onReaderAction('delete', e.detail === 0));
   $('modal-copy-btn').addEventListener('click', (e) => {
-    if (readerTab) copyText(formatStandaloneNote(readerTab), 'Copied full note Markdown!', e.currentTarget);
+    if (readerTab) copyText(formatStandaloneNote(readerTab), 'Copied the note as Markdown.', e.currentTarget);
   });
+
+  // Shortcuts legend: native <dialog>, so Escape closes it and focus returns to the opener
+  const legend = $('shortcuts-dialog');
+  const openLegend = () => {
+    closeDrawer();
+    $('shortcuts-fade-note').textContent = fadeExplanation(fadeSettings);
+    legend.showModal();
+  };
+  $('shortcuts-btn').addEventListener('click', openLegend);
+  $('shortcuts-close-btn').addEventListener('click', () => legend.close());
+  legend.addEventListener('click', (e) => { if (e.target === legend) legend.close(); });
 
   // Global keyboard shortcuts
   document.addEventListener('keydown', async (e) => {
-    if (dialog.open) return; // the <dialog> closes itself on Escape
+    if (dialog.open || legend.open) return; // a <dialog> closes itself on Escape
     const el = document.activeElement;
     const typing = el && (['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) || el.isContentEditable);
     const drawerOpen = document.body.classList.contains('drawer-open');
@@ -835,8 +1542,13 @@ function setupEventListeners() {
     if (e.key === 'Escape') {
       if (exportMenu.matches(':popover-open')) return; // the popover closes itself on Escape
       if (drawerOpen) return closeDrawer();
-      searchInput.blur();
+      // First Escape in the search box only leaves it (the query stays); the next one clears it.
+      if (el === searchInput) {
+        searchInput.blur();
+        return;
+      }
       clearSelection();
+      if (inFeed(el)) el.blur(); // focus in a card would keep it the target of s / o / Delete
       await clearSearch();
       return;
     }
@@ -850,17 +1562,36 @@ function setupEventListeners() {
       }
       return;
     }
+    if (e.key === '?' && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      openLegend();
+      return;
+    }
     if (typing || drawerOpen) return;
 
+    if (e.key.toLowerCase() === 'u' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      if (undoFromKeyboard()) e.preventDefault();
+      return;
+    }
     if (e.key === 'j' || e.key === 'ArrowDown') {
       e.preventDefault();
-      selectCard(selectedIndex + 1);
+      selectCard(liveCards().indexOf(keyCard()) + 1);
     } else if (e.key === 'k' || e.key === 'ArrowUp') {
       e.preventDefault();
-      selectCard(selectedIndex - 1);
-    } else if (e.key === 'Enter' && selectedIndex >= 0 && !el?.closest('button, a, summary')) {
+      selectCard(liveCards().indexOf(keyCard()) - 1);
+    } else if (e.key === 'Enter' && keyCard() && !el?.closest('button, a, summary')) {
       e.preventDefault();
-      liveCards()[selectedIndex]?.querySelector('.restore-btn')?.click();
+      keyCard().querySelector('.restore-btn')?.click();
+    } else if (Object.hasOwn(CARD_KEYS, e.key) && keyCard() && !e.ctrlKey && !e.metaKey && !e.altKey &&
+        (!el || el === document.body || inFeed(el))) {
+      // Act on the focused or selected card, but never on a key pressed in the sidebar or another control.
+      const card = keyCard();
+      const tab = card && tabsById.get(card.dataset.id);
+      if (!tab) return;
+      // One-line view hides Star and Delete; a key must not act on an action nobody can see.
+      if (card.closest('#closed-today-list.lines') && ['s', 'Delete', 'Backspace'].includes(e.key)) return;
+      e.preventDefault();
+      await CARD_KEYS[e.key](tab, card, { viaKeyboard: true });
     }
   });
 }
@@ -882,7 +1613,7 @@ const relativeTimeFormatter = new Intl.RelativeTimeFormat('en', { style: 'narrow
 
 function formatTimeAgo(timestamp) {
   const mins = Math.floor((Date.now() - timestamp) / 60000);
-  if (mins < 1) return 'Just now';
+  if (mins < 1) return 'just now'; // always follows "saved"
   if (mins < 60) return relativeTimeFormatter.format(-mins, 'minute');
   const hours = Math.floor(mins / 60);
   if (hours < 24) return relativeTimeFormatter.format(-hours, 'hour');

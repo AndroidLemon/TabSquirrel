@@ -1,5 +1,5 @@
 /**
- * Automated Unit Tests for the shared Knowledge Wiki export module
+ * Automated Unit Tests for the shared export module
  * (Markdown, Obsidian vault .zip, JSON backup).
  */
 
@@ -22,7 +22,7 @@ import {
 } from '../src/shared/export.js';
 import { escapeHtml } from '../src/shared/html.js';
 
-console.log('--- Running Tab Squirrel Knowledge Wiki Export Unit Tests ---');
+console.log('--- Running Tab Squirrel Notes Export Unit Tests ---');
 
 const mockTab1 = {
   id: 'tab-001',
@@ -66,7 +66,7 @@ assert.ok(!/^captured_at: /m.test(mdOutput), 'Combined markdown must not contain
 assert.ok(mdOutput.includes('## [Modern Vector Databases & Semantic Retrieval](https://example.com/vector-db)'), 'Should contain a ## section for the first note');
 assert.ok(mdOutput.includes('## [Chrome V8 Optimization Guide](https://dev.to/performance)'), 'Should contain a ## section for the second note');
 assert.ok(mdOutput.includes('**TL;DR**: Vector databases power high-dimensional semantic search in modern RAG systems.'), 'Should contain TL;DR line');
-assert.ok(mdOutput.includes('### Key Takeaways'), 'Should contain Key Takeaways section');
+assert.ok(mdOutput.includes('### Key takeaways'), 'Should contain Key takeaways section');
 assert.ok(mdOutput.includes('- HNSW graphs achieve logarithmic nearest-neighbor search latency'), 'Should contain bullet 1');
 assert.ok(mdOutput.includes('#AI') && mdOutput.includes('#Databases') && mdOutput.includes('#Search'), 'Should list tags as inline hashtags');
 assert.ok(mdOutput.includes('#JavaScript') && !mdOutput.includes('##JavaScript'), 'Should not double-hash tags that already had #');
@@ -219,7 +219,7 @@ assert.ok(!escapeHtml('"><script>alert(1)</script>').includes('"'), 'Double quot
 assert.ok(!escapeHtml("'><img src=x>").includes("'"), 'Single quotes must be escaped');
 console.log('✓ escapeHtml quote-escaping verified');
 
-console.log('--- All Knowledge Wiki Export Unit Tests Passed Successfully! ---');
+console.log('--- All Notes Export Unit Tests Passed Successfully! ---');
 
 /**
  * Minimal ZIP local-file-header parser for test verification (STORE method only).

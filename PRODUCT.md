@@ -23,30 +23,30 @@ Tab suspenders free memory but leave the clutter and keep no record. Read-later 
 ## Operating Context
 
 - Lives in desktop Chrome (minimum version 141, Manifest V3). The notebook is one page that runs in the side panel (narrow, single column) and as a full tab (sidebar plus grid). Options open in their own tab.
-- Shortcuts: Cmd/Ctrl+Shift+S opens the panel and Cmd/Ctrl+Shift+E archives the active tab. In the notebook: j/k or the arrow keys move between cards, Enter reopens, `/` searches, Escape clears or closes.
-- Note lifecycle: notes start in the Inbox, then Reopened, and fade unless starred (30 days if never reopened, 7 days after the last reopen; both configurable, 0 means never). Closed tabs collect in a "Closed today" list. There are no per-tab notifications.
+- Shortcuts: Cmd/Ctrl+Shift+S opens the panel and Cmd/Ctrl+Shift+E archives the active tab. In the notebook: j/k or the arrow keys move between cards, Enter reopens, `o` reads, `s` stars, Delete or Backspace deletes, `u` undoes while the Undo bar shows, `/` searches, the first Escape leaves search and keeps the query, a second clears it, and Escape closes dialogs. `?` lists shortcuts.
+- Note lifecycle: notes start in the Inbox and leave it when they are read in the reader, starred or reopened (unstarring does not put a note back; a fresh capture of the same page does). Reopened notes also move to Reopened. Notes fade unless starred (30 days if never reopened, 7 days after the last reopen; both configurable, 0 means never). Tabs closed today head the feed as a "Closed today" section, each note shown once (ADR 0005). There are no per-tab notifications.
 - Exports to Obsidian (zip of .md files), Markdown and JSON. JSON can be re-imported.
 
 ## Capabilities and Constraints
 
-- Archival modes: Smart Hybrid (the default: closes plain reading pages, suspends interactive ones, and closes suspended tabs at twice the threshold), Soft Suspend All, and Auto-Close All.
-- Safety: tabs with unsaved input, rich-text editors, audio, pinned tabs or whitelisted domains are never closed. Trusted domains may be closed even where a check would only suspend them. Everything is re-checked at the last moment before acting.
+- Modes (what happens to an idle tab): Close or sleep (the default: closes plain reading pages, puts interactive ones to sleep, and closes sleeping tabs at twice the threshold), Sleep only, and Close all.
+- Safety: tabs with unsaved input, rich-text editors, audio, pinned tabs or domains on the never-touch list are never closed. Trusted domains may be closed even where a check would only suspend them. Everything is re-checked at the last moment before acting.
 - By default a tab is closed only when an AI tier wrote its summary. With only the heuristic fallback available, it is suspended instead.
 - Summarizer tiers: offline heuristic, Chrome's on-device Prompt API, Gemini with the user's own key, or any OpenAI-compatible local server.
 - Local-first: data stays in IndexedDB and chrome.storage. Nothing leaves the machine unless the user configures a cloud or remote summarizer (see PRIVACY.md).
 - Plain JS, HTML and CSS with no framework and no build step for the extension itself.
-- Terminology: note, Inbox, Reopened, Sleeping (suspended), Saved (summary kept, tab still open), Archived (tab closed), fade, star.
+- Terminology: note, Inbox, Reopened, Sleeping (suspended), Saved (summary kept, tab still open), Closed (tab closed, note kept), fade, star.
 
 ## Brand Commitments
 
 - Name: **Tab Squirrel** (committed 2026-10-12). The rename landed 2026-10-13, including the GitHub repository (AndroidLemon/TabSquirrel). Icon: an acorn whose cap is a browser-tab shape (src/assets/icons/icon.svg).
-- Icon: an acorn whose cap is a browser-tab shape. This is provisional, not final.
+- The icon is provisional, not final.
 - Voice: plain, specific and honest about limits. For example, the README says "No heuristic is infallible", and the UI says there is no Undo when there isn't one.
 
 ## Evidence on Hand
 
-- README.md, PRIVACY.md and docs/CHROMEWEBSTORE.md hold the current product copy, under the legacy name.
-- Store screenshots and GIFs from PR #10 are out of date once the rename and re-theme land.
+- README.md, PRIVACY.md and docs/CHROMEWEBSTORE.md hold the current product copy.
+- The store screenshots and GIFs in docs/store/ predate the Closed today feed and the Inbox exit rule. Regenerate them with `npm run assets:store`.
 - There are no users, testimonials, reviews, usage numbers or store listing yet. Do not invent any.
 
 ## Product Principles
@@ -59,4 +59,4 @@ Tab suspenders free memory but leave the clutter and keep no record. Read-later 
 
 ## Accessibility & Inclusion
 
-WCAG 2.2 AA: AA contrast in both light and dark, full keyboard operation of the notebook and options (keeping the existing shortcuts), visible focus, and `prefers-reduced-motion` respected.
+WCAG 2.2 AA: AA contrast in both light and dark (System by default, with a System / Light / Dark choice in the notebook footer and the options page), reflow at 200% zoom in the side panel, controls at least 24px, full keyboard operation of the notebook and options (keeping the existing shortcuts), visible focus, and `prefers-reduced-motion` respected.

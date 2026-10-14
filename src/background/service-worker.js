@@ -1,7 +1,7 @@
 /**
  * Tab Squirrel - Background Service Worker (Manifest V3)
  * Handles tab activity tracking, periodic inactivity sweeps, safe extraction,
- * soft suspension / auto-archival, and badge indicators.
+ * suspension / auto-close, and badge indicators.
  */
 
 import {
@@ -64,7 +64,7 @@ chrome.runtime.onInstalled.addListener(async () => {
   // contains an '&', which the auto-generated submenu eats as a mnemonic.
   await chrome.contextMenus.removeAll();
   chrome.contextMenus.create({ id: 'tab-squirrel', title: 'Tab Squirrel', contexts: ['tab'] });
-  chrome.contextMenus.create({ id: 'excludedDomains', parentId: 'tab-squirrel', title: 'Never archive this site', contexts: ['tab'] });
+  chrome.contextMenus.create({ id: 'excludedDomains', parentId: 'tab-squirrel', title: 'Never touch this site', contexts: ['tab'] });
   chrome.contextMenus.create({ id: 'alwaysCloseDomains', parentId: 'tab-squirrel', title: 'Always close this site', contexts: ['tab'] });
 
   await initialize();
@@ -428,7 +428,7 @@ async function closeDiscardedTab(tab, recordId, settings) {
       await revertIfStillOpen(tab.id, recordId, true, 'Chrome refused to close this tab; it stays suspended');
       return;
     }
-    await markClosedByTabSquirrel(recordId);
+    await markClosedByTabSquirrel(recordId, { closedFrom: 'suspended' });
     console.log(`[Tab Squirrel] Closed long-discarded tab ${tab.id} (${tab.url}).`);
     // Refresh the side panel's "Closed today"; no page open is fine.
     chrome.runtime.sendMessage({ type: 'TABS_CLOSED' }).catch(() => {});
@@ -620,9 +620,11 @@ async function handleCommand(command) {
         showArchivedNotification(result.record.title || activeTab.title || 'Page');
       } else if (!result?.success) {
         console.warn('[Tab Squirrel] Could not archive tab via shortcut:', result?.error);
+        showSaveFailedNotification();
       }
     } catch (err) {
       console.error('[Tab Squirrel] Error executing archive_active_tab command:', err);
+      showSaveFailedNotification();
     }
   }
 }
@@ -637,7 +639,9 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     type: 'basic',
     iconUrl: chrome.runtime.getURL('src/assets/icons/icon-128.png'),
     title: 'Tab Squirrel',
-    message: info.menuItemId === 'excludedDomains' ? `${domain} will never be archived` : `${domain} will always be closed`
+    message: info.menuItemId === 'excludedDomains'
+      ? `Tab Squirrel will leave ${domain} tabs alone.`
+      : `${domain} added to Always close. Its idle tabs are closed once an AI summary is written (Close or sleep mode only).`
   });
 });
 
@@ -740,15 +744,30 @@ async function updateBadge() {
   }
 }
 
-function showArchivedNotification(title) {
-  const text = String(title || 'Page');
-  const shortTitle = text.length > 50 ? `${text.slice(0, 50)}...` : text;
+// The shortcut has no panel to show an error in, so a failed save says so here. It answers a key the
+// user just pressed; idle sweeps still never notify.
+function showSaveFailedNotification() {
   try {
     chrome.notifications.create({
       type: 'basic',
       iconUrl: chrome.runtime.getURL('src/assets/icons/icon-128.png'),
-      title: 'Tab Archived to Wiki',
-      message: `"${shortTitle}" summarized and saved to your knowledge base.`,
+      title: 'Couldn\'t save this page',
+      message: 'Tab Squirrel can\'t read browser pages, or sites you haven\'t allowed.'
+    });
+  } catch (err) {
+    console.debug('Notification error:', err);
+  }
+}
+
+function showArchivedNotification(title) {
+  const text = String(title || 'Page');
+  const shortTitle = text.length > 50 ? `${text.slice(0, 50)}…` : text;
+  try {
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: chrome.runtime.getURL('src/assets/icons/icon-128.png'),
+      title: 'Saved a note',
+      message: `"${shortTitle}" is in your notebook. The tab stays open.`,
       silent: true
     });
   } catch (err) {

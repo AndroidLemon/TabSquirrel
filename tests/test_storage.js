@@ -6,7 +6,7 @@
 
 import assert from 'node:assert';
 import 'fake-indexeddb/auto';
-import { getExpiry, fadeChipLabel, FADE_WARNING_DAYS } from '../src/shared/fade.js';
+import { getExpiry, fadeChipLabel, fadeDateLabel, fadeExplanation, FADE_WARNING_DAYS, FADE_DATE_DAYS } from '../src/shared/fade.js';
 
 console.log('--- Running Tab Squirrel Storage Unit Tests ---');
 
@@ -41,6 +41,8 @@ const {
   markClosedByTabSquirrel,
   markTabGone,
   markReopened,
+  markFiled,
+  isInInbox,
   markLeftOpen,
   markStaysSuspended,
   recordCapture,
@@ -169,12 +171,60 @@ const stats = await getStats();
 assert.strictEqual(stats.total, 2);
 assert.strictEqual(stats.today, 1, 'Only records since local midnight count as today');
 assert.strictEqual(stats.favorites, 1);
+assert.strictEqual(stats.yesterday, 1, 'Yesterday counts the previous calendar day only');
+assert.strictEqual(stats.week, 2, 'Past 7 days counts both, the same boundary as the time range');
+assert.strictEqual(stats.inbox, 2, 'Never-reopened notes make up the Inbox count');
+assert.strictEqual(stats.reopened, 0);
+await saveArchivedTab({ id: 'd-reopened', url: 'https://d.example/reopened', status: 'restored', restoredAt: Date.now(), capturedAt: midnight.getTime() - 2000 });
+const stats2 = await getStats();
+assert.deepStrictEqual([stats2.total, stats2.inbox, stats2.reopened], [3, 2, 1], 'Inbox and Reopened counts split the notes by restoredAt');
+await softDeleteTab('d-reopened');
 assert.ok(stats.totalReadingMinutes >= 2);
 assert.deepStrictEqual((await getArchivedTabs({ timeRange: 'today' })).map(t => t.id), ['d-today']);
 assert.deepStrictEqual((await getArchivedTabs({ timeRange: 'yesterday' })).map(t => t.id), ['d-yesterday']);
+assert.strictEqual((await getArchivedTabs({ timeRange: 'week' })).length, stats.week, 'The Past 7 days count equals what its filter lists');
 console.log('✓ Calendar-day stats verified');
 
-// Test 11: closedAt feeds "Closed today"; reopening clears it
+// Test 10b: a note leaves the Inbox when it is reopened, read (markFiled) or starred; unstarring
+// does not bring it back. The Inbox view and the Inbox count use the same rule.
+console.log('Testing the Inbox exit rule...');
+await clearAllHistory();
+for (const id of ['i-read', 'i-star', 'i-reopen', 'i-new']) {
+  await saveArchivedTab({ id, url: `https://i.example/${id}`, status: 'archived' });
+}
+const inboxIds = async () => (await getArchivedTabs({ view: 'inbox' })).map(t => t.id).sort();
+assert.deepStrictEqual(await inboxIds(), ['i-new', 'i-read', 'i-reopen', 'i-star'], 'New notes start in the Inbox');
+assert.strictEqual((await getStats()).inbox, 4);
+const read = await markFiled('i-read');
+assert.ok(read.filedAt > 0, 'Reading a note stamps filedAt');
+const firstRead = read.filedAt;
+await new Promise(r => setTimeout(r, 5));
+assert.strictEqual((await markFiled('i-read')).filedAt, firstRead, 'A second read keeps the first filedAt');
+const starredRec = await toggleFavoriteTab('i-star');
+assert.ok(starredRec.isFavorite && starredRec.filedAt > 0, 'Starring stamps filedAt');
+await markReopened('i-reopen');
+assert.deepStrictEqual(await inboxIds(), ['i-new'], 'Read, starred and reopened notes have all left the Inbox');
+let inboxStats = await getStats();
+assert.deepStrictEqual([inboxStats.total, inboxStats.inbox, inboxStats.reopened], [4, 1, 1], 'The Inbox count follows the same rule as the view');
+const unstarred = await toggleFavoriteTab('i-star');
+assert.strictEqual(unstarred.isFavorite, false);
+assert.ok(unstarred.filedAt > 0, 'Unstarring keeps filedAt');
+assert.ok(!(await inboxIds()).includes('i-star'), 'Unstarring does not put a note back in the Inbox');
+assert.strictEqual((await getStats()).inbox, 1, 'nor in the Inbox count');
+assert.ok(!(await getArchivedTabs({ view: 'reopened' })).some(t => t.id === 'i-read' || t.id === 'i-star'), 'Read or starred notes are not Reopened');
+assert.ok(!isInInbox({ filedAt: 1 }) && !isInInbox({ restoredAt: 1 }) && isInInbox({}), 'isInInbox: neither stamp means Inbox');
+const refiled = await saveArchivedTab({ url: 'https://i.example/i-read', status: 'archived' });
+assert.strictEqual(refiled.filedAt, undefined, 'A recapture puts a read note back in the Inbox, as it does a reopened one');
+await saveArchivedTab({ id: 'i-keep', url: 'https://i.example/keep', status: 'archived' });
+await toggleFavoriteTab('i-keep');
+const starredRecapture = await saveArchivedTab({ url: 'https://i.example/keep', status: 'archived' });
+assert.ok(starredRecapture.isFavorite && starredRecapture.filedAt > 0 && !isInInbox(starredRecapture), 'A recapture of a starred note keeps it filed, out of the Inbox');
+const importedFiled = await saveArchivedTab({ id: 'i-imp', url: 'https://i.example/imp', status: 'archived', filedAt: 1234 });
+assert.strictEqual(importedFiled.filedAt, 1234, 'JSON import keeps filedAt');
+assert.strictEqual((await saveArchivedTab({ id: 'i-bad', url: 'https://i.example/bad', filedAt: 'soon' })).filedAt, undefined, 'An invalid filedAt is dropped');
+console.log('✓ Inbox exit rule verified (reopen, read, star; unstar does not return a note)');
+
+// Test 11: lastClosedAt feeds "Closed today"; reopening clears closedAt but keeps the record of the closure
 console.log('Testing record lifecycle / closedSince...');
 await clearAllHistory();
 await saveArchivedTab({ id: 'c-closed', url: 'https://c.example/closed', status: 'discarded' });
@@ -182,11 +232,19 @@ await saveArchivedTab({ id: 'c-manual', url: 'https://c.example/manual', status:
 const closedRec = await markClosedByTabSquirrel('c-closed');
 assert.strictEqual(closedRec.status, 'archived');
 assert.ok(closedRec.closedAt > 0, 'markClosedByTabSquirrel stamps closedAt');
+assert.strictEqual(closedRec.closedFrom, undefined, 'A direct close records no closedFrom');
 assert.deepStrictEqual((await getArchivedTabs({ closedSince: midnight.getTime() })).map(t => t.id), ['c-closed'],
   'closedSince returns only tabs Tab Squirrel closed');
 await markReopened('c-closed');
-assert.strictEqual((await getTabById('c-closed')).closedAt, null, 'Reopening clears closedAt');
-assert.strictEqual((await getArchivedTabs({ closedSince: midnight.getTime() })).length, 0);
+assert.ok(closedRec.lastClosedAt > 0, 'markClosedByTabSquirrel stamps lastClosedAt');
+const reopenedClosed = await getTabById('c-closed');
+assert.strictEqual(reopenedClosed.closedAt, null, 'Reopening clears closedAt');
+assert.strictEqual(reopenedClosed.lastClosedAt, closedRec.lastClosedAt, 'Reopening keeps lastClosedAt');
+assert.deepStrictEqual((await getArchivedTabs({ closedSince: midnight.getTime() })).map(t => t.id), ['c-closed'],
+  'a reopened note stays in Closed today');
+await saveArchivedTab({ id: 'c-slept', url: 'https://c.example/slept', status: 'discarded' });
+assert.strictEqual((await markClosedByTabSquirrel('c-slept', { closedFrom: 'suspended' })).closedFrom, 'suspended', 'A close of a suspended tab records closedFrom');
+await markReopened('c-slept');
 console.log('✓ Closed-today bookkeeping verified');
 
 // Test 11b: 'captured' = summary saved, tab still open (Chrome refused to close, or manual save)
@@ -194,6 +252,7 @@ await markClosedByTabSquirrel('c-manual');
 const kept = await markLeftOpen('c-manual', 'Chrome refused to close this tab; summary saved, tab left open');
 assert.strictEqual(kept.closureReason, 'Chrome refused to close this tab; summary saved, tab left open', 'Reason is recorded');
 assert.strictEqual(kept.closedAt, null, 'A tab Chrome kept open is not in Closed today');
+assert.strictEqual(kept.lastClosedAt, null, 'and its closure record is cleared');
 assert.strictEqual(kept.restoredAt, undefined, 'Not counted as reopened, so it stays in the inbox');
 assert.ok((await getArchivedTabs({ view: 'inbox' })).some(t => t.id === 'c-manual'));
 console.log('✓ Captured status verified');
@@ -212,6 +271,7 @@ const cap = { url: 'https://lc.example/cap', title: 'Cap' };
 const asClosed = await recordCapture({ ...cap, url: 'https://lc.example/c1' }, 'closed');
 assert.strictEqual(asClosed.status, 'archived');
 assert.ok(asClosed.closedAt > 0, "disposition 'closed' pairs archived with closedAt");
+assert.strictEqual(asClosed.lastClosedAt, asClosed.closedAt, "disposition 'closed' also stamps lastClosedAt");
 const asSuspended = await recordCapture({ ...cap, url: 'https://lc.example/c2' }, 'suspended');
 assert.strictEqual(asSuspended.status, 'discarded');
 assert.strictEqual(asSuspended.closedAt, null, "disposition 'suspended' leaves closedAt null");
@@ -221,7 +281,16 @@ assert.strictEqual(asOpen.closedAt, null, "disposition 'left-open' leaves closed
 
 const reopened = await markReopened(asClosed.id);
 assert.strictEqual(reopened.closedAt, null, 'reopening clears closedAt');
+assert.strictEqual(reopened.lastClosedAt, asClosed.lastClosedAt, 'reopening keeps lastClosedAt');
 assert.ok(reopened.restoredAt > 0, 'reopening stamps restoredAt');
+
+// The sweep suspends the reopened tab again: the recapture must not wipe the record of the closure
+const resuspended = await recordCapture({ ...cap, url: 'https://lc.example/c1' }, 'suspended');
+assert.strictEqual(resuspended.id, asClosed.id, 'a recapture of the same URL reuses the record');
+assert.strictEqual(resuspended.status, 'discarded');
+assert.strictEqual(resuspended.closedAt, null, 'the recapture is not a closure');
+assert.strictEqual(resuspended.lastClosedAt, asClosed.lastClosedAt, 'a suspended recapture keeps lastClosedAt');
+assert.ok((await getArchivedTabs({ closedSince: 1 })).some(t => t.id === asClosed.id), 'so it stays in Closed today');
 
 // Chrome refused to close a tab we had suspended: it stays suspended, and must land in
 // neither "Closed today" nor the fully-open inbox.
@@ -229,6 +298,7 @@ await saveArchivedTab({ id: 'lc-stuck', url: 'https://lc.example/stuck', status:
 const stuck = await markStaysSuspended('lc-stuck', 'Chrome refused to close this tab; it stays suspended');
 assert.strictEqual(stuck.status, 'discarded', 'markStaysSuspended puts the record back to suspended');
 assert.strictEqual(stuck.closedAt, null, 'and clears closedAt so it leaves Closed today');
+assert.strictEqual(stuck.lastClosedAt, null, 'and lastClosedAt, since the closure did not hold');
 assert.strictEqual(stuck.closureReason, 'Chrome refused to close this tab; it stays suspended', 'the refusal reason is recorded');
 assert.ok(!(await getArchivedTabs({ closedSince: 1 })).some(t => t.id === 'lc-stuck'), 'a stuck tab is not closed today');
 
@@ -278,8 +348,8 @@ const chipNote = { capturedAt: chipNow, isFavorite: false };
 const chipAt = (daysLeft, sortBy) =>
   fadeChipLabel({ ...chipNote, capturedAt: chipNow - (30 - daysLeft) * DAY }, { ...fade }, sortBy, chipNow);
 assert.strictEqual(chipAt(FADE_WARNING_DAYS + 1), '', 'outside the warning window a fading note is silent');
-assert.strictEqual(chipAt(FADE_WARNING_DAYS), 'Fades in 3d', 'at the window edge the chip appears');
-assert.strictEqual(chipAt(0.5), 'Fades today', 'under a day it says today');
+assert.strictEqual(chipAt(FADE_WARNING_DAYS), 'Fading soon · 3d left', 'at the window edge the chip appears');
+assert.strictEqual(chipAt(0.5), 'Fading soon · today', 'under a day it says today');
 assert.strictEqual(chipAt(FADE_WARNING_DAYS + 1, 'expiring-soon'), 'Fades in 4d',
   'the expiring-soon sort shows every fading note regardless of the window');
 assert.strictEqual(fadeChipLabel({ ...chipNote, isFavorite: true }, fade, 'newest', chipNow), '',
@@ -288,6 +358,27 @@ assert.strictEqual(fadeChipLabel(chipNote, null, 'newest', chipNow), '', 'no set
 // Regression: getArchivedTabs defaults fadeSettings to null and app.js can pass null when the
 // settings read fails. That must not throw mid-render.
 assert.strictEqual(getExpiry({ capturedAt: chipNow }, null), null, 'null settings means never fades, not a crash');
+
+// Fade date and the one-line explanation: both read the user's real windows.
+const dateNote = { capturedAt: new Date(2026, 9, 1, 12).getTime(), isFavorite: false };
+const dateNow = new Date(2026, 9, 13, 12).getTime();
+assert.strictEqual(fadeDateLabel(dateNote, fade, dateNow), 'fades Oct 31', 'unopened note: capture date + 30 days');
+assert.strictEqual(fadeDateLabel({ ...dateNote, restoredAt: new Date(2026, 9, 10, 12).getTime() }, fade, dateNow), 'fades Oct 17',
+  'reopened note: last reopen + 7 days');
+assert.strictEqual(fadeDateLabel({ ...dateNote, isFavorite: true }, fade, dateNow), '', 'starred notes show no fade date');
+assert.strictEqual(fadeDateLabel(dateNote, { ...fade, fadeUnopenedDays: 0 }, dateNow), '', '0 days = no fade date');
+assert.strictEqual(fadeDateLabel(dateNote, null, dateNow), '', 'no settings = no fade date');
+assert.match(fadeDateLabel(dateNote, { ...fade, fadeUnopenedDays: 120 }, dateNow), /2027/, 'a date in another year names the year');
+assert.strictEqual(fadeDateLabel(dateNote, fade, dateNow, FADE_DATE_DAYS), '', 'a note 18 days from fading shows no date on a card');
+assert.strictEqual(fadeDateLabel({ ...dateNote, restoredAt: new Date(2026, 9, 10, 12).getTime() }, fade, dateNow, FADE_DATE_DAYS), 'fades Oct 17', 'a note 4 days out does');
+assert.strictEqual(fadeDateLabel({ ...dateNote, restoredAt: new Date(2026, 9, 13, 12).getTime() }, fade, dateNow, FADE_DATE_DAYS), 'fades Oct 20', 'exactly 7 days out still shows');
+assert.strictEqual(fadeDateLabel({ ...dateNote, restoredAt: new Date(2026, 9, 14, 12).getTime() }, fade, dateNow, FADE_DATE_DAYS), '', 'more than 7 days out does not');
+assert.strictEqual(fadeExplanation(fade), 'Notes fade after 30 days, or 7 days after a reopen, unless you star them.');
+assert.strictEqual(fadeExplanation({ fadeUnopenedDays: 14, fadeReopenedDays: 14 }), 'Notes fade after 14 days unless you star them.');
+assert.match(fadeExplanation({ fadeUnopenedDays: 0, fadeReopenedDays: 0 }), /Fading is off/);
+assert.match(fadeExplanation({ fadeUnopenedDays: 0, fadeReopenedDays: 7 }), /7 days after you reopen/);
+assert.match(fadeExplanation({ fadeUnopenedDays: 30, fadeReopenedDays: 0 }), /Reopened notes stay/);
+assert.strictEqual(fadeExplanation(null), '', 'no settings = no explanation');
 assert.strictEqual(getExpiry({ capturedAt: chipNow }, undefined), null, 'undefined settings likewise');
 await assert.doesNotReject(() => getArchivedTabs({ sortBy: 'expiring-soon' }),
   'the expiring-soon sort survives a missing fadeSettings');
@@ -297,7 +388,7 @@ console.log('✓ Inbox views, fading and expiring-soon sort verified');
 const imported = await saveArchivedTab({ id: 'imp-1', url: 'https://f.example/new', title: 42, readingTimeMinutes: '<img src=x onerror=alert(1)>', summarySource: 'manual' });
 assert.strictEqual(imported.summarySource, 'heuristic', 'Unknown summary sources cannot pass the AI-only close gate');
 assert.strictEqual(imported.id, 'f-new', 'Unknown id falls back to URL dedupe');
-assert.strictEqual(imported.title, 'Untitled Tab');
+assert.strictEqual(imported.title, 'Untitled page');
 assert.strictEqual(imported.readingTimeMinutes, 1, 'Non-numeric reading time is coerced');
 assert.strictEqual((await getArchivedTabs({ query: 'f.example' })).length > 0, true, 'Search still works after import');
 const restoredImport = await saveArchivedTab({ id: 'imp-2', url: 'https://f.example/imp2', status: 'restored', restoredAt: nowMs - DAY, capturedAt: 'garbage' });

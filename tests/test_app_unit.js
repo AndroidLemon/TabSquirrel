@@ -1,5 +1,5 @@
 /**
- * Unit & static checks for the Knowledge Hub page (src/app/): shared HTML helpers, reader-view
+ * Unit & static checks for the notebook page (src/app/): shared HTML helpers, reader-view
  * article formatting, status badges, and markup/CSS regression guards. Runs in Node, so
  * src/app/app.js must stay importable without a DOM or chrome.* APIs.
  */
@@ -7,10 +7,11 @@
 import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
-import { highlightSearch, escapeHtml } from '../src/shared/html.js';
-import { formatExtractedArticle, getStatusBadge } from '../src/app/app.js';
+import { highlightSearch, escapeHtml, reasonLabel, offlineSummaryHtml, isOfflineSummary } from '../src/shared/html.js';
+import { plannedSource } from '../src/ai/summarizer.js';
+import { formatExtractedArticle, getStatusBadge, closedReason, closedException, closedWhen, closedTodayHeading, firstRunCopy, resolvesToHeuristic, starLabel } from '../src/app/app.js';
 
-console.log('--- Running Knowledge Hub Unit & Markup Verification Tests ---');
+console.log('--- Running Notebook Unit & Markup Verification Tests ---');
 
 // Test 1: highlightSearch with standard queries
 console.log('Testing highlightSearch basic and case-insensitive matching...');
@@ -79,11 +80,123 @@ const badge = (status, closureReason) => getStatusBadge({ status, closureReason 
 assert.ok(badge('discarded').includes('class="badge-status sleeping"') && badge('discarded').includes('>Sleeping</span>'), 'discarded -> Sleeping');
 assert.ok(badge('restored').includes('class="badge-status restored"') && badge('restored').includes('>Reopened</span>'), 'restored -> Reopened');
 assert.ok(badge('captured').includes('class="badge-status captured"') && badge('captured').includes('>Saved</span>'), 'captured -> Saved');
-assert.ok(badge('archived').includes('class="badge-status archived"') && badge('archived').includes('>Archived</span>'), 'archived -> Archived');
-assert.ok(badge(undefined).includes('>Archived</span>'), 'Unknown status falls back to Archived');
-assert.ok(badge('captured', 'Chrome refused to close this tab; summary saved, tab left open').includes('title="Chrome refused to close this tab; summary saved, tab left open"'), 'Badge tooltip is the closureReason');
-assert.ok(!badge('captured', '"><img src=x>').includes('<img'), 'closureReason tooltip must be escaped');
-console.log('✓ Status badges verified (Sleeping, Reopened, Saved, Archived)');
+assert.strictEqual(badge('archived'), '', 'archived (the default state) renders no badge');
+assert.strictEqual(badge(undefined), '', 'Unknown status renders no badge');
+assert.ok(badge('captured', 'Chrome refused to close this tab; summary saved, tab left open').includes('title="Chrome wouldn&#39;t close this tab. Its note is saved and the tab is still open."'), 'Badge tooltip is the plain wording of the closureReason');
+assert.ok(!badge('captured', 'Chrome refused to close this tab; summary saved, tab left open').includes('summary saved, tab left open'), 'the internal reason is not shown to the user');
+assert.ok(!badge('discarded', '"><img src=x>').includes('<img'), 'tooltip text must be escaped');
+console.log('✓ Status badges verified (Sleeping, Reopened, Saved, Closed)');
+
+// Closure reasons: internal strings stay as they are; users read the mapped wording
+const label = (status, closureReason) => reasonLabel({ status, closureReason });
+assert.strictEqual(label('discarded', 'Contains form or interactive input controls'), 'Put to sleep: the page has a form or app controls.');
+assert.strictEqual(label('discarded', 'Stateful URL path or client-side hash route'), 'Put to sleep: the address looks like an app page, such as a checkout or editor.');
+assert.strictEqual(label('discarded', 'Complex search/filter query state'), 'Put to sleep: the address holds a search or filter.');
+assert.strictEqual(label('discarded', 'Media-dominated page with little prose'), 'Put to sleep: mostly video or images, little text.');
+assert.strictEqual(label('discarded', 'Short or low-confidence content'), 'Put to sleep: too little text to summarize with confidence.');
+assert.strictEqual(label('discarded', 'Suspended instead of closed: no AI summary available'), 'Put to sleep, not closed: only the offline summary was available.');
+assert.strictEqual(label('discarded', 'Chrome refused to close this tab; it stays suspended'), 'Chrome wouldn\'t close this tab, so it stays asleep.');
+assert.strictEqual(label('captured', 'You switched to this tab while it was being archived; summary saved, tab left open'), 'You came back to this tab while its note was being written, so it stayed open.');
+assert.strictEqual(label('captured', 'Chrome refused to close this tab; summary saved, tab left open'), 'Chrome wouldn\'t close this tab. Its note is saved and the tab is still open.');
+assert.strictEqual(label('captured', 'Chrome refused to suspend this tab; summary saved, tab left open'), 'Chrome wouldn\'t put this tab to sleep. Its note is saved and the tab is still open.');
+assert.strictEqual(label('captured', 'Saved manually; tab left open'), 'You saved this tab. It stays open.');
+assert.strictEqual(label('archived', 'Pure stateless reading article'), 'A reading page, so it was closed.');
+assert.strictEqual(label('archived', 'Closed: trusted domain'), 'On your always-close list, so it was closed.');
+assert.strictEqual(label('discarded', ''), 'Asleep in the tab strip to save memory', 'no reason: the generic sleeping line');
+assert.strictEqual(label('discarded', 'something new'), 'Asleep in the tab strip to save memory', 'an unknown reason never leaks internal wording');
+assert.strictEqual(label('captured', ''), 'Its note is saved and the tab is still open.');
+// A reopened record keeps the reason it was closed for; the tooltip must never repeat it
+for (const reason of ['Pure stateless reading article', 'Closed: trusted domain', 'Contains form or interactive input controls', '']) {
+  assert.strictEqual(label('restored', reason), 'You reopened this tab', `Reopened never shows the old closure reason (${reason || 'none'})`);
+}
+assert.ok(badge('restored', 'Pure stateless reading article').includes('title="You reopened this tab"'), 'the Reopened badge carries its own tooltip');
+assert.ok(!/Pure stateless|reading page/.test(badge('restored', 'Pure stateless reading article')), 'and not the closure reason');
+console.log('✓ Closure reasons read as plain text; Reopened has its own tooltip');
+
+// Offline summaries are marked quietly; AI-written ones are not
+assert.ok(isOfflineSummary({ summarySource: 'heuristic' }));
+assert.ok(offlineSummaryHtml({ summarySource: 'heuristic' }).includes('offline summary'), 'a heuristic-written note says so');
+for (const source of ['prompt-api', 'gemini-api', 'openai-compatible']) {
+  assert.strictEqual(offlineSummaryHtml({ summarySource: source }), '', `${source} shows nothing extra`);
+}
+console.log('✓ Offline summary marker: heuristic only');
+
+// Which provider the settings resolve to decides whether the first run can promise closing
+assert.strictEqual(plannedSource({}), 'prompt-api', 'Auto plans for the on-device model');
+assert.strictEqual(plannedSource({ aiProvider: 'heuristic' }), 'heuristic');
+assert.strictEqual(plannedSource({ aiProvider: 'gemini-api' }), 'heuristic', 'Gemini without a key falls back');
+assert.strictEqual(plannedSource({ aiProvider: 'gemini-api', geminiApiKey: 'k' }), 'gemini-api');
+assert.strictEqual(plannedSource({ aiProvider: 'openai-compatible', openaiBaseUrl: 'http://x/v1' }), 'heuristic', 'a server without a model falls back');
+assert.strictEqual(plannedSource({ aiProvider: 'openai-compatible', openaiBaseUrl: 'http://x/v1', openaiModel: 'm' }), 'openai-compatible');
+assert.strictEqual(resolvesToHeuristic({}, false), true, 'Auto with no downloaded model is the heuristic');
+assert.strictEqual(resolvesToHeuristic({}, true), false, 'Auto with the model downloaded is AI');
+assert.strictEqual(resolvesToHeuristic({ aiProvider: 'heuristic' }, true), true);
+assert.strictEqual(resolvesToHeuristic({ aiProvider: 'gemini-api', geminiApiKey: 'k' }, false), false, 'a cloud key does not depend on the on-device model');
+const heuristicOnly = 'Without an AI summarizer, tabs are put to sleep rather than closed. Choose one in Settings.';
+assert.ok(firstRunCopy({}, 'tab', false).lines.includes(heuristicOnly), 'Auto with no on-device model says tabs are put to sleep');
+assert.ok(!firstRunCopy({}, 'tab', true).lines.includes(heuristicOnly), 'with the model downloaded it does not');
+assert.ok(!firstRunCopy({}, 'tab', undefined).lines.includes(heuristicOnly), 'with the model state unknown it makes no claim');
+assert.ok(!firstRunCopy({ closeRequiresAiSummary: false }, 'tab', false).lines.includes(heuristicOnly), 'with the AI-summary rule off the heuristic still closes');
+assert.ok(!firstRunCopy({ archiveMode: 'discard' }, 'tab', false).lines.includes(heuristicOnly), 'Sleep only never closes, so there is nothing to add');
+assert.ok(!firstRunCopy({ aiProvider: 'gemini-api', geminiApiKey: 'k' }, 'tab', false).lines.includes(heuristicOnly), 'a configured cloud summarizer is AI');
+assert.ok(firstRunCopy({ aiProvider: 'heuristic' }, 'tab', true).lines.includes(heuristicOnly), 'the heuristic provider says it whatever Chrome has');
+assert.match(firstRunCopy({ timeoutMinutes: 120 }, 'tab').lines[0], /^Tabs left idle for 2 hours /, 'whole hours read as hours from two hours up');
+assert.match(firstRunCopy({ timeoutMinutes: 60 }, 'tab').lines[0], /^Tabs left idle for 60 minutes /, 'an hour stays in minutes, as the setting reads');
+
+// The star tooltip promises "it won't fade" only while fading is on
+assert.strictEqual(starLabel(false, { fadeUnopenedDays: 30, fadeReopenedDays: 7 }), 'Star: keep this note; it won\'t fade');
+assert.strictEqual(starLabel(true, { fadeUnopenedDays: 0, fadeReopenedDays: 7 }), 'Unstar: let this note fade again', 'either window on means notes fade');
+assert.strictEqual(starLabel(false, { fadeUnopenedDays: 0, fadeReopenedDays: 0 }), 'Star', 'fading off: no promise about fading');
+assert.strictEqual(starLabel(true, { fadeUnopenedDays: 0, fadeReopenedDays: 0 }), 'Unstar');
+assert.strictEqual(starLabel(false, null), 'Star', 'settings not loaded yet: no claim');
+
+// Closed today reasons are derived from the record, never invented
+assert.match(closedReason({ closureTier: 'safe_to_close', closureReason: 'Pure stateless reading article' }), /idle/, 'a plain reading page closed after sitting idle');
+assert.match(closedReason({ closureTier: 'suspend_only', closureReason: 'Contains form or interactive input controls', closedFrom: 'suspended' }), /Slept first/, 'a tab that slept before closing says so');
+assert.match(closedReason({ closureTier: 'suspend_only', closureReason: 'Contains form or interactive input controls' }), /Sat idle/, 'a suspend_only page closed directly (close mode) never slept');
+assert.match(closedReason({ closureTier: 'suspend_only', closureReason: 'Closed: trusted domain' }), /always-close list/, 'a trusted-domain close names the list');
+assert.match(closedReason({}), /idle/, 'a record with no closure data still gets an honest idle reason');
+console.log('✓ Closed-today reasons derived from closureTier / closureReason');
+
+// Closed today card timing: idle time only when both stamps are real
+const closedAtMs = new Date(2026, 9, 13, 10, 42).getTime();
+assert.match(closedWhen({ lastClosedAt: closedAtMs, lastActiveAt: closedAtMs - 64 * 60000 }), /^closed .*42.* · idle 64 min$/, 'closed time plus idle minutes');
+assert.match(closedWhen({ lastClosedAt: closedAtMs, lastActiveAt: closedAtMs - 125 * 60000 }), / · idle 2 h 5 min$/, 'idle from two hours up reads in hours');
+assert.match(closedWhen({ lastClosedAt: closedAtMs, lastActiveAt: closedAtMs - 120 * 60000 }), / · idle 2 h$/, 'whole hours drop the minutes');
+assert.ok(!closedWhen({ lastClosedAt: closedAtMs }).includes('idle'), 'no lastActiveAt, no idle claim');
+assert.ok(!closedWhen({ lastClosedAt: closedAtMs, lastActiveAt: closedAtMs + 60000 }).includes('idle'), 'a stamp from after the close is not idle time');
+assert.ok(!closedWhen({ lastClosedAt: closedAtMs, lastActiveAt: closedAtMs - 20000 }).includes('idle'), 'under a minute is not worth stating');
+assert.strictEqual(closedWhen({}), '', 'a record with no closure says nothing');
+console.log('✓ Closed today closed time and idle time derived from the record');
+
+// Closed today: the common reason (sat idle) goes in the heading once; cards state only exceptions
+assert.strictEqual(closedException({ closureTier: 'safe_to_close' }), '', 'plain idleness is not repeated on the card');
+assert.strictEqual(closedException({}), '', 'nor is it for a record with no closure data');
+assert.match(closedException({ closedFrom: 'suspended' }), /Slept first/, 'a tab that slept first is an exception');
+assert.match(closedException({ closureReason: 'Closed: trusted domain' }), /always-close list/, 'so is the always-close list');
+const at = (minutesIdle, extra = {}) => ({ lastClosedAt: closedAtMs, lastActiveAt: closedAtMs - minutesIdle * 60000, closedAt: closedAtMs, ...extra });
+const mixed = [at(64), at(125, { closedFrom: 'suspended' }), at(70, { closureReason: 'Closed: trusted domain' }), at(61, { closedAt: null, status: 'restored' })];
+assert.strictEqual(closedTodayHeading(mixed, 60), 'Closed 4 tabs for you today, all idle 60+ min · 1 reopened',
+  'mixed reasons share one true lower bound: every closure sat idle past the threshold');
+assert.strictEqual(closedTodayHeading([at(64), at(61, { closedAt: null, status: 'captured' })], 60), 'Closed 2 tabs for you today, all idle 60+ min',
+  'a note saved by hand (tab left open, no closedAt) is not counted as reopened');
+assert.strictEqual(closedTodayHeading([at(64)], 60), 'Closed 1 tab for you today, idle 60+ min', 'singular, and no reopened part at 0');
+assert.strictEqual(closedTodayHeading([at(64), { lastClosedAt: closedAtMs, closedAt: closedAtMs }], 60), 'Closed 2 tabs for you today, all idle 60+ min',
+  'a record with no idle stamp does not contradict the threshold');
+assert.strictEqual(closedTodayHeading([at(64), at(40)], 60), 'Closed 2 tabs for you today',
+  'a real idle time under the threshold (it was raised since) drops the claim rather than overstate it');
+assert.strictEqual(closedTodayHeading([at(130)], 120), 'Closed 1 tab for you today, idle 2+ h', 'whole-hour thresholds read in hours');
+assert.strictEqual(closedTodayHeading([at(50)], 45), 'Closed 1 tab for you today, idle 45+ min', 'the real threshold, not the default');
+console.log('✓ Closed today heading: one idle reason for all, true with mixed reasons; cards carry only exceptions');
+
+// First-run copy uses the real threshold and names Save current tab only in the panel
+const firstRunPanel = firstRunCopy({ timeoutMinutes: 45, archiveMode: 'hybrid' }, 'panel');
+assert.ok(firstRunPanel.lines.join(' ').includes('45 minutes'), 'first run states the user\'s idle threshold');
+assert.ok(firstRunPanel.lines.some(l => /Save current tab/.test(l)), 'the panel names Save current tab');
+assert.ok(!firstRunCopy({ timeoutMinutes: 45 }, 'tab').lines.some(l => /Save current tab/.test(l)), 'the full tab does not');
+assert.match(firstRunCopy({ timeoutMinutes: 1, archiveMode: 'close' }, 'tab').lines[0], /^Tabs left idle for 1 minute are closed once a summary is written\./, 'singular minute, close mode');
+assert.match(firstRunCopy({ timeoutMinutes: 30, archiveMode: 'discard' }, 'tab').lines[0], /put to sleep/, 'suspend-only mode does not promise closing');
+console.log('✓ First-run copy verified');
 
 // Test 9: Verify src/app/index.html markup (element ids the Playwright tests rely on)
 console.log('Verifying src/app/index.html markup...');
@@ -92,9 +205,9 @@ assert.ok(htmlContent.includes('<dialog id="reader-dialog" class="reader-dialog"
 for (const id of [
   'search-input', 'search-clear-btn', 'search-kbd-hint', 'modal-copy-btn', 'modal-close-btn', 'perm-banner',
   'enable-perm-btn', 'view-inbox', 'view-reopened', 'view-all', 'sort-select', 'density-toggle-btn',
-  'closed-today', 'tabs-feed', 'toast-undo-btn', 'toast-progress', 'filters-btn', 'sidebar', 'sidebar-tags',
+  'closed-today', 'closed-today-toggle', 'closed-today-reopen-all', 'closed-today-list', 'closed-today-more', 'feed-heading', 'tabs-feed', 'toast-undo-btn', 'toast-progress', 'filters-btn', 'sidebar', 'sidebar-tags',
   'sidebar-domains', 'filter-banner', 'clear-filter-btn', 'results-count', 'export-dropdown-btn', 'settings-btn',
-  'stat-total', 'archive-current-btn', 'open-full-btn'
+  'view-options', 'archive-current-btn', 'open-full-btn', 'perm-dismiss-btn', 'count-inbox', 'count-reopened', 'shortcuts-fade-note'
 ]) {
   assert.ok(htmlContent.includes(`id="${id}"`), `index.html must include #${id}`);
 }
@@ -104,8 +217,12 @@ for (const time of ['favorites', 'today', 'yesterday', 'week']) {
 for (const sort of ['newest', 'oldest', 'reading-time-asc', 'reading-time-desc', 'title-asc', 'domain', 'expiring-soon']) {
   assert.ok(htmlContent.includes(`<option value="${sort}">`), `Sort select must offer "${sort}"`);
 }
+assert.ok(!htmlContent.includes('stats-banner') && !htmlContent.includes('id="stat-'), 'The stats strip is gone');
 assert.ok(/id="archive-current-btn" class="[^"]*panel-only[^"]*" hidden/.test(htmlContent), 'Archive Current Tab must be panel-only and hidden until the surface is known');
 assert.ok(/id="open-full-btn" class="[^"]*panel-only[^"]*"/.test(htmlContent), 'Open full view must be panel-only');
+assert.ok(/<header class="topbar">[\s\S]*id="archive-current-btn"[\s\S]*<\/header>/.test(htmlContent), 'Save current tab lives in the topbar');
+assert.ok(/id="archive-current-btn"[^>]*aria-label="Save current tab"/.test(htmlContent) && /id="archive-current-btn"[^>]*title="Save current tab"/.test(htmlContent), 'Save current tab is an icon button with a label and tooltip');
+assert.ok(!htmlContent.includes('id="fade-note"'), 'The fade sentence is not static markup above the feed');
 assert.ok(!/\son[a-z]+\s*=/.test(htmlContent), 'index.html must not use inline event handlers (blocked by MV3 CSP)');
 
 // Test 10: Verify src/app/app.css rules
@@ -131,7 +248,7 @@ console.log('Verifying src/options/options.js logic for new settings...');
 const optionsJs = fs.readFileSync(path.resolve('src/options/options.js'), 'utf-8');
 assert.ok(!optionsJs.includes("from '../storage/db.js'") || !optionsJs.includes('exportTabs'), 'options.js must not import the removed db.exportTabs');
 assert.ok(optionsJs.includes('saveArchivedTab'), 'options.js must call saveArchivedTab to restore an imported backup');
-assert.ok(optionsJs.includes("getURL('src/app/index.html')"), 'options.js "Open Wiki" must open the merged src/app/index.html page');
+assert.ok(optionsJs.includes("getURL('src/app/index.html')"), 'options.js "Open notebook" must open the merged src/app/index.html page');
 
 // Test 13: Regression guards for fixed bugs (CSP inline handler, third-party favicon leak)
 // and for the one-page merge (surface detection, no references to the removed pages)
@@ -147,4 +264,49 @@ const manifest = JSON.parse(fs.readFileSync(path.resolve('manifest.json'), 'utf-
 assert.strictEqual(manifest.side_panel.default_path, 'src/app/index.html', 'Side panel must load the merged page');
 assert.ok(!fs.existsSync(path.resolve('src/sidepanel')) && !fs.existsSync(path.resolve('src/wiki')), 'The pre-merge src/sidepanel/ and src/wiki/ pages must be gone');
 
-console.log('--- All Knowledge Hub Unit & Markup Verification Tests Passed Successfully! ---');
+// Test 14: Theme choice. The dark tokens exist twice (System via media query, explicit Dark via data-theme)
+// because CSS cannot share a block between the two; the copies must never drift apart.
+console.log('Verifying the theme tokens and boot script...');
+// The token blocks are flat (no nested braces), so a block runs from its selector to the next "}".
+const declarations = (css, selector) => {
+  const start = css.indexOf(`${selector} {`);
+  assert.ok(start >= 0, `${selector} block exists`);
+  const body = css.slice(css.indexOf('{', start) + 1, css.indexOf('}', start));
+  return body.split(';').map(d => d.trim().replace(/\s+/g, ' ')).filter(Boolean).sort();
+};
+for (const file of ['src/app/app.css', 'src/options/options.css']) {
+  const css = fs.readFileSync(path.resolve(file), 'utf-8');
+  const media = css.slice(css.indexOf('@media (prefers-color-scheme: dark)'));
+  const system = declarations(media, ':root:not([data-theme="light"])');
+  const explicit = declarations(css.slice(css.indexOf(':root[data-theme="dark"] {')), ':root[data-theme="dark"]');
+  assert.strictEqual(css.split('prefers-color-scheme').length - 1, 1, `${file}: prefers-color-scheme appears exactly once, so the token blocks cannot grow a third copy`);
+  assert.ok(system.length > 20, `${file}: the System dark block holds the tokens`);
+  assert.deepStrictEqual(explicit, system, `${file}: :root[data-theme="dark"] repeats the System dark tokens exactly`);
+  assert.ok(/:root\[data-theme="light"\]\s*\{\s*color-scheme: light;/.test(css), `${file}: Light sets color-scheme: light for native controls`);
+  assert.ok(/:root\[data-theme="dark"\]\s*\{\s*color-scheme: dark;/.test(css), `${file}: Dark sets color-scheme: dark for native controls`);
+}
+for (const file of ['src/app/index.html', 'src/options/index.html']) {
+  const html = fs.readFileSync(path.resolve(file), 'utf-8');
+  const head = html.slice(html.indexOf('<head>'), html.indexOf('</head>'));
+  const firstScript = head.indexOf('<script');
+  assert.ok(firstScript >= 0 && head.slice(firstScript).startsWith('<script src="../shared/theme-boot.js"></script>'), `${file}: theme-boot.js is a classic script and the first <script>`);
+  assert.ok(head.indexOf('theme-boot.js') < head.indexOf('rel="stylesheet"'), `${file}: theme-boot.js loads before the stylesheets`);
+}
+// Dialogs are modal, which makes #toast-live inert: each carries its own status region for announce()
+{
+  const html = fs.readFileSync(path.resolve('src/app/index.html'), 'utf-8');
+  for (const id of ['reader-dialog', 'shortcuts-dialog']) {
+    const dialog = html.slice(html.indexOf(`<dialog id="${id}"`), html.indexOf('</dialog>', html.indexOf(`<dialog id="${id}"`)));
+    assert.ok(/class="dialog-live sr-only" role="status"/.test(dialog), `#${id} holds a visually hidden status region`);
+  }
+  assert.ok(appJs.indexOf("renderThemeButton('system')") > 0 && appJs.indexOf("renderThemeButton('system')") < appJs.indexOf('startTheme(renderThemeButton)'),
+    'the theme button is rendered as System before the stored choice loads, so it always has an accessible name');
+}
+const theme = await import('../src/shared/theme.js');
+assert.strictEqual(theme.nextTheme('system'), 'light');
+assert.strictEqual(theme.nextTheme('light'), 'dark');
+assert.strictEqual(theme.nextTheme('dark'), 'system');
+assert.strictEqual(theme.normalizeTheme('purple'), 'system', 'an unknown value is System');
+console.log('✓ Theme tokens match, native controls follow the theme, boot script comes first');
+
+console.log('--- All Notebook Unit & Markup Verification Tests Passed Successfully! ---');

@@ -118,17 +118,24 @@ export async function saveArchivedTab(tabData) {
         id: existing?.id || tabData.id || crypto.randomUUID(),
         url: safeUrl,
         // JSON import feeds arbitrary values here; the UI assumes these types
-        title: (typeof tabData.title === 'string' && tabData.title) || 'Untitled Tab',
+        title: (typeof tabData.title === 'string' && tabData.title) || 'Untitled page',
         domain: (typeof tabData.domain === 'string' && tabData.domain) || extractDomain(safeUrl),
         favIconUrl: safeFavicon,
         capturedAt: timestamp(tabData.capturedAt, Date.now()),
         lastActiveAt: timestamp(tabData.lastActiveAt, Date.now()),
         restoredAt: timestamp(tabData.restoredAt, undefined), // kept on JSON import; a recapture clears it
+        // First read in the reader or first star: the note leaves the Inbox. Kept on JSON import;
+        // a recapture clears it, like restoredAt, so a fresh capture lands in the Inbox again, unless
+        // the note is starred.
+        filedAt: timestamp(tabData.filedAt, existing?.isFavorite ? existing.filedAt : undefined),
         readingTimeMinutes: Math.max(1, Math.round(Number(tabData.readingTimeMinutes)) || 1),
         summary: sanitizeSummary(tabData.summary),
         // Unknown values (JSON import) must not pass the AI-only close gate
         summarySource: AI_SUMMARY_SOURCES.has(tabData.summarySource) ? tabData.summarySource : 'heuristic',
-        closedAt: timestamp(tabData.closedAt, null), // set only when Tab Squirrel itself closed the tab
+        closedAt: timestamp(tabData.closedAt, null), // set only while Tab Squirrel's closure of the tab stands
+        // When Tab Squirrel last closed it; survives a reopen, so "Closed today" keeps its record
+        // A recapture that carries neither field (the sweep suspending a reopened tab) keeps the old value
+        lastClosedAt: timestamp(tabData.lastClosedAt ?? tabData.closedAt ?? existing?.lastClosedAt, null),
         wordCount: tabData.wordCount || 0,
         // 'discarded' (suspended) | 'archived' (closed) | 'restored' (reopened) |
         // 'captured' (summary saved, tab still open: manual archive or Chrome refused to close/suspend)
@@ -162,6 +169,14 @@ export async function saveArchivedTab(tabData) {
 }
 
 /**
+ * The Inbox holds notes nobody has acted on yet: a note leaves it when it is reopened (restoredAt)
+ * or filed (filedAt: read in the reader, or starred). Unstarring does not bring it back.
+ */
+export function isInInbox(record) {
+  return !record.restoredAt && !record.filedAt;
+}
+
+/**
  * Query archived tabs with keyword search and filters.
  * Records come back without cleanText unless `includeText: true`; soft-deleted records
  * are always hidden.
@@ -175,8 +190,8 @@ export async function getArchivedTabs(filters = {}) {
     timeRange = '',
     status = '',
     favoriteOnly = false,
-    closedSince = 0, // only records Tab Squirrel closed at/after this time
-    view = '', // 'inbox' (never reopened) | 'reopened' | '' (all)
+    closedSince = 0, // only records Tab Squirrel last closed at/after this time (reopened ones included)
+    view = '', // 'inbox' (see isInInbox) | 'reopened' | '' (all)
     includeText = false,
     sortBy = 'newest', // 'newest' | 'oldest' | 'reading-time-asc' | 'reading-time-desc' | 'title-asc' | 'domain' | 'expiring-soon'
     limit = 100,
@@ -195,8 +210,8 @@ export async function getArchivedTabs(filters = {}) {
     if (item.deletedAt) return false;
     if (favoriteOnly && !item.isFavorite) return false;
     if (status && item.status !== status) return false;
-    if (closedSince && !(item.closedAt >= closedSince)) return false;
-    if (view === 'inbox' && item.restoredAt) return false;
+    if (closedSince && !(item.lastClosedAt >= closedSince)) return false;
+    if (view === 'inbox' && !isInInbox(item)) return false;
     if (view === 'reopened' && !item.restoredAt) return false;
     if (domain && item.domain !== domain) return false;
     if (tag && !(item.summary?.tags || []).some(t => t.toLowerCase() === tag.toLowerCase())) return false;
@@ -328,23 +343,32 @@ async function updateRecord(id, mutate) {
 /**
  * Record lifecycle.
  *
- * `status`, `closedAt` and `restoredAt` are one state machine with one invariant, so nothing
+ * `status`, `closedAt`, `lastClosedAt` and `restoredAt` are one state machine with one invariant, so nothing
  * outside this block writes them except `saveArchivedTab`, which sets them directly for JSON
  * import: callers name the transition that happened and the timestamps are derived here. The
  * states:
  *
  *   captured   summary saved, tab still fully open (manual archive, or Chrome refused)
  *   discarded  tab suspended by Tab Squirrel, still in the tab strip
- *   archived   the tab is gone. `closedAt` is set only when Tab Squirrel itself closed it, which
- *              is exactly what "Closed today" counts
- *   restored   the user reopened it
+ *   archived   the tab is gone. `closedAt` is set only when Tab Squirrel itself closed it
+ *   restored   the user reopened it. `closedAt` clears, but `lastClosedAt` stays: "Closed today"
+ *              counts every note whose last closure was today and marks the reopened ones
+ *
+ * `lastClosedAt` is cleared only when a closure turns out not to hold (Chrome refused to close or
+ * suspend the tab: markLeftOpen, markStaysSuspended). A recapture of the same URL that carries
+ * neither `lastClosedAt` nor `closedAt` (e.g. the sweep suspending a reopened tab) keeps it; one
+ * that carries `closedAt` replaces it. A row whose note is no longer closed shows as Reopened.
  */
 
-/** Tab Squirrel closed the tab itself. Feeds "Closed today". */
-export async function markClosedByTabSquirrel(id) {
+/**
+ * Tab Squirrel closed the tab itself. Feeds "Closed today". `closedFrom: 'suspended'` records
+ * that the tab had been suspended first (hybrid mode), which "Closed today" explains to the user.
+ */
+export async function markClosedByTabSquirrel(id, { closedFrom } = {}) {
   return updateRecord(id, (record) => {
     record.status = 'archived';
-    record.closedAt = Date.now();
+    record.closedAt = record.lastClosedAt = Date.now();
+    if (closedFrom) record.closedFrom = closedFrom;
   });
 }
 
@@ -364,11 +388,18 @@ export async function markReopened(id) {
   });
 }
 
+/** The user read the note in the reader: it leaves the Inbox. The first read is kept. */
+export async function markFiled(id) {
+  return updateRecord(id, (record) => {
+    if (!record.filedAt) record.filedAt = Date.now();
+  });
+}
+
 /** Chrome refused to close or suspend the tab, so it is still fully open. */
 export async function markLeftOpen(id, reason) {
   return updateRecord(id, (record) => {
     record.status = 'captured';
-    record.closedAt = null;
+    record.closedAt = record.lastClosedAt = null;
     if (reason) record.closureReason = reason;
   });
 }
@@ -377,7 +408,7 @@ export async function markLeftOpen(id, reason) {
 export async function markStaysSuspended(id, reason) {
   return updateRecord(id, (record) => {
     record.status = 'discarded';
-    record.closedAt = null;
+    record.closedAt = record.lastClosedAt = null;
     if (reason) record.closureReason = reason;
   });
 }
@@ -495,10 +526,16 @@ export function getAllDomains() {
 export async function getStats() {
   const tabs = await getArchivedTabs({ limit: Infinity });
   const todayStart = startOfDay(0);
+  const yesterdayStart = startOfDay(1);
+  const weekAgo = Date.now() - 7 * DAY_MS; // the same boundaries as getArchivedTabs' time ranges
   return {
     total: tabs.length,
     today: tabs.filter(t => t.capturedAt >= todayStart).length,
+    yesterday: tabs.filter(t => t.capturedAt >= yesterdayStart && t.capturedAt < todayStart).length,
+    week: tabs.filter(t => t.capturedAt >= weekAgo).length,
     favorites: tabs.filter(t => t.isFavorite).length,
+    inbox: tabs.filter(isInInbox).length, // same rule as getArchivedTabs' 'inbox' view
+    reopened: tabs.filter(t => t.restoredAt).length,
     totalReadingMinutes: tabs.reduce((acc, t) => acc + (t.readingTimeMinutes || 2), 0)
   };
 }
@@ -567,9 +604,11 @@ export function extractDomain(url) {
   }
 }
 
+/** Starring also files the note (it leaves the Inbox); unstarring leaves filedAt alone. */
 export async function toggleFavoriteTab(id) {
   return updateRecord(id, (record) => {
     record.isFavorite = !record.isFavorite;
+    if (record.isFavorite && !record.filedAt) record.filedAt = Date.now();
   });
 }
 

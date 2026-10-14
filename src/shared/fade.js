@@ -8,7 +8,7 @@
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** A note shows its "Fades in Nd" chip once it is this close to going. */
+/** A note shows its "Fading soon" chip once it is this close to going. */
 export const FADE_WARNING_DAYS = 3;
 
 /**
@@ -27,6 +27,9 @@ export function getExpiry(record, settings) {
   return (record.restoredAt || record.capturedAt) + days * DAY_MS;
 }
 
+/** A card shows its quiet "fades Oct 30" date only this close to the end; farther out it is noise. */
+export const FADE_DATE_DAYS = 7;
+
 /**
  * Chip text for a note, or '' when it should not show one: never-fading notes, and fading
  * notes still further out than the warning window (unless the user is sorting by fade date,
@@ -37,5 +40,38 @@ export function fadeChipLabel(record, settings, sortBy, now = Date.now()) {
   if (expiry === null) return '';
   const daysLeft = (expiry - now) / DAY_MS;
   if (sortBy !== 'expiring-soon' && daysLeft > FADE_WARNING_DAYS) return '';
-  return daysLeft < 1 ? 'Fades today' : `Fades in ${Math.ceil(daysLeft)}d`;
+  if (daysLeft < 1) return 'Fading soon · today';
+  const days = Math.ceil(daysLeft);
+  // Inside the warning window it is "fading soon"; further out (expiring-soon sort only) it is a plain date.
+  return daysLeft <= FADE_WARNING_DAYS ? `Fading soon · ${days}d left` : `Fades in ${days}d`;
+}
+
+/**
+ * Quiet "fades Oct 30" text for the card meta and reader, or '' for notes that never fade (or, when
+ * `withinDays` is given, that fade later than that). Shows the year only when it is not the current one.
+ */
+export function fadeDateLabel(record, settings, now = Date.now(), withinDays = Infinity) {
+  const expiry = getExpiry(record, settings);
+  if (expiry === null || (expiry - now) / DAY_MS > withinDays) return '';
+  const date = new Date(expiry);
+  const sameYear = date.getFullYear() === new Date(now).getFullYear();
+  const text = date.toLocaleDateString('en', sameYear
+    ? { month: 'short', day: 'numeric' }
+    : { month: 'short', day: 'numeric', year: 'numeric' });
+  return `fades ${text}`;
+}
+
+/**
+ * One calm sentence on how fading is set up, for the notebook. '' when the settings are unknown.
+ */
+export function fadeExplanation(settings) {
+  if (!settings) return '';
+  const unopened = settings.fadeUnopenedDays;
+  const reopened = settings.fadeReopenedDays;
+  const days = (n) => `${n} ${n === 1 ? 'day' : 'days'}`;
+  if (!unopened && !reopened) return 'Fading is off, so notes stay until you delete them.';
+  if (!unopened) return `Notes fade ${days(reopened)} after you reopen them, unless you star them.`;
+  if (!reopened) return `Notes fade after ${days(unopened)} unless you star them. Reopened notes stay.`;
+  if (unopened === reopened) return `Notes fade after ${days(unopened)} unless you star them.`;
+  return `Notes fade after ${days(unopened)}, or ${days(reopened)} after a reopen, unless you star them.`;
 }

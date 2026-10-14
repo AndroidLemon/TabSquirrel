@@ -376,7 +376,7 @@ async function runHybridTests() {
     });
 
     assert.strictEqual(postSweepTabs.pureExists, false, 'Pure article tab must be closed in hybrid mode');
-    console.log('✓ Pure article was automatically closed into Wiki');
+    console.log('✓ Pure article was automatically closed into the notebook');
 
     assert.strictEqual(postSweepTabs.formTabExists, true, 'Form page tab must NOT be closed');
     assert.ok(postSweepTabs.formTabTitle.startsWith('💤 '), `Form tab must have sleeping indicator 💤 prefix, got: "${postSweepTabs.formTabTitle}"`);
@@ -401,8 +401,8 @@ async function runHybridTests() {
     assert.strictEqual(formRecord.closureTier, 'suspend_only', 'Form page record closureTier must be suspend_only');
     console.log('✓ Form page record verified: status = "discarded", tier = "suspend_only"');
 
-    // --- Test 3: Status badges in both layouts of the Knowledge Hub page ---
-    console.log('\n--- Test 3: UI Badge Status Rendering (Archived vs Sleeping) ---');
+    // --- Test 3: Status badges in both layouts of the notebook page ---
+    console.log('\n--- Test 3: UI Badge Status Rendering (Sleeping badged, Closed not) ---');
 
     // One page serves the side panel (narrow layout) and the full view (wide layout)
     const hubPage = await context.newPage();
@@ -416,9 +416,9 @@ async function runHybridTests() {
         text: b.textContent.trim()
       })));
 
-      assert.ok(badges.some(b => b.className.includes('archived') && b.text.includes('Archived')), `${layout} layout must render Archived badge`);
+      assert.ok(!badges.some(b => b.className.includes('archived') || b.text.includes('Closed')), `${layout} layout must not badge closed notes`);
       assert.ok(badges.some(b => b.className.includes('sleeping') && b.text.includes('Sleeping')), `${layout} layout must render Sleeping badge`);
-      console.log(`✓ ${layout} layout correctly displays "Archived" and "Sleeping" status badges`);
+      console.log(`✓ ${layout} layout correctly badges Sleeping notes and leaves closed notes unbadged`);
     }
 
     // --- Test 4: Pinned Tab & Domain Whitelist Safety ---
@@ -564,11 +564,13 @@ async function runHybridTests() {
     await hubPage.reload();
     await hubPage.waitForSelector('#closed-today:not([hidden])', { timeout: 5000 });
     const closedToday = await hubPage.evaluate(() => ({
-      count: Number(document.getElementById('closed-today-count').textContent),
-      titles: Array.from(document.querySelectorAll('.closed-today-title')).map(el => el.textContent)
+      count: Number(document.getElementById('closed-today-toggle').textContent.match(/^Closed (\d+) tabs? for you today/)?.[1]),
+      ids: Array.from(document.querySelectorAll('#closed-today-list .tab-card')).map(el => el.dataset.id),
+      feedIds: Array.from(document.querySelectorAll('#tabs-feed .tab-card')).map(el => el.dataset.id)
     }));
     assert.ok(closedToday.count >= 1, 'Closed today must count the auto-closed article');
-    assert.strictEqual(closedToday.titles.length, closedToday.count, 'One row per closed tab');
+    assert.strictEqual(closedToday.ids.length, Math.min(closedToday.count, 6), 'One card per closed tab (up to six before Show all)');
+    assert.ok(!closedToday.ids.some(id => closedToday.feedIds.includes(id)), 'A closed tab\'s note is not repeated in the feed below');
     console.log(`✓ Closed today shows ${closedToday.count} tab(s)`);
 
     // --- Test 6: Without an AI summary, a closable article is suspended instead ---
@@ -631,6 +633,7 @@ async function runHybridTests() {
     assert.strictEqual(tier2.tabOpen, false, 'Tier 2 must close the long-suspended tab');
     assert.strictEqual(tier2.rec.status, 'archived', 'Tier 2 record must be archived');
     assert.ok(tier2.rec.closedAt > 0, 'Tier 2 close must stamp closedAt (Closed today)');
+    assert.strictEqual(tier2.rec.closedFrom, 'suspended', 'Tier 2 close records that the tab slept first');
     console.log('✓ Long-suspended tab was closed by tier 2 and recorded as archived');
 
     // --- Test 8: A hung executeScript is skipped after EXTRACT_TIMEOUT_MS and does not wedge isSweeping ---

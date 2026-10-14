@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tab Squirrel Knowledge Hub</title>
+  <title>Tab Squirrel Notebook</title>
+  <script src="../shared/theme-boot.js"></script>
   <link rel="stylesheet" href="../fonts/fonts.css">
   <link rel="stylesheet" href="app.css">
 </head>
@@ -18,55 +19,61 @@
         <img src="../assets/icons/icon-48.png" alt="Tab Squirrel" class="brand-icon">
         <div class="brand-text">
           <h2 class="brand-title">Tab Squirrel</h2>
-          <span class="brand-subtitle">Personal Knowledge Hub</span>
+          <span class="brand-subtitle">Your notebook</span>
         </div>
         <button id="drawer-close-btn" class="icon-btn narrow-only" title="Close filters" aria-label="Close filters">✕</button>
       </div>
 
       <nav class="sidebar-nav">
-        <div class="nav-section-title">Timeline</div>
-        <button class="nav-item" data-view="">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
-          All Summaries
-          <span class="badge" id="count-all">0</span>
-        </button>
+        <div class="nav-section-title">Views</div>
         <button class="nav-item" data-view="inbox">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-6l-2 3h-4l-2-3H2"></path><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg>
           Inbox
+          <span class="badge" id="count-inbox">0</span>
         </button>
         <button class="nav-item" data-view="reopened">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
           Reopened
+          <span class="badge" id="count-reopened">0</span>
+        </button>
+        <button class="nav-item" data-view="">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+          All notes
+          <span class="badge" id="count-all">0</span>
         </button>
         <button class="nav-item" data-time="favorites">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
-          Favorites
+          Starred
           <span class="badge" id="count-favorites">0</span>
         </button>
+
+        <div class="nav-section-title">When</div>
         <button class="nav-item" data-time="today">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-          Captured Today
+          Today
           <span class="badge" id="count-today">0</span>
         </button>
         <button class="nav-item" data-time="yesterday">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
           Yesterday
+          <span class="badge" id="count-yesterday">0</span>
         </button>
         <button class="nav-item" data-time="week">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-          Past 7 Days
+          Past 7 days
+          <span class="badge" id="count-week">0</span>
         </button>
 
-        <div class="nav-section-title">Topics &amp; Tags</div>
+        <div class="nav-section-title">Tags</div>
         <div id="sidebar-tags" class="filter-list"></div>
 
-        <div class="nav-section-title">Top Domains</div>
+        <div class="nav-section-title">Domains</div>
         <div id="sidebar-domains" class="filter-list"></div>
       </nav>
 
       <div class="sidebar-footer">
         <div class="export-dropdown">
-          <button id="export-dropdown-btn" class="footer-btn" popovertarget="export-dropdown-menu" aria-haspopup="true" aria-expanded="false" title="Export Knowledge Wiki">
+          <button id="export-dropdown-btn" class="footer-btn" popovertarget="export-dropdown-menu" aria-haspopup="true" aria-expanded="false" title="Export notes">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
             Export
             <svg class="dropdown-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"></polyline></svg>
@@ -74,18 +81,20 @@
           <div id="export-dropdown-menu" class="export-dropdown-menu" role="menu" aria-label="Export options" popover>
             <button class="export-option-btn" role="menuitem" data-format="markdown">
               <span class="option-title">Markdown (.md)</span>
-              <span class="option-desc">One consolidated note (respects active filters)</span>
+              <span class="option-desc">One file with every note in this view</span>
             </button>
             <button class="export-option-btn" role="menuitem" data-format="obsidian">
               <span class="option-title">Obsidian vault (.zip)</span>
-              <span class="option-desc">One note per summary with YAML frontmatter</span>
+              <span class="option-desc">One file per note in this view</span>
             </button>
             <button class="export-option-btn" role="menuitem" data-format="json">
-              <span class="option-title">JSON Backup (.json)</span>
-              <span class="option-desc">Full structured database backup</span>
+              <span class="option-title">JSON backup (.json)</span>
+              <span class="option-desc">Every note, whatever the filter. Import it again from Settings.</span>
             </button>
           </div>
         </div>
+        <button id="shortcuts-btn" class="footer-btn shortcuts-btn" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts" aria-haspopup="dialog">?</button>
+        <button id="theme-btn" class="footer-btn theme-btn" type="button"></button>
         <button id="settings-btn" class="footer-btn">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
           Settings
@@ -100,39 +109,32 @@
           <img src="../assets/icons/icon-48.png" alt="Tab Squirrel" class="brand-icon">
           <div class="brand-text">
             <h1 class="brand-title">Tab Squirrel</h1>
-            <span class="brand-subtitle">Knowledge Hub</span>
+            <span class="brand-subtitle">Notebook</span>
           </div>
         </div>
-        <div class="stats-banner">
-          <div class="stat-item"><span class="stat-num" id="stat-total">0</span><span class="stat-label">Archived</span></div>
-          <div class="stat-divider"></div>
-          <div class="stat-item"><span class="stat-num" id="stat-today">0</span><span class="stat-label">Today</span></div>
-          <div class="stat-divider"></div>
-          <div class="stat-item"><span class="stat-num" id="stat-time">0m</span><span class="stat-label">Reading Backlog</span></div>
-        </div>
+        <!-- In a tab, the "current tab" is Tab Squirrel itself, so this only makes sense in the side panel -->
+        <button id="archive-current-btn" class="icon-btn panel-only" hidden title="Save current tab" aria-label="Save current tab">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
+        </button>
         <button id="open-full-btn" class="icon-btn panel-only" title="Open full view in a tab" aria-label="Open full view in a tab" hidden>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
         </button>
       </header>
 
+      <!-- Loud until the first note exists; after that a hairline note the user can dismiss (app.js) -->
       <div id="perm-banner" class="perm-banner" hidden>
         <div>
-          <strong>Enable Tab Extraction</strong>
-          <p>Grant permission to read and summarize background tabs.</p>
+          <strong>Let Tab Squirrel read pages</strong>
+          <p id="perm-text">Without it, tabs from sites you haven't allowed stay open and get no note.</p>
         </div>
-        <button id="enable-perm-btn" class="perm-btn">Enable</button>
+        <button id="enable-perm-btn" class="perm-btn">Allow all sites</button>
+        <button id="perm-dismiss-btn" class="icon-btn perm-dismiss-btn" title="Dismiss" aria-label="Dismiss" hidden>✕</button>
       </div>
-
-      <!-- In a tab, the "current tab" is Tab Squirrel itself, so this only makes sense in the side panel -->
-      <button id="archive-current-btn" class="primary-btn panel-only" hidden>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
-        Archive Current Tab
-      </button>
 
       <div class="search-row">
         <div class="search-box">
           <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          <input type="text" id="search-input" placeholder="Search summaries, tags, domains, full text..." aria-label="Search knowledge base">
+          <input type="text" id="search-input" placeholder="Search notes" aria-label="Search notes">
           <button id="search-clear-btn" class="search-clear-btn" title="Clear search" aria-label="Clear search" hidden>✕</button>
           <kbd id="search-kbd-hint" class="search-kbd-hint">/</kbd>
         </div>
@@ -143,23 +145,32 @@
       </div>
 
       <div class="controls-row">
-        <div id="view-tabs" class="view-tabs" role="group" aria-label="Filter by view">
-          <button id="view-inbox" class="view-tab-btn" data-view="inbox" aria-pressed="false">Inbox</button>
-          <button id="view-reopened" class="view-tab-btn" data-view="reopened" aria-pressed="false">Reopened</button>
-          <button id="view-all" class="view-tab-btn" data-view="" aria-pressed="false">All</button>
+        <div id="view-tabs" class="view-tabs narrow-only" role="group" aria-label="View">
+          <button id="view-inbox" class="view-tab-btn" data-view="inbox">Inbox</button>
+          <button id="view-reopened" class="view-tab-btn" data-view="reopened">Reopened</button>
+          <button id="view-all" class="view-tab-btn" data-view="">All notes</button>
         </div>
         <div class="feed-controls">
           <span id="results-count" class="results-count"></span>
-          <select id="sort-select" class="sort-select" aria-label="Sort summaries" title="Sort summaries">
-            <option value="newest">Newest</option>
-            <option value="oldest">Oldest</option>
-            <option value="reading-time-asc">Quick Reads</option>
-            <option value="reading-time-desc">Deep Dives</option>
-            <option value="title-asc">Title (A–Z)</option>
-            <option value="domain">Domain</option>
-            <option value="expiring-soon">Expiring soon</option>
-          </select>
-          <button id="density-toggle-btn" class="density-toggle-btn" aria-pressed="false" aria-label="Toggle compact view" title="Switch to Compact View"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></button>
+          <details id="view-options" class="view-options">
+            <summary>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
+              <span class="view-options-label">Sort and view</span>
+            </summary>
+            <div class="view-options-body">
+            <select id="sort-select" class="sort-select" aria-label="Sort notes" title="Sort notes">
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
+              <option value="reading-time-asc">Quick reads</option>
+              <option value="reading-time-desc">Deep dives</option>
+              <option value="title-asc">Title (A–Z)</option>
+              <option value="domain">Domain</option>
+              <option value="expiring-soon">Fading soonest</option>
+            </select>
+            <button id="density-toggle-btn" class="density-toggle-btn" aria-pressed="false" aria-label="Compact view" title="Compact view"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></button>
+
+            </div>
+          </details>
         </div>
       </div>
 
@@ -168,10 +179,24 @@
         <button id="clear-filter-btn" class="clear-filter-btn">✕ Clear</button>
       </div>
 
-      <details id="closed-today" class="closed-today" hidden>
-        <summary>Closed today (<span id="closed-today-count">0</span>)</summary>
-        <div id="closed-today-list" class="closed-today-list"></div>
-      </details>
+      <!-- Closed today: the top of the feed in the default view, each closure once, as its card.
+           Expanded until seen, then one line per note on later opens the same day (app.js). -->
+      <section id="closed-today" class="closed-today" aria-labelledby="closed-today-toggle" hidden>
+        <div class="closed-today-head">
+          <h2 class="feed-heading closed-today-heading">
+            <button id="closed-today-toggle" class="closed-today-toggle" type="button" aria-expanded="true" aria-controls="closed-today-list"></button>
+          </h2>
+          <button id="closed-today-reopen-all" class="closed-today-reopen-btn" type="button">Reopen all</button>
+          <div id="closed-today-confirm" class="closed-today-confirm" role="group" aria-label="Confirm Reopen all" hidden>
+            <span id="closed-today-confirm-text"></span>
+            <button id="closed-today-confirm-yes" class="closed-today-reopen-btn" type="button">Reopen all</button>
+            <button id="closed-today-confirm-no" class="closed-today-cancel-btn" type="button">Cancel</button>
+          </div>
+        </div>
+        <div id="closed-today-list" class="feed closed-today-list"></div>
+        <button id="closed-today-more" class="closed-today-more" type="button" aria-controls="closed-today-list" hidden></button>
+      </section>
+      <h2 id="feed-heading" class="feed-heading" hidden></h2>
 
       <div id="tabs-feed" class="feed"></div>
     </main>
@@ -181,17 +206,27 @@
     <div class="modal-card">
       <header class="modal-header">
         <div class="modal-title-group">
-          <h2 id="modal-title" class="modal-title"></h2>
+          <h2 id="modal-title" class="modal-title" tabindex="-1"></h2>
           <a id="modal-source-link" target="_blank" rel="noopener" class="modal-source-link"></a>
+          <div id="modal-fade" class="modal-fade"></div>
         </div>
         <div class="modal-header-actions">
-          <button id="modal-copy-btn" class="modal-copy-btn" title="Copy Markdown" aria-label="Copy Markdown">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-            <span class="btn-label">Copy Markdown</span>
+          <button id="modal-reopen-btn" class="modal-copy-btn modal-btn-primary" type="button" title="Reopen this tab">
+            <span class="btn-label">Reopen tab</span>
           </button>
-          <button id="modal-close-btn" class="modal-close-btn" title="Close reader view" aria-label="Close reader view">✕</button>
+          <button id="modal-star-btn" class="modal-copy-btn" type="button">
+            <span class="btn-label">Star</span>
+          </button>
+          <button id="modal-delete-btn" class="modal-copy-btn modal-btn-danger" type="button" title="Delete note" aria-label="Delete note">
+            <span class="btn-label">Delete</span>
+          </button>
+          <button id="modal-copy-btn" class="modal-copy-btn" title="Copy Markdown" aria-label="Copy Markdown">
+            <span class="btn-label">Copy</span>
+          </button>
         </div>
+        <button id="modal-close-btn" class="modal-close-btn" title="Close reader view" aria-label="Close reader view">✕</button>
       </header>
+      <div class="dialog-live sr-only" role="status" aria-live="polite"></div>
       <div class="modal-body">
         <div id="modal-summary-box" class="modal-summary-box"></div>
         <div id="modal-text-content" class="modal-text-content"></div>
@@ -199,9 +234,35 @@
     </div>
   </dialog>
 
-  <div id="toast" class="toast hidden" role="status" aria-live="polite">
+  <dialog id="shortcuts-dialog" class="shortcuts-dialog" aria-labelledby="shortcuts-title">
+    <header class="shortcuts-header">
+      <h2 id="shortcuts-title" class="shortcuts-title">Keyboard shortcuts</h2>
+      <button id="shortcuts-close-btn" class="modal-close-btn" title="Close shortcuts" aria-label="Close shortcuts">✕</button>
+    </header>
+    <dl class="shortcuts-list">
+      <div><dt><kbd>j</kbd> <kbd>↓</kbd></dt><dd>Next note</dd></div>
+      <div><dt><kbd>k</kbd> <kbd>↑</kbd></dt><dd>Previous note</dd></div>
+      <div><dt><kbd>Enter</kbd></dt><dd>Reopen the selected note's tab (or go to it, if it is still open)</dd></div>
+      <div><dt><kbd>o</kbd></dt><dd>Open the selected note in the reader</dd></div>
+      <div><dt><kbd>s</kbd></dt><dd>Star or unstar the selected note</dd></div>
+      <div><dt><kbd>Del</kbd> <kbd>Backspace</kbd></dt><dd>Delete the selected note</dd></div>
+      <div><dt><kbd>u</kbd></dt><dd>Undo, while the Undo bar shows (5 seconds)</dd></div>
+      <div><dt><kbd>/</kbd></dt><dd>Search</dd></div>
+      <div><dt><kbd>Enter</kbd> <kbd>↓</kbd></dt><dd>In search: jump to the first result</dd></div>
+      <div><dt><kbd>Esc</kbd></dt><dd>Leave search (press again to clear it), or close a panel</dd></div>
+      <div><dt><kbd>?</kbd></dt><dd>This list</dd></div>
+      <div><dt><kbd>Cmd/Ctrl</kbd> <kbd>Shift</kbd> <kbd>S</kbd></dt><dd>Open the notebook</dd></div>
+      <div><dt><kbd>Cmd/Ctrl</kbd> <kbd>Shift</kbd> <kbd>E</kbd></dt><dd>Save the current tab</dd></div>
+    </dl>
+    <p id="shortcuts-fade-note" class="fade-note"></p>
+    <div class="dialog-live sr-only" role="status" aria-live="polite"></div>
+  </dialog>
+
+  <!-- The toast is display:none while hidden, so it cannot announce itself; this persistent region does. -->
+  <div id="toast-live" class="sr-only" role="status" aria-live="polite"></div>
+  <div id="toast" class="toast hidden" popover="manual">
     <span id="toast-message" class="toast-message"></span>
-    <button id="toast-undo-btn" class="toast-undo-btn" hidden>Undo</button>
+    <button id="toast-undo-btn" class="toast-undo-btn" aria-keyshortcuts="u" hidden>Undo (U)</button>
     <div id="toast-progress" class="toast-progress"></div>
   </div>
 

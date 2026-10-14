@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tab Squirrel Settings & Permissions</title>
+  <title>Tab Squirrel Settings</title>
+  <script src="../shared/theme-boot.js"></script>
   <link rel="stylesheet" href="../fonts/fonts.css">
   <link rel="stylesheet" href="options.css">
 </head>
@@ -14,12 +15,12 @@
         <img src="../assets/icons/icon-48.png" alt="Tab Squirrel" class="brand-icon">
         <div>
           <h1>Tab Squirrel Settings</h1>
-          <p class="subtitle">Customize tab inactivity, privacy, and summarization rules.</p>
+          <p class="subtitle">When idle tabs close, and who writes their summaries.</p>
         </div>
       </div>
       <button id="open-wiki-link-btn" class="secondary-btn">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
-        Open Wiki Dashboard
+        Open notebook
       </button>
     </header>
 
@@ -29,26 +30,51 @@
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
       </div>
       <div class="card-content">
-        <h2>Page Content Extraction Access</h2>
-        <p>To summarize background tabs automatically, Tab Squirrel needs permission to extract reading text from web pages. Your content is parsed directly on your device and never uploaded to external servers without your consent.</p>
-        <div class="permission-status" id="permission-status">Checking permission status...</div>
+        <h2>Let Tab Squirrel read pages</h2>
+        <p>Tab Squirrel reads the text of an idle tab to write its note. Reading happens on this device. Page text leaves it only if you pick Gemini or a remote server under Summaries. Without this, idle tabs stay open and get no note.</p>
+        <div class="permission-status" id="permission-status">Checking…</div>
       </div>
-      <button id="grant-perm-btn" class="primary-btn">Enable Extraction</button>
+      <button id="grant-perm-btn" class="primary-btn">Allow all sites</button>
     </section>
 
-    <!-- Inactivity & Archival Mode -->
+    <!-- Appearance: the same choice as the notebook's footer button -->
     <section class="settings-card">
-      <h2>Tab Inactivity & Behavior</h2>
+      <h2>Appearance</h2>
+      <div class="setting-row">
+        <div class="setting-label-group">
+          <label id="theme-label">Theme</label>
+          <span class="setting-desc">Light or dark for the notebook and this page. System follows your browser or operating system.</span>
+        </div>
+        <div class="radio-group" role="radiogroup" aria-labelledby="theme-label">
+          <label class="radio-option">
+            <input type="radio" name="theme" value="system" id="theme-system">
+            <div><strong>System</strong></div>
+          </label>
+          <label class="radio-option">
+            <input type="radio" name="theme" value="light" id="theme-light">
+            <div><strong>Light</strong></div>
+          </label>
+          <label class="radio-option">
+            <input type="radio" name="theme" value="dark" id="theme-dark">
+            <div><strong>Dark</strong></div>
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <!-- Idle tabs: threshold and what happens to them -->
+    <section class="settings-card">
+      <h2>Idle tabs</h2>
       
       <div class="setting-row">
         <div class="setting-label-group">
-          <label for="timeout-select">Inactivity Threshold</label>
-          <span class="setting-desc">How long a tab can remain untouched before Tab Squirrel archives it.</span>
+          <label for="timeout-select">Inactivity threshold</label>
+          <span class="setting-desc">How long a tab can sit untouched before Tab Squirrel saves a note and closes it or puts it to sleep. Time away from the computer doesn't count.</span>
         </div>
         <select id="timeout-select" class="form-select">
           <option value="15">15 minutes</option>
           <option value="30">30 minutes</option>
-          <option value="60">1 hour (Default)</option>
+          <option value="60">1 hour (default)</option>
           <option value="120">2 hours</option>
           <option value="240">4 hours</option>
           <option value="1440">24 hours (1 day)</option>
@@ -57,29 +83,29 @@
 
       <div class="setting-row">
         <div class="setting-label-group">
-          <label>Archival Action</label>
-          <span class="setting-desc">Choose how Tab Squirrel cleans up your tabs once summarized.</span>
+          <label id="idle-action-label">What happens to an idle tab</label>
+          <span class="setting-desc">After its note is saved.</span>
         </div>
-        <div class="radio-group">
+        <div class="radio-group" role="radiogroup" aria-labelledby="idle-action-label">
           <label class="radio-option">
             <input type="radio" name="archiveMode" value="hybrid" id="mode-hybrid">
             <div>
-              <strong>Smart Hybrid [Recommended]</strong>
-              <span>Auto-closes pure reading articles into the Wiki; safely soft-suspends tabs with forms, interactive apps, or stateful URLs.</span>
+              <strong>Close or sleep (recommended)</strong>
+              <span>Closes reading pages once their note is saved. Puts pages with forms or app-like addresses to sleep instead, and closes them if they sit idle twice as long.</span>
             </div>
           </label>
           <label class="radio-option">
             <input type="radio" name="archiveMode" value="discard" id="mode-discard">
             <div>
-              <strong>Soft Suspend All</strong>
-              <span>Never closes tabs. Discards all idle tabs to free 95% RAM while keeping them visible in the tab bar.</span>
+              <strong>Sleep only</strong>
+              <span>Never closes tabs. Puts idle tabs to sleep to free memory. They stay in the tab strip with 💤 in the title, and each still gets a note.</span>
             </div>
           </label>
           <label class="radio-option">
             <input type="radio" name="archiveMode" value="close" id="mode-close">
             <div>
-              <strong>Auto-Close All</strong>
-              <span>Closes every idle tab (unless dirty/unsaved). One-click restore available from Side Panel or Wiki.</span>
+              <strong>Close all</strong>
+              <span>Closes every idle tab once its note is saved, unless it has unsaved typing or is playing audio. Your never-touch list and pinned-tab setting still apply. Reopen any of them from the notebook.</span>
             </div>
           </label>
         </div>
@@ -87,55 +113,55 @@
 
       <div class="setting-row">
         <div class="setting-label-group">
-          <label for="ignore-pinned-toggle">Ignore Pinned Tabs</label>
-          <span class="setting-desc">Never automatically archive or suspend tabs pinned to your browser tab strip.</span>
+          <label for="ignore-pinned-toggle">Ignore pinned tabs</label>
+          <span class="setting-desc">Leave pinned tabs alone: never close them or put them to sleep.</span>
         </div>
         <input type="checkbox" id="ignore-pinned-toggle" class="form-toggle">
       </div>
 
       <div class="setting-row">
         <div class="setting-label-group">
-          <label for="ai-close-toggle">Only Close Tabs With an AI Summary</label>
-          <span class="setting-desc">If no AI summary is available (on-device model, local server, or Gemini key), suspend the tab instead of closing it. Closed tabs are listed under "Closed today" in the Side Panel.</span>
+          <label for="ai-close-toggle">Only close tabs with an AI summary</label>
+          <span class="setting-desc">If only the offline heuristic could write the note, the tab is put to sleep instead of closed. With Auto and no on-device model, that means no tab is closed.</span>
         </div>
         <input type="checkbox" id="ai-close-toggle" class="form-toggle">
       </div>
 
       <div class="setting-row">
         <div class="setting-label-group">
-          <label for="remove-on-reopen-toggle">Remove Notes When Reopened</label>
-          <span class="setting-desc">Reopening a tab from the list deletes its note instead of moving it to Reopened. An Undo toast appears for 5 seconds if the side panel or app page is open.</span>
+          <label for="remove-on-reopen-toggle">Remove notes when reopened</label>
+          <span class="setting-desc">Reopening a tab from the notebook deletes its note instead of moving it to Reopened. An Undo toast appears for 5 seconds if the notebook is open.</span>
         </div>
         <input type="checkbox" id="remove-on-reopen-toggle" class="form-toggle">
       </div>
 
       <div class="setting-row">
         <div class="setting-label-group">
-          <label for="fade-unopened-input">Notes Fade After</label>
+          <label for="fade-unopened-input">Notes fade after</label>
           <span class="setting-desc">Unstarred notes are deleted automatically: counted from capture if you never reopened the tab, or from the last reopen. Star a note to keep it forever. 0 = never.</span>
         </div>
         <div class="fade-inputs">
-          <label>Unopened <input type="number" id="fade-unopened-input" class="form-input" min="0" max="3650" step="1"> days</label>
-          <label>Reopened <input type="number" id="fade-reopened-input" class="form-input" min="0" max="3650" step="1"> days</label>
+          <label>Never reopened <input type="number" id="fade-unopened-input" class="form-input" min="0" max="3650" step="1"> days</label>
+          <label>After a reopen <input type="number" id="fade-reopened-input" class="form-input" min="0" max="3650" step="1"> days</label>
         </div>
       </div>
 
     </section>
 
-    <!-- AI Summarization Provider -->
+    <!-- Summaries: who writes each note -->
     <section class="settings-card">
-      <h2>AI Summarization Engine</h2>
+      <h2>Summaries</h2>
 
       <div class="setting-row">
         <div class="setting-label-group">
           <label for="ai-provider-select">Provider</label>
-          <span class="setting-desc">Select which engine powers structured distillation and topic extraction.</span>
+          <span class="setting-desc">Who writes each note's summary and tags.</span>
         </div>
         <select id="ai-provider-select" class="form-select">
           <option value="auto">Auto (Chrome on-device model, else heuristic)</option>
-          <option value="prompt-api">Chrome Built-in Prompt API (Gemini Nano)</option>
-          <option value="heuristic">Algorithmic Heuristic (Instant, 100% Offline)</option>
-          <option value="gemini-api">Google Gemini Flash (Cloud BYOK)</option>
+          <option value="prompt-api">Chrome's on-device model (Gemini Nano)</option>
+          <option value="heuristic">Offline heuristic (instant, no tags; tabs are put to sleep, not closed)</option>
+          <option value="gemini-api">Google Gemini (cloud, your own API key)</option>
           <option value="openai-compatible">Local / OpenAI-compatible server (Ollama, LM Studio, oMLX…)</option>
         </select>
       </div>
@@ -150,14 +176,14 @@
       <div class="setting-row hidden local-llm-row">
         <div class="setting-label-group">
           <label for="openai-model">Model</label>
-          <span class="setting-desc">Model name as the server knows it. <strong>Test Connection</strong> lists the available ones.</span>
+          <span class="setting-desc">Model name as the server knows it. <strong>Test connection</strong> lists the available ones.</span>
         </div>
         <input type="text" id="openai-model" list="openai-model-list" placeholder="e.g. llama3.2" class="form-input">
         <datalist id="openai-model-list"></datalist>
       </div>
       <div class="setting-row hidden local-llm-row">
         <div class="setting-label-group">
-          <label for="openai-api-key">API Key (optional)</label>
+          <label for="openai-api-key">API key (optional)</label>
           <span class="setting-desc">Only if your server requires one. Stored locally in extension storage.</span>
         </div>
         <input type="password" id="openai-api-key" placeholder="(none)" class="form-input">
@@ -167,13 +193,13 @@
           <label>Connection</label>
           <span class="setting-desc" id="openai-test-status">Grants Tab Squirrel access to the server and checks it responds.</span>
         </div>
-        <button id="openai-test-btn" class="secondary-btn">Test Connection</button>
+        <button id="openai-test-btn" class="secondary-btn">Test connection</button>
       </div>
 
       <div class="setting-row hidden" id="api-key-row">
         <div class="setting-label-group">
-          <label for="gemini-api-key">Gemini API Key</label>
-          <span class="setting-desc">Stored locally on your device in secure extension storage.</span>
+          <label for="gemini-api-key">Gemini API key</label>
+          <span class="setting-desc">Stored only in this browser, unencrypted like all extension storage. Each page's text is sent to Google's Gemini API to write its summary.</span>
         </div>
         <input type="password" id="gemini-api-key" placeholder="AIzaSy..." class="form-input">
       </div>
@@ -181,12 +207,12 @@
 
     <!-- Excluded Domains -->
     <section class="settings-card">
-      <h2>Domain Whitelist (Never Archive)</h2>
-      <p class="section-desc">Tabs from these domains will NEVER be automatically summarized or closed.</p>
+      <h2>Never touch these sites</h2>
+      <p class="section-desc">Tabs on these sites are never summarized, put to sleep or closed. Subdomains are included.</p>
       
       <div class="domain-input-row">
         <input type="text" id="new-domain-input" placeholder="e.g. figma.com, notion.so" class="form-input">
-        <button id="add-domain-btn" class="secondary-btn">Add Domain</button>
+        <button id="add-domain-btn" class="secondary-btn">Add domain</button>
       </div>
 
       <div id="domain-chips" class="domain-chips-container">
@@ -196,12 +222,12 @@
 
     <!-- Trusted Sites -->
     <section class="settings-card">
-      <h2>Trusted Sites (Always Close)</h2>
-      <p class="section-desc">Tabs from these domains are closed once summarized even when the safety checks would only suspend them. A page with unsaved text is still kept. Only applies in Smart Hybrid mode.</p>
+      <h2>Always close these sites</h2>
+      <p class="section-desc">Tabs on these sites are closed once an AI summary is written, even when the safety checks would only put them to sleep. A page with unsaved typing is still left open. Close or sleep mode only.</p>
 
       <div class="domain-input-row">
         <input type="text" id="new-trusted-input" placeholder="e.g. figma.com, notion.so" class="form-input">
-        <button id="add-trusted-btn" class="secondary-btn">Add Domain</button>
+        <button id="add-trusted-btn" class="secondary-btn">Add domain</button>
       </div>
 
       <div id="trusted-chips" class="domain-chips-container">
@@ -212,28 +238,28 @@
     <!-- Storage -->
     <section class="settings-card" id="storage-section">
       <h2>Storage</h2>
-      <p class="section-desc">Notes live only in this browser. Old notes fade automatically (see "Notes Fade After").</p>
+      <p class="section-desc">Notes live only in this browser. Old notes fade automatically (see "Notes fade after").</p>
 
       <div class="storage-meter-box">
-        <span id="storage-meter-text" class="storage-meter-text">Current Storage: 0 tabs (~0 KB)</span>
+        <span id="storage-meter-text" class="storage-meter-text">0 notes, about 0 KB</span>
       </div>
 
       <div class="setting-row">
         <div class="setting-label-group">
-          <label>Clear All History</label>
-          <span class="setting-desc">Erase all archived tabs and history from your local browser.</span>
+          <label>Delete all notes</label>
+          <span class="setting-desc">Deletes every note, starred ones too, and their saved page text from this browser. There is no Undo.</span>
         </div>
-        <button id="clear-history-btn" class="danger-btn">Clear All History</button>
+        <button id="clear-history-btn" class="danger-btn">Delete all notes</button>
       </div>
     </section>
 
     <!-- Data Management -->
     <section class="settings-card danger-zone">
-      <h2>Data & Backups</h2>
+      <h2>Data and backups</h2>
       <div class="setting-row">
         <div>
-          <strong>Export Knowledge Wiki</strong>
-          <p class="setting-desc">Download all your saved summaries and notes.</p>
+          <strong>Export notes</strong>
+          <p class="setting-desc">Download every note. The Obsidian export is in the notebook's Export menu.</p>
         </div>
         <div class="btn-group">
           <button id="export-json-btn" class="secondary-btn">JSON</button>
@@ -243,8 +269,8 @@
 
       <div class="setting-row">
         <div>
-          <strong>Import / Restore Backup</strong>
-          <p class="setting-desc">Restore summaries from a previously exported JSON backup.</p>
+          <strong>Import a backup</strong>
+          <p class="setting-desc">Adds the notes from a JSON backup made with Export.</p>
         </div>
         <div class="btn-group">
           <button id="import-json-btn" class="secondary-btn">Import JSON</button>
@@ -255,7 +281,7 @@
     </section>
 
     <!-- Save Feedback -->
-    <div id="save-toast" class="toast hidden">Settings saved!</div>
+    <div id="save-toast" class="toast hidden">Settings saved.</div>
   </div>
 
   <script type="module" src="options.js"></script>
