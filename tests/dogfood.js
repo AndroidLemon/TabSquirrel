@@ -1,7 +1,7 @@
 /**
  * Tab Squirrel - Automated End-to-End Dogfooding & Verification Suite (Playwright)
  * Simulates real browser sessions, multi-tab browsing, safety net guards,
- * background summarization, and Wiki/Sidepanel UI verification.
+ * background summarization, and notebook UI verification.
  */
 
 import http from 'node:http';
@@ -251,8 +251,8 @@ async function runDogfood() {
     });
     telemetry.testsPassed++;
 
-    // Scenario 4: Wiki Dashboard & Full-Text Search
-    console.log('\n--- Scenario 4: Wiki Dashboard & Full-Text Search ---');
+    // Scenario 4: Notebook Search & Reopen
+    console.log('\n--- Scenario 4: Notebook Search & Reopen ---');
     const wikiPage = await context.newPage();
     await wikiPage.goto(`chrome-extension://${extensionId}/src/app/index.html`);
     await wikiPage.waitForLoadState('domcontentloaded');
@@ -260,7 +260,7 @@ async function runDogfood() {
     // Wait for card to render
     await wikiPage.waitForSelector('.tab-card', { timeout: 5000 });
     const cardTitle = await wikiPage.locator('.card-title').first().textContent();
-    console.log(`✓ Card rendered in Wiki: "${cardTitle}"`);
+    console.log(`✓ Card rendered in the notebook: "${cardTitle}"`);
 
     // Test Search input
     await wikiPage.fill('#search-input', 'HNSW');
@@ -268,7 +268,7 @@ async function runDogfood() {
     const filteredCount = await wikiPage.locator('.tab-card').count();
     console.log(`✓ Search for "HNSW" returned ${filteredCount} card(s)`);
 
-    // Test Knowledge Wiki Export Dropdown UI
+    // Test Notes Export Dropdown UI
     const exportBtn = wikiPage.locator('#export-dropdown-btn');
     const exportMenu = wikiPage.locator('#export-dropdown-menu');
     await exportBtn.click();
@@ -326,7 +326,7 @@ async function runDogfood() {
     console.log('✓ 1-Click Restore opened a fresh tab when the original tab was closed');
 
     telemetry.scenarios.push({
-      name: 'Wiki Search & 1-Click Restore',
+      name: 'Notebook Search & 1-Click Restore',
       status: 'PASSED'
     });
     telemetry.testsPassed++;

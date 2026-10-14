@@ -1,5 +1,5 @@
 /**
- * Tab Squirrel - Knowledge Hub UX Verification (Playwright)
+ * Tab Squirrel - Notebook UX Verification (Playwright)
  *
  * src/app/index.html is one page loaded both in Chrome's side panel and in a full tab.
  * This suite drives the narrow layout (side-panel width) and the wide layout (full tab),
@@ -19,7 +19,7 @@ const NARROW = { width: 380, height: 800 };
 const WIDE = { width: 1280, height: 800 };
 
 async function runAppUXTests() {
-  console.log('🧪 Starting Tab Squirrel Knowledge Hub UX Verification Test Suite...\n');
+  console.log('🧪 Starting Tab Squirrel Notebook UX Verification Test Suite...\n');
 
   if (fs.existsSync(USER_DATA_DIR)) {
     fs.rmSync(USER_DATA_DIR, { recursive: true, force: true });
@@ -121,7 +121,7 @@ async function runAppUXTests() {
     await page.reload();
     await page.waitForSelector('.tab-card', { timeout: 5000 });
     const cardIds = (p = page) => p.$$eval('#tabs-feed .tab-card', cards => cards.map(c => c.dataset.id));
-    console.log('✓ Knowledge Hub loaded with 3 seeded cards\n');
+    console.log('✓ Notebook loaded with 3 seeded cards\n');
 
     // --- TEST 1: Surface detection & narrow layout ---
     console.log('--- Test 1: Surface Detection (tab) & Narrow Layout (380px) ---');
@@ -1881,7 +1881,7 @@ async function runAppUXTests() {
     console.log('✓ At 190px nothing scrolls sideways, search keeps 120px+, Closed today wraps; targets are 24px+ (icons 28px)\n');
 
     console.log('========================================================');
-    console.log('🎉 ALL KNOWLEDGE HUB UX TESTS PASSED (NARROW + WIDE LAYOUTS, PANEL + TAB SURFACES)! 🎉');
+    console.log('🎉 ALL NOTEBOOK UX TESTS PASSED (NARROW + WIDE LAYOUTS, PANEL + TAB SURFACES)! 🎉');
     console.log('========================================================\n');
   } finally {
     if (context) await context.close();
@@ -1889,6 +1889,6 @@ async function runAppUXTests() {
 }
 
 runAppUXTests().catch(err => {
-  console.error('❌ Knowledge Hub UX Test Failure:', err);
+  console.error('❌ Notebook UX Test Failure:', err);
   process.exit(1);
 });

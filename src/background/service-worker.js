@@ -1,7 +1,7 @@
 /**
  * Tab Squirrel - Background Service Worker (Manifest V3)
  * Handles tab activity tracking, periodic inactivity sweeps, safe extraction,
- * soft suspension / auto-archival, and badge indicators.
+ * suspension / auto-close, and badge indicators.
  */
 
 import {

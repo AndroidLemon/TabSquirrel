@@ -1,5 +1,5 @@
 /**
- * Unit & static checks for the Knowledge Hub page (src/app/): shared HTML helpers, reader-view
+ * Unit & static checks for the notebook page (src/app/): shared HTML helpers, reader-view
  * article formatting, status badges, and markup/CSS regression guards. Runs in Node, so
  * src/app/app.js must stay importable without a DOM or chrome.* APIs.
  */
@@ -11,7 +11,7 @@ import { highlightSearch, escapeHtml, reasonLabel, offlineSummaryHtml, isOffline
 import { plannedSource } from '../src/ai/summarizer.js';
 import { formatExtractedArticle, getStatusBadge, closedReason, closedException, closedWhen, closedTodayHeading, firstRunCopy, resolvesToHeuristic, starLabel } from '../src/app/app.js';
 
-console.log('--- Running Knowledge Hub Unit & Markup Verification Tests ---');
+console.log('--- Running Notebook Unit & Markup Verification Tests ---');
 
 // Test 1: highlightSearch with standard queries
 console.log('Testing highlightSearch basic and case-insensitive matching...');
@@ -150,7 +150,7 @@ assert.strictEqual(starLabel(false, { fadeUnopenedDays: 0, fadeReopenedDays: 0 }
 assert.strictEqual(starLabel(true, { fadeUnopenedDays: 0, fadeReopenedDays: 0 }), 'Unstar');
 assert.strictEqual(starLabel(false, null), 'Star', 'settings not loaded yet: no claim');
 
-// Receipt reasons are derived from the record, never invented
+// Closed today reasons are derived from the record, never invented
 assert.match(closedReason({ closureTier: 'safe_to_close', closureReason: 'Pure stateless reading article' }), /idle/, 'a plain reading page closed after sitting idle');
 assert.match(closedReason({ closureTier: 'suspend_only', closureReason: 'Contains form or interactive input controls', closedFrom: 'suspended' }), /Slept first/, 'a tab that slept before closing says so');
 assert.match(closedReason({ closureTier: 'suspend_only', closureReason: 'Contains form or interactive input controls' }), /Sat idle/, 'a suspend_only page closed directly (close mode) never slept');
@@ -158,7 +158,7 @@ assert.match(closedReason({ closureTier: 'suspend_only', closureReason: 'Closed:
 assert.match(closedReason({}), /idle/, 'a record with no closure data still gets an honest idle reason');
 console.log('✓ Closed-today reasons derived from closureTier / closureReason');
 
-// Receipt row timing: idle time only when both stamps are real
+// Closed today card timing: idle time only when both stamps are real
 const closedAtMs = new Date(2026, 9, 13, 10, 42).getTime();
 assert.match(closedWhen({ lastClosedAt: closedAtMs, lastActiveAt: closedAtMs - 64 * 60000 }), /^closed .*42.* · idle 64 min$/, 'closed time plus idle minutes');
 assert.match(closedWhen({ lastClosedAt: closedAtMs, lastActiveAt: closedAtMs - 125 * 60000 }), / · idle 2 h 5 min$/, 'idle from two hours up reads in hours');
@@ -167,7 +167,7 @@ assert.ok(!closedWhen({ lastClosedAt: closedAtMs }).includes('idle'), 'no lastAc
 assert.ok(!closedWhen({ lastClosedAt: closedAtMs, lastActiveAt: closedAtMs + 60000 }).includes('idle'), 'a stamp from after the close is not idle time');
 assert.ok(!closedWhen({ lastClosedAt: closedAtMs, lastActiveAt: closedAtMs - 20000 }).includes('idle'), 'under a minute is not worth stating');
 assert.strictEqual(closedWhen({}), '', 'a record with no closure says nothing');
-console.log('✓ Receipt closed time and idle time derived from the record');
+console.log('✓ Closed today closed time and idle time derived from the record');
 
 // Closed today: the common reason (sat idle) goes in the heading once; cards state only exceptions
 assert.strictEqual(closedException({ closureTier: 'safe_to_close' }), '', 'plain idleness is not repeated on the card');
@@ -248,7 +248,7 @@ console.log('Verifying src/options/options.js logic for new settings...');
 const optionsJs = fs.readFileSync(path.resolve('src/options/options.js'), 'utf-8');
 assert.ok(!optionsJs.includes("from '../storage/db.js'") || !optionsJs.includes('exportTabs'), 'options.js must not import the removed db.exportTabs');
 assert.ok(optionsJs.includes('saveArchivedTab'), 'options.js must call saveArchivedTab to restore an imported backup');
-assert.ok(optionsJs.includes("getURL('src/app/index.html')"), 'options.js "Open Wiki" must open the merged src/app/index.html page');
+assert.ok(optionsJs.includes("getURL('src/app/index.html')"), 'options.js "Open notebook" must open the merged src/app/index.html page');
 
 // Test 13: Regression guards for fixed bugs (CSP inline handler, third-party favicon leak)
 // and for the one-page merge (surface detection, no references to the removed pages)
@@ -309,4 +309,4 @@ assert.strictEqual(theme.nextTheme('dark'), 'system');
 assert.strictEqual(theme.normalizeTheme('purple'), 'system', 'an unknown value is System');
 console.log('✓ Theme tokens match, native controls follow the theme, boot script comes first');
 
-console.log('--- All Knowledge Hub Unit & Markup Verification Tests Passed Successfully! ---');
+console.log('--- All Notebook Unit & Markup Verification Tests Passed Successfully! ---');

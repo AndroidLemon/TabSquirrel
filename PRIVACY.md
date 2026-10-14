@@ -8,7 +8,7 @@ Tab Squirrel summarizes inactive browser tabs and stores the summaries in your b
 
 To do its job, Tab Squirrel reads two kinds of data from your browser:
 
-- **Website content.** The text of a web page, read from an inactive tab that is about to be archived, or from the active tab when you press the archive shortcut. Only pages on sites you have granted access to are read. Tab Squirrel also checks the page for unsaved form input and playing media so it can leave those tabs alone.
+- **Website content.** The text of a web page, read from an inactive tab that is about to be closed or put to sleep, or from the active tab when you press the save shortcut. Only pages on sites you have granted access to are read. Tab Squirrel also checks the page for unsaved form input and playing media so it can leave those tabs alone.
 - **Tab metadata.** The URL, title, and favicon of each tab, and the time it was last active. This is how Tab Squirrel decides which tabs are inactive and how it reopens a tab later.
 
 Tab Squirrel reads nothing else. It does not store or send cookies, passwords or form values. To spot unsaved typing, it only checks inside the page whether a field has changed. It reads nothing from sites you have not granted access to.
@@ -28,7 +28,7 @@ Nothing is synced to other devices or to any Google account. Like all extension 
 
 Page text leaves your computer only if you choose one of these summarization providers in Settings:
 
-- **Google Gemini.** If you enter a Gemini API key, the extracted text of each archived page is sent to Google's Gemini API using your key. Google's terms and privacy policy for that API apply to those requests. Tab Squirrel sends the page text and nothing else.
+- **Google Gemini.** If you enter a Gemini API key, the extracted text of each page is sent to Google's Gemini API using your key. Google's terms and privacy policy for that API apply to those requests. Tab Squirrel sends the page text and nothing else.
 - **A local or OpenAI-compatible server.** If you enter a server URL, the extracted text is sent to that URL. This is typically a model running on your own machine. Access to the server's origin is granted through a permission prompt when you click Test Connection. What that server does with the text is up to whoever runs it.
 
 Favicons are read from Chrome's own local cache, never fetched from the site or from a third-party icon service.

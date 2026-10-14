@@ -97,7 +97,7 @@ https://github.com/AndroidLemon/TabSquirrel/blob/main/PRIVACY.md
 ## 4. Assets Checklist
 
 - [x] Icon 128×128 PNG (`src/assets/icons/icon-128.png`)
-- [ ] Screenshots, 1280×800, five (regenerate after rename/re-theme): full notebook, a summarized card expanded (reader view), a tag filter narrowing results, a composited side-panel view, and Options (`docs/store/01-notebook.png`, `docs/store/02-card-expanded.png`, `docs/store/03-search-filter.png`, `docs/store/04-side-panel.png`, `docs/store/05-options.png`). Regenerate with `npm run assets:store` (see `tests/store_assets.js`).
+- [ ] Screenshots, 1280×800, five (regenerate: the current files predate the Closed today feed): full notebook, a summarized card expanded (reader view), a tag filter narrowing results, a composited side-panel view, and Options (`docs/store/01-notebook.png`, `docs/store/02-card-expanded.png`, `docs/store/03-search-filter.png`, `docs/store/04-side-panel.png`, `docs/store/05-options.png`). Regenerate with `npm run assets:store` (see `tests/store_assets.js`).
 - [x] Small promo tile, 440×280 (`docs/store/promo-440x280.png`)
 - [x] Privacy policy URL (`PRIVACY.md`, see section 3)
 - [x] Upload zip: `npm run package` → `dist/tab-squirrel-<version>.zip` (manifest, `src/`, `LICENSE` only)

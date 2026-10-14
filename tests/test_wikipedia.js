@@ -1,8 +1,8 @@
 /**
- * Tab Squirrel - End-to-End Wikipedia Inactivity & Knowledge Archival Test
+ * Tab Squirrel - End-to-End Wikipedia Inactivity & Archival Test
  * Opens multiple arbitrary Wikipedia pages, verifies real DOM readability extraction,
  * auto-archives stale background tabs, protects active tabs, checks IndexedDB persistence,
- * and tests Wiki search and 1-click tab restoration.
+ * and tests notebook search and 1-click tab restoration.
  */
 
 import fs from 'node:fs';
@@ -198,7 +198,7 @@ async function runWikipediaMultiTabTest() {
     console.log(`  ✓ Active foreground tab (Voyager 1) was safely preserved!`);
 
     // 8. Verify IndexedDB Persistence
-    console.log('\n💾 Verifying IndexedDB Knowledge Wiki records...');
+    console.log('\n💾 Verifying IndexedDB note records...');
     const records = await sidepanel.evaluate(async () => {
       const { getArchivedTabs } = await import('/src/storage/db.js');
       return await getArchivedTabs();
@@ -222,22 +222,22 @@ async function runWikipediaMultiTabTest() {
     console.log(`    Takeaways: ${webbRecord.summary.bullets.length} bullets`);
     console.log(`    Tags: [${webbRecord.summary.tags.join(', ')}]`);
 
-    // 9. Verify Wiki Dashboard UI
-    console.log('\n📖 Opening Tab Squirrel Knowledge Wiki Dashboard UI...');
+    // 9. Verify notebook UI
+    console.log('\n📖 Opening Tab Squirrel notebook UI...');
     const wikiTab = await context.newPage();
     await wikiTab.goto(`chrome-extension://${extensionId}/src/app/index.html`);
     await wikiTab.waitForLoadState('domcontentloaded');
 
     await wikiTab.waitForSelector('.tab-card', { timeout: 8000 });
     const initialCardCount = await wikiTab.locator('.tab-card').count();
-    console.log(`  ✓ Rendered ${initialCardCount} knowledge cards in Wiki dashboard`);
+    console.log(`  ✓ Rendered ${initialCardCount} note cards in the notebook`);
 
     if (initialCardCount < 2) {
-      throw new Error(`Expected at least 2 cards in Wiki, got ${initialCardCount}`);
+      throw new Error(`Expected at least 2 cards in the notebook, got ${initialCardCount}`);
     }
 
     // 10. Test Full-Text Search in Wiki UI
-    console.log('\n🔍 Testing interactive full-text search in Wiki UI...');
+    console.log('\n🔍 Testing interactive full-text search in the notebook...');
     await wikiTab.fill('#search-input', 'Shannon');
     await wikiTab.waitForTimeout(400);
     const shannonFilterCount = await wikiTab.locator('.tab-card').count();
@@ -257,7 +257,7 @@ async function runWikipediaMultiTabTest() {
     console.log(`  Filter cleared: ${clearedCount} cards displayed`);
 
     // 11. Test 1-Click Tab Restoration
-    console.log('\n🔄 Testing 1-Click Tab Restoration from Wiki UI...');
+    console.log('\n🔄 Testing 1-Click Tab Restoration from the notebook...');
     const pagesBeforeRestore = context.pages().length;
     
     // Click reopen on the first card

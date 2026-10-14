@@ -376,7 +376,7 @@ async function runHybridTests() {
     });
 
     assert.strictEqual(postSweepTabs.pureExists, false, 'Pure article tab must be closed in hybrid mode');
-    console.log('✓ Pure article was automatically closed into Wiki');
+    console.log('✓ Pure article was automatically closed into the notebook');
 
     assert.strictEqual(postSweepTabs.formTabExists, true, 'Form page tab must NOT be closed');
     assert.ok(postSweepTabs.formTabTitle.startsWith('💤 '), `Form tab must have sleeping indicator 💤 prefix, got: "${postSweepTabs.formTabTitle}"`);
@@ -401,7 +401,7 @@ async function runHybridTests() {
     assert.strictEqual(formRecord.closureTier, 'suspend_only', 'Form page record closureTier must be suspend_only');
     console.log('✓ Form page record verified: status = "discarded", tier = "suspend_only"');
 
-    // --- Test 3: Status badges in both layouts of the Knowledge Hub page ---
+    // --- Test 3: Status badges in both layouts of the notebook page ---
     console.log('\n--- Test 3: UI Badge Status Rendering (Sleeping badged, Closed not) ---');
 
     // One page serves the side panel (narrow layout) and the full view (wide layout)

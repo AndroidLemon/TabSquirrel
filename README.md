@@ -187,7 +187,8 @@ src/
   shared/closure-policy.js     Pure decision engine: sweep triage, safety tiers, close vs suspend
   shared/fade.js               Pure rule for when an unstarred note deletes itself
   shared/export.js             Markdown, Obsidian zip, JSON export and import
-  shared/html.js               escapeHtml, highlightSearch, faviconUrl, fade chip
+  shared/html.js               escapeHtml, highlightSearch, faviconUrl, fade chip, closure-reason wording
+  shared/theme.js              System / Light / Dark choice; theme-boot.js applies it before first paint
   shared/with-timeout.js       Promise timeout helper
   app/                         The notebook: one page for side panel and full view
   options/                     Options page

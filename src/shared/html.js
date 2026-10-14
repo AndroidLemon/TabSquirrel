@@ -1,5 +1,5 @@
 /**
- * Tab Squirrel - Shared HTML helpers for extension pages (side panel, wiki, options).
+ * Tab Squirrel - Shared HTML helpers for extension pages (notebook, options).
  */
 
 import { fadeChipLabel, fadeDateLabel, FADE_DATE_DAYS } from './fade.js';

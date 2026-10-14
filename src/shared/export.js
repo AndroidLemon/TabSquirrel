@@ -1,6 +1,6 @@
 /**
  * Tab Squirrel - Shared export helpers (Markdown, Obsidian vault, JSON backup) for the
- * wiki dashboard and options page. Keeping this in one place avoids the two pages
+ * notebook and options page. Keeping this in one place avoids the two pages
  * producing two different, incompatible export formats.
  */
 

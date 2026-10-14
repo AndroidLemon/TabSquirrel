@@ -159,7 +159,7 @@ assert.strictEqual(
 );
 console.log('✓ In-tab extractor title separator regex passed');
 
-// Test 9: Knowledge Wiki Export (Markdown, Obsidian, JSON)
+// Test 9: Notes Export (Markdown, Obsidian, JSON)
 import './test_export.js';
 
 // Test 10: Storage layer (IndexedDB)
@@ -172,7 +172,7 @@ await runSortingTests();
 // Test 12: Closure Policy Engine
 import './test_closure_policy.js';
 
-// Wiki & Modal UX (Highlighting, Typography, Dialog Markup)
+// Notebook & Modal UX (Highlighting, Typography, Dialog Markup)
 import './test_app_unit.js';
 
 // Test 13: Local / OpenAI-compatible summarization tier

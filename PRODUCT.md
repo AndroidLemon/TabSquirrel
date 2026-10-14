@@ -40,13 +40,13 @@ Tab suspenders free memory but leave the clutter and keep no record. Read-later 
 ## Brand Commitments
 
 - Name: **Tab Squirrel** (committed 2026-10-12). The rename landed 2026-10-13, including the GitHub repository (AndroidLemon/TabSquirrel). Icon: an acorn whose cap is a browser-tab shape (src/assets/icons/icon.svg).
-- Icon: an acorn whose cap is a browser-tab shape. This is provisional, not final.
+- The icon is provisional, not final.
 - Voice: plain, specific and honest about limits. For example, the README says "No heuristic is infallible", and the UI says there is no Undo when there isn't one.
 
 ## Evidence on Hand
 
-- README.md, PRIVACY.md and docs/CHROMEWEBSTORE.md hold the current product copy, under the legacy name.
-- Store screenshots and GIFs from PR #10 are out of date once the rename and re-theme land.
+- README.md, PRIVACY.md and docs/CHROMEWEBSTORE.md hold the current product copy.
+- The store screenshots and GIFs in docs/store/ predate the Closed today feed and the Inbox exit rule. Regenerate them with `npm run assets:store`.
 - There are no users, testimonials, reviews, usage numbers or store listing yet. Do not invent any.
 
 ## Product Principles

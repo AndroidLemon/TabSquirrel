@@ -1,5 +1,5 @@
 /**
- * Automated Unit Tests for the shared Knowledge Wiki export module
+ * Automated Unit Tests for the shared export module
  * (Markdown, Obsidian vault .zip, JSON backup).
  */
 
@@ -22,7 +22,7 @@ import {
 } from '../src/shared/export.js';
 import { escapeHtml } from '../src/shared/html.js';
 
-console.log('--- Running Tab Squirrel Knowledge Wiki Export Unit Tests ---');
+console.log('--- Running Tab Squirrel Notes Export Unit Tests ---');
 
 const mockTab1 = {
   id: 'tab-001',
@@ -219,7 +219,7 @@ assert.ok(!escapeHtml('"><script>alert(1)</script>').includes('"'), 'Double quot
 assert.ok(!escapeHtml("'><img src=x>").includes("'"), 'Single quotes must be escaped');
 console.log('✓ escapeHtml quote-escaping verified');
 
-console.log('--- All Knowledge Wiki Export Unit Tests Passed Successfully! ---');
+console.log('--- All Notes Export Unit Tests Passed Successfully! ---');
 
 /**
  * Minimal ZIP local-file-header parser for test verification (STORE method only).

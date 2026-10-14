@@ -1,7 +1,7 @@
 /**
  * Tab Squirrel - Milestone 7 Keyboard Shortcuts & Navigation Verification Test
  * Verifies manifest command bindings, service worker onCommand listener,
- * notification & badge updates, and Knowledge Hub keyboard navigation (/, Escape, Enter).
+ * notification & badge updates, and notebook keyboard navigation (/, Escape, Enter).
  */
 
 import http from 'node:http';
@@ -97,7 +97,7 @@ async function runShortcutsTests() {
       };
     });
 
-    // Helper page to communicate with background service worker: the Knowledge Hub page at
+    // Helper page to communicate with background service worker: the notebook page at
     // side-panel width (narrow layout)
     const helperPage = await context.newPage();
     await helperPage.setViewportSize({ width: 380, height: 800 });
@@ -152,8 +152,8 @@ async function runShortcutsTests() {
     assert.strictEqual(archivedRecord.title, 'Keyboard Shortcuts in Modern Web Applications');
     console.log(`✓ Verified record persisted in IndexedDB: "${archivedRecord.title}"\n`);
 
-    // --- TEST 3: Knowledge Hub Keyboard Navigation ---
-    console.log('--- Test 3: Knowledge Hub Keyboard Navigation (/, Escape, Enter) ---');
+    // --- TEST 3: Notebook Keyboard Navigation ---
+    console.log('--- Test 3: Notebook Keyboard Navigation (/, Escape, Enter) ---');
     // Refresh the feed
     await helperPage.evaluate(async () => {
       window.location.reload();
@@ -162,7 +162,7 @@ async function runShortcutsTests() {
 
     // Wait for feed to load the archived card
     await helperPage.waitForSelector('.tab-card', { timeout: 5000 });
-    console.log('✓ Knowledge Hub loaded with knowledge cards');
+    console.log('✓ Notebook loaded with note cards');
 
     // 3a. Pressing '/' focuses search input
     console.log('Testing "/" key focus shortcut...');
