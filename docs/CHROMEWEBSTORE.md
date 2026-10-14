@@ -97,11 +97,19 @@ https://github.com/AndroidLemon/TabSquirrel/blob/main/PRIVACY.md
 ## 4. Assets Checklist
 
 - [x] Icon 128×128 PNG (`src/assets/icons/icon-128.png`)
-- [ ] Screenshots, 1280×800, five (regenerate: the current files predate the Closed today feed): full notebook, a summarized card expanded (reader view), a tag filter narrowing results, a composited side-panel view, and Options (`docs/store/01-notebook.png`, `docs/store/02-card-expanded.png`, `docs/store/03-search-filter.png`, `docs/store/04-side-panel.png`, `docs/store/05-options.png`). Regenerate with `npm run assets:store` (see `tests/store_assets.js`).
-- [x] Small promo tile, 440×280 (`docs/store/promo-440x280.png`)
+- [x] Screenshots, 1280×800, five (the store's maximum). Regenerate with `npm run assets:store` (see `tests/store_assets.js`); the seed notes are written so the shots read the same on any day:
+  - `docs/store/01-notebook.png`: the full-tab notebook in the light theme, Closed today open at the top ("Closed 4 tabs for you today, all idle 60+ min · 1 reopened") with its note cards, one starred and one reopened.
+  - `docs/store/02-card-expanded.png`: a summarized note open in the reader (summary box, then the saved text, with Reopen tab, Star, Delete and Copy), in the dark theme.
+  - `docs/store/03-search-filter.png`: the `#frontend` tag filter narrowing the notebook to three notes, with the filter banner and Clear.
+  - `docs/store/04-side-panel.png`: the side panel beside an article, showing Closed today and its cards.
+  - `docs/store/05-options.png`: Options, "What happens to an idle tab" (Close or sleep, Sleep only, Close all) and the settings under it.
+- [x] Small promo tile, 440×280 (`docs/store/promo-440x280.png`): the icon, "Tab Squirrel" and "Close idle tabs, keep the gist."
 - [x] Privacy policy URL (`PRIVACY.md`, see section 3)
 - [x] Upload zip: `npm run package` → `dist/tab-squirrel-<version>.zip` (manifest, `src/`, `LICENSE` only)
-- Demo GIFs (not a dashboard requirement, but useful for the listing copy or a README): `docs/store/demo-notebook.gif`, `docs/store/demo-keyboard.gif`.
+- Demo GIFs (not a dashboard requirement, but useful for the listing copy or a README; about 5 to 6 MB each at 880px wide):
+  - `docs/store/demo-notebook.gif`: opening on Closed today, searching, filtering by tag, reading a note, folding Closed today to one line per note, starring, scrolling on to the rest of the Inbox (a sleeping tab, an offline summary), then switching the theme with the footer button.
+  - `docs/store/demo-keyboard.gif`: the keyboard flow: `j`/`k` to move, `o` to read, `s` to star, Delete, then `u` to undo from the toast.
+- Toast crops (`docs/store/06-toast.png`, `06-toast-undo-hover.png`, `06-toast-error.png`, `06-toast-error-undo.png`): the bottom-right toast with "Undo (U)", with Undo hovered, as an error, and as an error with Undo. Not required by the dashboard; for docs.
 
 ---
 

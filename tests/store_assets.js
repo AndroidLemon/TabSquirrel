@@ -27,14 +27,33 @@ const USER_DATA_DIR = path.join(TMP_ROOT, 'profile');
 const WIDE = { width: 1280, height: 800 };
 const PROMO = { width: 440, height: 280 };
 
-const NOW = Date.now();
+// A fixed mid-afternoon "now" (today, 3:30 pm) instead of the real clock, so the times on the cards read
+// naturally whatever hour the script runs. Every page in the contexts below is pinned to it (pinClock).
+const NOW = new Date().setHours(15, 30, 0, 0);
 const DAY = 24 * 60 * 60 * 1000;
 const HOUR = 60 * 60 * 1000;
+const MIN = 60 * 1000;
 const ago = (days, hours = 0) => NOW - days * DAY - hours * HOUR;
 
+// Tab Squirrel's "today" starts at local midnight; a closure stamped before it would not show in Closed today.
+const START_OF_TODAY = new Date(NOW).setHours(0, 0, 0, 0);
+
+/**
+ * Timestamps for a tab the idle sweep closed `minutesAgo` minutes ago after it sat unused for
+ * `idleMinutes` (the note is saved a moment before the tab closes). Clamped into today so a run
+ * just after midnight still has the closure on today's record; the heading's "idle 60+ min" only
+ * holds while every idleMinutes is at least the 60-minute default threshold.
+ */
+function closedToday(slot, minutesAgo, idleMinutes) {
+  const closedAt = Math.min(NOW - MIN, Math.max(NOW - minutesAgo * MIN, START_OF_TODAY + (slot + 1) * MIN));
+  return { capturedAt: closedAt - MIN, closedAt, lastClosedAt: closedAt, lastActiveAt: closedAt - idleMinutes * MIN };
+}
+
 // ---------------------------------------------------------------------------
-// Seed data: ~12 notes across varied real domains, spread over the past two
-// weeks, with overlapping tags, a couple of favorites, and several closed today.
+// Seed data: 13 notes across varied real domains, spread over the past month. Four were closed
+// today by the idle sweep (n1, n3, n5, n4), one of those since reopened (n4) and one starred (n3);
+// n2 is asleep (no AI summary, so it was not closed); n13 is about to fade. Only n2 has an
+// offline summary: Tab Squirrel closes a tab only when an AI model wrote its summary.
 // ---------------------------------------------------------------------------
 const NOTES = [
   {
@@ -42,9 +61,10 @@ const NOTES = [
     url: 'https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_cascade_layers',
     title: 'Understanding the CSS Cascade Layers',
     domain: 'developer.mozilla.org',
-    capturedAt: ago(0, 1),
-    closedAt: ago(0, 1),
+    ...closedToday(0, 18, 74),
     status: 'archived',
+    closureTier: 'close',
+    closureReason: 'Pure stateless reading article',
     summarySource: 'prompt-api',
     isFavorite: false,
     readingTimeMinutes: 6,
@@ -66,8 +86,9 @@ const NOTES = [
     title: 'Byzantine Empire',
     domain: 'en.wikipedia.org',
     capturedAt: ago(0, 3),
-    closedAt: ago(0, 3),
-    status: 'archived',
+    lastActiveAt: ago(0, 4),
+    status: 'discarded',
+    closureReason: 'Suspended instead of closed: no AI summary available',
     summarySource: 'heuristic',
     isFavorite: false,
     readingTimeMinutes: 12,
@@ -88,11 +109,13 @@ const NOTES = [
     url: 'https://arxiv.org/abs/2409.01234',
     title: 'Attention Is All You Need: A Ten-Year Retrospective',
     domain: 'arxiv.org',
-    capturedAt: ago(0, 5),
-    closedAt: ago(0, 5),
+    ...closedToday(1, 52, 67),
     status: 'archived',
+    closureTier: 'close',
+    closureReason: 'Pure stateless reading article',
     summarySource: 'gemini-api',
     isFavorite: true,
+    filedAt: NOW - 35 * MIN, // starred after the tab closed
     readingTimeMinutes: 9,
     summary: {
       tldr: "Ten years after \"Attention Is All You Need\", the transformer architecture still underlies most state-of-the-art language and multimodal models.",
@@ -111,9 +134,12 @@ const NOTES = [
     url: 'https://news.ycombinator.com/item?id=41800000',
     title: 'Show HN: A tiny WASM runtime for edge functions',
     domain: 'news.ycombinator.com',
-    capturedAt: ago(0, 8),
-    closedAt: ago(0, 8),
-    status: 'archived',
+    ...closedToday(3, 141, 120),
+    closedAt: null, // the closure no longer stands: it was reopened
+    restoredAt: NOW - 26 * MIN,
+    status: 'restored',
+    closureTier: 'close',
+    closureReason: 'Pure stateless reading article',
     summarySource: 'openai-compatible',
     isFavorite: false,
     readingTimeMinutes: 4,
@@ -133,9 +159,10 @@ const NOTES = [
     url: 'https://web.dev/articles/optimize-lcp',
     title: 'Optimizing Largest Contentful Paint in 2026',
     domain: 'web.dev',
-    capturedAt: ago(0, 10),
-    closedAt: ago(0, 10),
+    ...closedToday(2, 95, 88),
     status: 'archived',
+    closureTier: 'close',
+    closureReason: 'Pure stateless reading article',
     summarySource: 'prompt-api',
     isFavorite: false,
     readingTimeMinutes: 7,
@@ -159,7 +186,7 @@ const NOTES = [
     capturedAt: ago(2),
     closedAt: ago(2),
     status: 'archived',
-    summarySource: 'heuristic',
+    summarySource: 'gemini-api',
     isFavorite: false,
     readingTimeMinutes: 5,
     summary: {
@@ -179,8 +206,9 @@ const NOTES = [
     title: 'The Science of a Perfect Sourdough Starter',
     domain: 'www.seriouseats.com',
     capturedAt: ago(3),
-    status: 'discarded',
-    summarySource: 'heuristic',
+    closedAt: ago(3),
+    status: 'archived',
+    summarySource: 'prompt-api',
     isFavorite: false,
     readingTimeMinutes: 8,
     summary: {
@@ -205,6 +233,7 @@ const NOTES = [
     status: 'archived',
     summarySource: 'openai-compatible',
     isFavorite: true,
+    filedAt: ago(4),
     readingTimeMinutes: 10,
     summary: {
       tldr: "A budget-minded guide to seeing Kyoto's temples, gardens and food culture without overspending.",
@@ -271,7 +300,7 @@ const NOTES = [
     capturedAt: ago(10),
     status: 'captured',
     closureReason: 'Saved manually; tab left open',
-    summarySource: 'heuristic',
+    summarySource: 'prompt-api',
     isFavorite: false,
     readingTimeMinutes: 9,
     summary: {
@@ -293,7 +322,7 @@ const NOTES = [
     capturedAt: ago(13),
     closedAt: ago(13),
     status: 'archived',
-    summarySource: 'heuristic',
+    summarySource: 'openai-compatible',
     isFavorite: false,
     readingTimeMinutes: 3,
     summary: {
@@ -306,6 +335,32 @@ const NOTES = [
       tags: ['programming']
     },
     cleanText: 'The thread asks which terminal multiplexer people reach for in 2026, and the top replies split fairly evenly between tmux and the newer Zellij.\n\nZellij fans cite its more discoverable default keybindings, while tmux holdouts point to its maturity and ubiquity on remote servers.\n\nThe most commonly cited reason to use either one at all is keeping a session alive across a dropped SSH connection.'
+  },
+  {
+    // Unopened for 28 of the 30 days notes last, so it shows "Fading soon".
+    id: 'n13',
+    url: 'https://www.seriouseats.com/how-to-pull-a-better-espresso-shot',
+    title: 'How to Pull a Better Espresso Shot at Home',
+    domain: 'www.seriouseats.com',
+    capturedAt: ago(28, 4),
+    closedAt: ago(28, 4),
+    status: 'archived',
+    closureTier: 'close',
+    closureReason: 'Pure stateless reading article',
+    summarySource: 'gemini-api',
+    isFavorite: false,
+    readingTimeMinutes: 7,
+    summary: {
+      tldr: 'Most bad espresso comes from three variables: grind size, dose and shot time. Change one at a time and taste after each.',
+      bullets: [
+        'Aim for a 1:2 ratio, such as 18 g of coffee in and 36 g of espresso out, in about 25 to 30 seconds.',
+        'A shot that runs fast and tastes sour is under-extracted; grind finer.',
+        'A shot that runs slow and tastes bitter is over-extracted; grind coarser.',
+        'Weigh the dose and the output instead of eyeballing them.'
+      ],
+      tags: ['cooking', 'coffee']
+    },
+    cleanText: 'Pulling a good shot is mostly a matter of controlling three things: how finely the coffee is ground, how much of it goes in the basket, and how long the water takes to pass through it.\n\nA reliable starting point is a 1:2 ratio, for example 18 grams of ground coffee producing 36 grams of liquid espresso in roughly 25 to 30 seconds.\n\nIf the shot runs fast and tastes sharp or sour, the coffee is under-extracted and the grind should go finer. If it drips slowly and tastes bitter, go coarser. Change one variable at a time.'
   }
 ];
 
@@ -313,11 +368,47 @@ const NOTES = [
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Writes the seed notes by id, so running it again resets anything a shot changed (stars, reads,
+ * deletes). Also forgets that Closed today was already shown, which is what makes the section
+ * open expanded (full cards) instead of one line per note.
+ */
 async function seedNotes(page) {
   await page.evaluate(async (notes) => {
     const { saveArchivedTab } = await import('/src/storage/db.js');
     for (const note of notes) await saveArchivedTab(note);
+    await chrome.storage.local.remove(['closed_today_seen', 'theme']);
+    localStorage.removeItem('theme'); // theme-boot.js's copy of the choice
   }, NOTES);
+}
+
+/** Pins every page in the context to NOW; timers still run. Extension pages included. */
+const pinClock = (context) => context.clock.setFixedTime(NOW);
+
+/** Shows the toast without running its timer, so it stays put for the screenshot. */
+const setToast = (page, msg, error, undo) => page.evaluate(([m, e, u]) => {
+  const t = document.getElementById('toast');
+  document.getElementById('toast-message').textContent = m;
+  t.classList.toggle('error', e);
+  document.getElementById('toast-undo-btn').hidden = !u;
+  const p = document.getElementById('toast-progress');
+  p.style.animation = 'none';
+  p.style.width = u ? '62%' : '0';
+  t.classList.remove('hidden', 'paused');
+  if (!t.matches(':popover-open')) t.showPopover();
+}, [msg, error, undo]);
+
+const hideToastNow = (page) => page.evaluate(() => {
+  const t = document.getElementById('toast');
+  t.classList.add('hidden');
+  if (t.matches(':popover-open')) t.hidePopover();
+});
+
+/** Chooses the notebook theme the way the Settings page does: the stored choice, which every open page follows. */
+async function chooseTheme(page, theme) {
+  await page.evaluate(async (t) => { await chrome.storage.local.set({ theme: t }); }, theme);
+  await page.waitForFunction((t) => (t === 'system' ? !document.documentElement.dataset.theme : document.documentElement.dataset.theme === t), theme);
+  await page.waitForTimeout(250);
 }
 
 /**
@@ -415,7 +506,7 @@ async function makePromoTile(context) {
   <img src="data:image/png;base64,${iconB64}" alt="Tab Squirrel">
   <div class="copy">
     <div class="name">Tab Squirrel</div>
-    <div class="tagline">Close the tabs you were never going to read, and keep what was in them.</div>
+    <div class="tagline">Close idle tabs, keep the gist.</div>
   </div>
 </body></html>`;
   const page = await context.newPage();
@@ -429,46 +520,81 @@ async function makePromoTile(context) {
 
 async function webmToGif(webmPath, gifPath) {
   const paletteFile = path.join(TMP_ROOT, `${path.basename(gifPath, '.gif')}-palette.png`);
-  const filters = 'fps=12,scale=960:-1:flags=lanczos';
-  // max_colors=112 (instead of the usual 256) and no dithering: a flat-color UI recording
-  // compresses far better without dither noise, keeping the GIF comfortably under 5MB at
-  // 12fps/960px wide without any visible banding.
-  execFileSync('ffmpeg', ['-y', '-i', webmPath, '-vf', `${filters},palettegen=stats_mode=diff:max_colors=112`, paletteFile], { stdio: 'inherit' });
+  const filters = 'fps=10,scale=880:-1:flags=lanczos';
+  // max_colors=96 (instead of the usual 256) and no dithering: a flat-color UI recording
+  // compresses far better without dither noise, keeping the GIFs to about 5 to 6 MB at
+  // 10fps/880px wide without any visible banding.
+  execFileSync('ffmpeg', ['-y', '-i', webmPath, '-vf', `${filters},palettegen=stats_mode=diff:max_colors=96`, paletteFile], { stdio: 'inherit' });
   execFileSync('ffmpeg', ['-y', '-i', webmPath, '-i', paletteFile, '-lavfi', `${filters}[x];[x][1:v]paletteuse=dither=none`, gifPath], { stdio: 'inherit' });
   fs.rmSync(paletteFile, { force: true });
   fs.rmSync(webmPath, { force: true });
 }
 
+/** Resets the seed notes and the "already shown" state on a throwaway page, so each clip starts from the same notebook. */
+async function reseed(context, appUrl) {
+  const page = await context.newPage();
+  await page.goto(appUrl);
+  await page.waitForLoadState('domcontentloaded');
+  await seedNotes(page);
+  await page.close();
+}
+
 async function recordNotebookDemo(context, appUrl) {
+  await reseed(context, appUrl);
   const page = await context.newPage();
   await page.setViewportSize(WIDE);
   await page.goto(appUrl);
-  await page.waitForSelector('.tab-card');
-  await page.waitForTimeout(700);
+  await page.waitForSelector('#closed-today-list .tab-card');
+  await page.waitForTimeout(1800); // Closed today, as it opens
 
+  // Search
   const search = page.locator('#search-input');
   await search.click();
-  await search.pressSequentially('css cascade', { delay: 130 });
+  await search.pressSequentially('cascade', { delay: 130 });
   await page.waitForTimeout(1200);
-
   await page.locator('#search-clear-btn').click();
+  await page.waitForSelector('#closed-today-list .tab-card');
   await page.waitForTimeout(700);
 
+  // Tag filter
   await page.click('#sidebar-tags [data-tag="frontend"]');
+  await page.waitForFunction(() => document.getElementById('closed-today').hidden);
   await page.waitForTimeout(1300);
-
   await page.click('#clear-filter-btn');
+  await page.waitForSelector('#closed-today-list .tab-card');
   await page.waitForTimeout(700);
 
-  await page.click('.tab-card[data-id="n1"] .reader-btn');
+  // Read a note
+  await page.click('.tab-card[data-id="n1"] .card-title-btn');
   await page.waitForFunction(() => document.getElementById('modal-text-content').textContent.includes('cascade layers solve'));
   await page.waitForTimeout(1600);
-
   await page.keyboard.press('Escape');
-  await page.waitForTimeout(700);
+  await page.waitForTimeout(600);
 
-  await page.click('.tab-card[data-id="n9"] .star-btn');
-  await page.waitForTimeout(1400);
+  // Fold Closed today to one line per note, then open it again
+  await page.click('#closed-today-toggle');
+  await page.waitForTimeout(1300);
+  await page.click('#closed-today-toggle');
+  await page.waitForTimeout(900);
+
+  // Star a note from the Inbox
+  await page.click('#tabs-feed .tab-card[data-id="n9"] .star-btn');
+  await page.waitForTimeout(1500);
+
+  // Scroll on to the rest of the Inbox: a sleeping tab, an offline summary, a note about to fade
+  await page.evaluate(() => document.getElementById('feed-heading').scrollIntoView({ behavior: 'instant', block: 'start' }));
+  await page.waitForTimeout(1800);
+  await page.evaluate(() => document.getElementById('feed-heading').scrollIntoView({ behavior: 'instant', block: 'end' }));
+  await page.waitForTimeout(1200);
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+  await page.evaluate(() => document.querySelector('.main')?.scrollTo?.({ top: 0, behavior: 'instant' }));
+  await page.waitForTimeout(1200);
+
+  // Theme: System -> Light -> Dark
+  await page.click('#theme-btn');
+  await page.waitForTimeout(400);
+  await page.click('#theme-btn');
+  await page.waitForTimeout(1600);
 
   const video = page.video();
   await page.close();
@@ -476,39 +602,38 @@ async function recordNotebookDemo(context, appUrl) {
 }
 
 async function recordKeyboardDemo(context, appUrl) {
+  await reseed(context, appUrl);
   const page = await context.newPage();
   await page.setViewportSize(WIDE);
   await page.goto(appUrl);
-  await page.waitForSelector('.tab-card');
+  await page.waitForSelector('#closed-today-list .tab-card');
   await page.evaluate(() => document.activeElement?.blur());
+  await page.waitForTimeout(1200);
+
+  // j / k: move through the notes
+  for (const key of ['j', 'j', 'j', 'k']) {
+    await page.keyboard.press(key);
+    await page.waitForTimeout(650);
+  }
+
+  // o: read the selected note, Esc: back to the list
+  await page.keyboard.press('o');
+  await page.waitForSelector('#reader-dialog[open]');
+  await page.waitForTimeout(1600);
+  await page.keyboard.press('Escape');
   await page.waitForTimeout(700);
 
-  await page.keyboard.press('j');
-  await page.waitForTimeout(650);
-  await page.keyboard.press('j');
-  await page.waitForTimeout(650);
-  await page.keyboard.press('j');
-  await page.waitForTimeout(650);
-  await page.keyboard.press('k');
-  await page.waitForTimeout(900);
+  // s: star the selected note
+  await page.keyboard.press('s');
+  await page.waitForTimeout(1400);
 
-  // Stub the round trip so Enter's reopen doesn't try to navigate to a real external site.
-  await page.evaluate(() => {
-    chrome.runtime.sendMessage = async (msg) => (msg?.type === 'RESTORE_TAB'
-      ? { success: true, restoredInPlace: false }
-      : { success: true });
-  });
-  await page.keyboard.press('Enter');
-  await page.waitForFunction(() => /reopened/i.test(document.getElementById('toast-message')?.textContent || ''));
-  await page.waitForTimeout(1300);
-
-  await page.keyboard.press('/');
-  await page.waitForTimeout(500);
-  await page.locator('#search-input').pressSequentially('node', { delay: 150 });
-  await page.waitForTimeout(1100);
-
-  await page.keyboard.press('Escape');
-  await page.waitForTimeout(1200);
+  // Delete, then u: undo while the bar shows
+  await page.keyboard.press('Delete');
+  await page.waitForFunction(() => !document.getElementById('toast').classList.contains('hidden'));
+  await page.waitForTimeout(1500);
+  await page.keyboard.press('u');
+  await page.waitForFunction(() => /restored/i.test(document.getElementById('toast-message')?.textContent || ''));
+  await page.waitForTimeout(1600);
 
   const video = page.video();
   await page.close();
@@ -533,6 +658,7 @@ async function main() {
   // ---- Pass 1: screenshots + promo tile ----
   let context = await chromium.launchPersistentContext(USER_DATA_DIR, baseLaunchOpts);
   try {
+    await pinClock(context);
     const background = await waitForServiceWorker(context);
     const extensionId = background.url().split('/')[2];
     const APP_URL = `chrome-extension://${extensionId}/src/app/index.html`;
@@ -546,10 +672,12 @@ async function main() {
     await page.waitForLoadState('domcontentloaded');
     await seedNotes(page);
     await page.reload();
-    await page.waitForSelector('.tab-card', { timeout: 10000 });
+    await page.waitForSelector('#closed-today-list .tab-card', { timeout: 10000 });
     console.log(`Seeded ${NOTES.length} notes.`);
+    await page.mouse.move(WIDE.width - 40, 400); // park the pointer off every card
+    await page.waitForTimeout(300);
 
-    // 01: full notebook
+    // 01: full notebook, Closed today open at the top, light theme
     await page.screenshot({ path: path.join(OUT_DIR, '01-notebook.png') });
     console.log('Wrote 01-notebook.png');
 
@@ -560,50 +688,37 @@ async function main() {
       await page.screenshot({ path: full }); // a clip option resets :hover, so crop afterwards
       execFileSync('magick', [full, '-crop', `520x110+${WIDE.width - 520}+${WIDE.height - 110}`, '+repage', path.join(OUT_DIR, name)]);
     };
-    const setToast = (msg, error, undo) => page.evaluate(([m, e, u]) => {
-      const t = document.getElementById('toast');
-      document.getElementById('toast-message').textContent = m;
-      t.classList.toggle('error', e);
-      document.getElementById('toast-undo-btn').hidden = !u;
-      const p = document.getElementById('toast-progress');
-      p.style.animation = 'none';
-      p.style.width = u ? '62%' : '0';
-      t.classList.remove('hidden');
-    }, [msg, error, undo]);
-    await setToast('Summary removed', false, true);
+    // The corner behind the toast is the feed's card text; blank the feed so the crops are just the toast.
+    await page.addStyleTag({ content: '#closed-today, #tabs-feed { visibility: hidden; }' });
+    await setToast(page, 'Note deleted.', false, true);
     await page.mouse.move(10, 10);
     await page.waitForTimeout(350);
     await toastShot('06-toast.png');
     await page.hover('#toast-undo-btn');
     await page.waitForTimeout(250);
     await toastShot('06-toast-undo-hover.png');
-    await setToast('Couldn\'t reopen that tab. Try again.', true, false);
+    await setToast(page, 'Couldn\'t reopen that tab. Try again.', true, false);
     await page.mouse.move(10, 10);
     await page.waitForTimeout(350);
     await toastShot('06-toast-error.png');
-    await setToast('Could not update favorite', true, true);
+    await setToast(page, 'Couldn\'t restore that note. Try again.', true, true);
     await page.mouse.move(10, 10);
     await page.waitForTimeout(350);
     await toastShot('06-toast-error-undo.png');
-    await page.evaluate(() => document.getElementById('toast').classList.add('hidden'));
+    await hideToastNow(page);
+    await page.evaluate(() => document.head.lastElementChild.remove());
+    await page.mouse.move(WIDE.width - 40, 400);
     await page.waitForTimeout(300);
 
-    // 02: card expanded / reader view
-    await page.click('.tab-card[data-id="n1"] .reader-btn');
-    await page.waitForFunction(() => document.getElementById('modal-text-content').textContent.includes('cascade layers solve'));
-    await page.waitForTimeout(300);
-    await page.screenshot({ path: path.join(OUT_DIR, '02-card-expanded.png') });
-    console.log('Wrote 02-card-expanded.png');
-    await page.keyboard.press('Escape');
-    await page.waitForTimeout(200);
-
-    // 03: tag filter narrowed (frontend -> n1, n5, n9)
+    // 03: tag filter narrowed (frontend -> n1, n5, n9). Before the reader shot, which files n1 out of the Inbox.
     await page.click('#sidebar-tags [data-tag="frontend"]');
-    await page.waitForFunction(() => document.querySelectorAll('#tabs-feed .tab-card').length === 3);
+    await page.waitForFunction(() => document.querySelectorAll('#tabs-feed .tab-card').length === 3 && document.getElementById('closed-today').hidden);
+    await page.mouse.move(WIDE.width - 40, 400);
     await page.waitForTimeout(250);
     await page.screenshot({ path: path.join(OUT_DIR, '03-search-filter.png') });
     console.log('Wrote 03-search-filter.png');
     await page.click('#clear-filter-btn');
+    await page.waitForSelector('#closed-today-list .tab-card');
     await page.waitForTimeout(200);
 
     // 05: options, scrolled to frame What happens to an idle tab cleanly at the top
@@ -619,7 +734,9 @@ async function main() {
     console.log('Wrote 05-options.png');
     await optionsPage.close();
 
-    // 04: side-panel composite (wrapper page + iframe of the app in panel mode)
+    // 04: side-panel composite (wrapper page + iframe of the app in panel mode). The first 01 load marked
+    // Closed today as shown, which would fold it to one line per note; forget that so it opens as full cards.
+    await page.evaluate(() => chrome.storage.local.remove('closed_today_seen'));
     const panelPage = await context.newPage();
     await panelPage.addInitScript(() => { chrome.tabs.getCurrent = () => Promise.resolve(undefined); });
     await panelPage.setViewportSize(WIDE);
@@ -631,12 +748,24 @@ async function main() {
     }, { timeout: 10000 });
     await panelPage.waitForFunction(() => {
       const frame = document.querySelector('iframe');
-      return frame?.contentDocument?.querySelectorAll('.tab-card').length > 0;
+      return frame?.contentDocument?.querySelectorAll('#closed-today-list .tab-card').length > 0;
     }, { timeout: 10000 });
+    await panelPage.mouse.move(300, 400); // over the article, off the panel's cards
     await panelPage.waitForTimeout(400);
     await panelPage.screenshot({ path: path.join(OUT_DIR, '04-side-panel.png') });
     console.log('Wrote 04-side-panel.png');
     await panelPage.close();
+
+    // 02: a note in the reader, in the dark theme (the one dark shot; the store allows five screenshots)
+    await chooseTheme(page, 'dark');
+    await page.click('.tab-card[data-id="n1"] .card-title-btn');
+    await page.waitForFunction(() => document.getElementById('modal-text-content').textContent.includes('cascade layers solve'));
+    await page.mouse.move(WIDE.width - 40, 400);
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: path.join(OUT_DIR, '02-card-expanded.png') });
+    console.log('Wrote 02-card-expanded.png');
+    await page.keyboard.press('Escape');
+    await chooseTheme(page, 'system');
 
     await makePromoTile(context);
     console.log('Wrote promo-440x280.png');
@@ -654,6 +783,7 @@ async function main() {
   const recordLaunchOpts = { ...baseLaunchOpts, recordVideo: { dir: videoDir, size: WIDE } };
   context = await chromium.launchPersistentContext(USER_DATA_DIR, recordLaunchOpts);
   try {
+    await pinClock(context);
     const background = await waitForServiceWorker(context);
     const extensionId = background.url().split('/')[2];
     const APP_URL = `chrome-extension://${extensionId}/src/app/index.html`;
