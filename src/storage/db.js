@@ -130,7 +130,8 @@ export async function saveArchivedTab(tabData) {
         summarySource: AI_SUMMARY_SOURCES.has(tabData.summarySource) ? tabData.summarySource : 'heuristic',
         closedAt: timestamp(tabData.closedAt, null), // set only while Tab Squirrel's closure of the tab stands
         // When Tab Squirrel last closed it; survives a reopen, so "Closed today" keeps its record
-        lastClosedAt: timestamp(tabData.lastClosedAt ?? tabData.closedAt, null),
+        // A recapture that carries neither field (the sweep suspending a reopened tab) keeps the old value
+        lastClosedAt: timestamp(tabData.lastClosedAt ?? tabData.closedAt ?? existing?.lastClosedAt, null),
         wordCount: tabData.wordCount || 0,
         // 'discarded' (suspended) | 'archived' (closed) | 'restored' (reopened) |
         // 'captured' (summary saved, tab still open: manual archive or Chrome refused to close/suspend)
@@ -341,7 +342,10 @@ async function updateRecord(id, mutate) {
  *   restored   the user reopened it. `closedAt` clears, but `lastClosedAt` stays: "Closed today"
  *              counts every note whose last closure was today and marks the reopened ones
  *
- * `lastClosedAt` is cleared only when a closure turns out not to hold (Chrome refused).
+ * `lastClosedAt` is cleared only when a closure turns out not to hold (Chrome refused to close or
+ * suspend the tab: markLeftOpen, markStaysSuspended). A recapture of the same URL that carries
+ * neither `lastClosedAt` nor `closedAt` (e.g. the sweep suspending a reopened tab) keeps it; one
+ * that carries `closedAt` replaces it. A row whose note is no longer closed shows as Reopened.
  */
 
 /**

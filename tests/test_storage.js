@@ -240,6 +240,14 @@ assert.strictEqual(reopened.closedAt, null, 'reopening clears closedAt');
 assert.strictEqual(reopened.lastClosedAt, asClosed.lastClosedAt, 'reopening keeps lastClosedAt');
 assert.ok(reopened.restoredAt > 0, 'reopening stamps restoredAt');
 
+// The sweep suspends the reopened tab again: the recapture must not wipe the record of the closure
+const resuspended = await recordCapture({ ...cap, url: 'https://lc.example/c1' }, 'suspended');
+assert.strictEqual(resuspended.id, asClosed.id, 'a recapture of the same URL reuses the record');
+assert.strictEqual(resuspended.status, 'discarded');
+assert.strictEqual(resuspended.closedAt, null, 'the recapture is not a closure');
+assert.strictEqual(resuspended.lastClosedAt, asClosed.lastClosedAt, 'a suspended recapture keeps lastClosedAt');
+assert.ok((await getArchivedTabs({ closedSince: 1 })).some(t => t.id === asClosed.id), 'so it stays in Closed today');
+
 // Chrome refused to close a tab we had suspended: it stays suspended, and must land in
 // neither "Closed today" nor the fully-open inbox.
 await saveArchivedTab({ id: 'lc-stuck', url: 'https://lc.example/stuck', status: 'archived', closedAt: Date.now() });

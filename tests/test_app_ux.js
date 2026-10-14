@@ -715,6 +715,12 @@ async function runAppUXTests() {
     assert.strictEqual(await confirmShown(), false, 'Cancel dismisses the confirmation');
     assert.strictEqual(await page.locator('#closed-today-reopen-all').isVisible(), true, 'and brings Reopen all back');
     assert.strictEqual(await page.evaluate(() => window.__restoreCalls), 0, 'Cancel reopens nothing');
+    await page.click('#closed-today-reopen-all');
+    assert.strictEqual(await confirmShown(), true, 'Asking again');
+    await page.keyboard.press('Escape');
+    assert.strictEqual(await confirmShown(), false, 'Escape cancels the confirmation');
+    assert.strictEqual(await page.evaluate(() => document.activeElement.id), 'closed-today-reopen-all', 'and returns focus to Reopen all');
+    assert.strictEqual(await page.evaluate(() => window.__restoreCalls), 0, 'Escape reopens nothing');
 
     await markReopenedNow('r7');
     await tellClosed();
@@ -747,7 +753,33 @@ async function runAppUXTests() {
       for (const id of ids) await softDeleteTab(id);
       await purgeDeletedTabs(0);
     }, ids7);
-    console.log('✓ Receipt: three rows and Show all, title opens the reader, confirm above five, progress, named failures\n');
+    console.log('✓ Receipt: three rows and Show all, title opens the reader, confirm above five, progress, named failures');
+
+    // Confirming leaves focus inside the receipt, not on <body>
+    const idsG = ['g1', 'g2', 'g3', 'g4', 'g5', 'g6'];
+    for (const id of idsG) await closeNote({ id, url: `https://closed.example/${id}`, title: `Focus ${id}` });
+    await tellClosed();
+    await page.waitForFunction(() => document.querySelectorAll('.closed-today-reopen-btn[data-id^="g"]').length === 6);
+    await page.evaluate(() => {
+      window.__realSend = chrome.runtime.sendMessage;
+      chrome.runtime.sendMessage = async (msg) => {
+        if (msg?.type !== 'RESTORE_TAB') return window.__realSend.call(chrome.runtime, msg);
+        await (await import('/src/storage/db.js')).markReopened(msg.recordId);
+        return { success: true };
+      };
+    });
+    await page.click('#closed-today-reopen-all');
+    await page.click('#closed-today-confirm-yes');
+    await page.waitForFunction(() => /Reopened 6 tabs/.test(document.getElementById('toast-message').textContent));
+    assert.strictEqual(await page.evaluate(() => !!document.activeElement.closest('#closed-today')), true, 'After confirming Reopen all, focus is in the receipt, not on <body>');
+    await page.evaluate(async (ids) => {
+      chrome.runtime.sendMessage = window.__realSend;
+      const { softDeleteTab, purgeDeletedTabs } = await import('/src/storage/db.js');
+      for (const id of ids) await softDeleteTab(id);
+      await purgeDeletedTabs(0);
+    }, idsG);
+    await tellClosed();
+    console.log('✓ Reopen all confirm: Escape returns focus to the button; Reopen leaves focus in the receipt\n');
 
     // --- TEST 11: Side panel surface ---
     console.log('--- Test 11: Side Panel Surface (panel-only controls, Open full view) ---');
@@ -999,6 +1031,10 @@ async function runAppUXTests() {
     // --- TEST 14: title button, Go to tab, card keys, scoped search, permission note ---
     console.log('--- Test 14: Title Button, Go to Tab, Card Keys, Scoped Search, Permission Note ---');
     const refreshHub = async () => background.evaluate(() => chrome.runtime.sendMessage({ type: 'TABS_CLOSED' }).catch(() => {}));
+    await context.route('https://live.example/**', route => route.fulfill({ contentType: 'text/html', body: '<title>live</title>' }));
+    const openLive = async (id) => { const p = await context.newPage(); await p.goto(`https://live.example/${id}`); return p; };
+    const savedTabPage = await openLive('saved-note'); // the notes' tabs are really open
+    const sleepingTabPage = await openLive('sleeping-note');
     await hub.evaluate(async () => {
       const { saveArchivedTab } = await import('/src/storage/db.js');
       const note = (id, status) => saveArchivedTab({
@@ -1007,17 +1043,30 @@ async function runAppUXTests() {
       });
       await note('saved-note', 'captured');
       await note('sleeping-note', 'discarded');
+      await note('gone-saved-note', 'captured'); // saved manually, its tab closed since: status alone says captured
     });
     await refreshHub();
     await hub.waitForSelector('.tab-card[data-id="sleeping-note"]');
     const primary = (id) => hub.locator(`.tab-card[data-id="${id}"] .restore-btn`).textContent().then(t => t.trim());
-    assert.strictEqual(await primary('saved-note'), 'Go to tab', 'A Saved note (tab still open) says Go to tab');
-    assert.strictEqual(await primary('sleeping-note'), 'Go to tab', 'A Sleeping note says Go to tab');
+    assert.strictEqual(await primary('saved-note'), 'Go to tab', 'A Saved note whose tab is open says Go to tab');
+    assert.strictEqual(await primary('sleeping-note'), 'Go to tab', 'A Sleeping note whose tab is open says Go to tab');
     assert.strictEqual(await primary('inbox-note'), 'Reopen tab', 'A closed note says Reopen tab');
+    assert.strictEqual(await primary('gone-saved-note'), 'Reopen tab', 'A Saved note whose tab is not open says Reopen tab');
     await hub.click('.tab-card[data-id="saved-note"] .reader-btn');
     assert.strictEqual((await hub.textContent('#modal-reopen-btn')).trim(), 'Go to tab', 'The reader says the same');
     await hub.keyboard.press('Escape');
-    console.log('✓ Saved and Sleeping notes say Go to tab; closed notes say Reopen tab');
+    await hub.click('.tab-card[data-id="gone-saved-note"] .reader-btn');
+    assert.strictEqual((await hub.textContent('#modal-reopen-btn')).trim(), 'Reopen', 'The reader says Reopen for a note whose tab is not open');
+    await hub.keyboard.press('Escape');
+    await savedTabPage.close(); // closing the tab later flips the label, whatever the status says
+    await refreshHub();
+    await hub.waitForFunction(() => /Reopen tab/.test(document.querySelector('.tab-card[data-id="saved-note"] .restore-btn')?.textContent));
+    assert.strictEqual(await primary('sleeping-note'), 'Go to tab', 'and leaves the notes whose tabs are still open alone');
+    await sleepingTabPage.close();
+    await context.unroute('https://live.example/**');
+    await refreshHub();
+    await hub.waitForFunction(() => /Reopen tab/.test(document.querySelector('.tab-card[data-id="sleeping-note"] .restore-btn')?.textContent));
+    console.log('✓ Go to tab only while the note\'s address is open; otherwise Reopen tab (card and reader)');
 
     // The title is a real button that opens the reader; it does not reopen anything
     await hub.evaluate(() => {
@@ -1083,6 +1132,49 @@ async function runAppUXTests() {
     }
     console.log('✓ s, o, Delete and Backspace act on the selected card; typing and dialogs are left alone');
 
+    // Keys follow focus: Tab to another card's star button and s stars that card, not the j-selected one
+    await hub.evaluate(() => document.activeElement?.blur());
+    await hub.keyboard.press('j');
+    const [cardAId, , cardCId] = await cardIds(hub);
+    const starActive = (id) => hub.locator(`.tab-card[data-id="${id}"] .star-btn`).evaluate(el => el.classList.contains('active'));
+    const [firstStarred, thirdStarred] = [await starActive(cardAId), await starActive(cardCId)];
+    await hub.focus(`.tab-card[data-id="${cardCId}"] .star-btn`);
+    assert.strictEqual(await hub.evaluate(() => document.querySelector('#tabs-feed .keyboard-selected').dataset.id), cardCId, 'Focus moving into a card selects it');
+    await hub.keyboard.press('s');
+    await hub.waitForFunction(([id, was]) => document.querySelector(`.tab-card[data-id="${id}"] .star-btn`).classList.contains('active') !== was, [cardCId, thirdStarred]);
+    assert.strictEqual(await starActive(cardAId), firstStarred, 's does not star the card j selected earlier');
+    await hub.keyboard.press('s'); // put it back
+    await hub.waitForFunction(([id, was]) => document.querySelector(`.tab-card[data-id="${id}"] .star-btn`).classList.contains('active') === was, [cardCId, thirdStarred]);
+    await hub.keyboard.press('Escape');
+    await hub.evaluate(() => document.activeElement?.blur());
+    console.log('✓ Card keys act on the card holding focus');
+
+    // A refresh that inserts a note above the selection keeps it on the same note
+    await hub.keyboard.press('j');
+    await hub.keyboard.press('j');
+    const keptId = await hub.evaluate(() => document.querySelector('#tabs-feed .keyboard-selected').dataset.id);
+    await hub.evaluate(async () => (await import('/src/storage/db.js')).saveArchivedTab({
+      id: 'newest-note', url: 'https://notes.example/newest-note', title: 'newest-note', capturedAt: Date.now() + 60000,
+      status: 'archived', summary: { tldr: 'newest gist', bullets: [], tags: [] }
+    }));
+    await refreshHub();
+    await hub.waitForFunction(() => document.querySelector('#tabs-feed .tab-card')?.dataset.id === 'newest-note');
+    assert.strictEqual(await hub.evaluate(() => [...document.querySelectorAll('#tabs-feed .keyboard-selected')].map(c => c.dataset.id).join()), keptId, 'The selection stays on the same note after a note lands above it');
+    await hub.keyboard.press('Delete');
+    await hub.locator('#toast-undo-btn').waitFor({ state: 'visible', timeout: 2000 });
+    assert.strictEqual(await hub.evaluate(async (id) => (await (await import('/src/storage/db.js')).getArchivedTabs({ limit: Infinity })).some(t => t.id === id), keptId), false, 'and Delete removes that note, not the one at the old position');
+    await hub.click('#toast-undo-btn');
+    await hub.waitForSelector(`.tab-card[data-id="${keptId}"]:not(.removing)`);
+    await hub.evaluate(async () => {
+      const db = await import('/src/storage/db.js');
+      await db.softDeleteTab('newest-note');
+      await db.purgeDeletedTabs(0);
+    });
+    await refreshHub();
+    await hub.waitForFunction(() => !document.querySelector('.tab-card[data-id="newest-note"]'));
+    await hub.keyboard.press('Escape');
+    console.log('✓ Selection follows the note id across a refresh');
+
     // A scoped search that finds nothing names the view and offers All notes, keeping the query
     await hub.click('.nav-item[data-view="inbox"]');
     await hub.fill('#search-input', 'reopened-note');
@@ -1118,7 +1210,24 @@ async function runAppUXTests() {
     await hub.waitForSelector('.tab-card');
     assert.strictEqual(await hub.locator('#perm-banner').isHidden(), true, 'The dismissal survives a reload');
     await hub.evaluate(() => chrome.storage.local.remove('perm_banner_dismissed'));
-    console.log('✓ Permission note is quiet with notes, dismissible, and the dismissal persists\n');
+    console.log('✓ Permission note is quiet with notes, dismissible, and the dismissal persists');
+
+    // It must never flash loud on the way to quiet while the note count is still loading
+    const flashPage = await context.newPage();
+    await flashPage.addInitScript(() => {
+      window.__permLoud = false;
+      new MutationObserver(() => {
+        const b = document.getElementById('perm-banner');
+        if (b && !b.hidden && !b.classList.contains('quiet')) window.__permLoud = true;
+      }).observe(document, { subtree: true, attributes: true, attributeFilter: ['hidden', 'class'] });
+    });
+    await flashPage.goto(APP_URL);
+    await flashPage.waitForSelector('.tab-card');
+    await flashPage.waitForFunction(() => !document.getElementById('perm-banner').hidden);
+    assert.strictEqual(await flashPage.locator('#perm-banner').evaluate(el => el.classList.contains('quiet')), true, 'With notes the note ends up quiet');
+    assert.strictEqual(await flashPage.evaluate(() => window.__permLoud), false, 'It never showed loud on the way');
+    await flashPage.close();
+    console.log('✓ Permission note does not flash loud before the note count is known\n');
     await hub.close();
 
     console.log('========================================================');

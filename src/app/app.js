@@ -59,7 +59,8 @@ const VIEW_LABELS = { inbox: 'Inbox', reopened: 'Reopened' };
 let fadeSettings = null;
 let tabsById = new Map();
 let renderSeq = 0;
-let selectedIndex = -1;
+let selectedId = null; // the j/k-selected note, by id so a refresh that reorders the feed keeps it
+let openUrls = new Set(); // addresses of the tabs open right now: decides Go to tab vs Reopen tab
 let searchTimer = null;
 let toastTimer = null;
 let toastDuration = 2600;
@@ -69,7 +70,7 @@ let receiptById = new Map(); // today's receipt rows, so a row title can open it
 let reopenFailedIds = new Set(); // rows the last Reopen all could not reopen
 let permMissing = false; // the all-sites permission is not granted
 let permDismissed = false; // the user dismissed the quiet permission note
-let noteTotal = 0; // every note, whatever the view: decides how loud the permission note is
+let noteTotal = null; // every note, whatever the view: decides how loud the permission note is; null until read
 
 const ICONS = {
   reopen: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>',
@@ -336,6 +337,9 @@ async function reopenAllClosedToday() {
   button.disabled = false;
   button.textContent = 'Reopen all';
   await refresh();
+  if (document.activeElement === document.body) { // the confirm that held focus is gone
+    (button.checkVisibility() ? button : document.querySelector('#closed-today > summary')).focus();
+  }
   const failed = rows.length - reopened;
   const done = `Reopened ${reopened} ${reopened === 1 ? 'tab' : 'tabs'}.`;
   const summary = failed ? `${done} ${failed} could not be reopened.` : done;
@@ -350,7 +354,7 @@ async function renderFeed(showSkeletons = false) {
 
   // Settings first: the 'expiring-soon' sort needs the fade windows, and passing them in
   // keeps getArchivedTabs free of a hidden settings dependency. One read per render, not two.
-  const settings = await getSettings().catch(() => null);
+  const [settings] = await Promise.all([getSettings().catch(() => null), loadOpenUrls()]);
   // ponytail: newest 200 matches only (search/filters still reach older notes); fading keeps
   // most libraries under this. Add a "Load more" button if real libraries outgrow it.
   const tabs = await getArchivedTabs({
@@ -372,7 +376,11 @@ async function renderFeed(showSkeletons = false) {
   const active = document.activeElement;
   const hadFeedFocus = !active || active === document.body || feed.contains(active);
   feed.innerHTML = tabs.map(cardHtml).join('');
-  if (selectedIndex >= 0) selectCard(selectedIndex, { focus: hadFeedFocus });
+  if (selectedId !== null) {
+    const index = liveCards().findIndex(card => card.dataset.id === selectedId);
+    if (index >= 0) selectCard(index, { focus: hadFeedFocus });
+    else clearSelection(); // the selected note is gone
+  }
 }
 
 function setResultsCount(n) {
@@ -454,10 +462,22 @@ function starLabel(isFavorite) {
   return isFavorite ? 'Unstar: let this note fade again' : 'Star: keep this note; it won\'t fade';
 }
 
-/** Saved (tab still open) and Sleeping (discarded) notes have a tab to switch to; every other note reopens one. */
-function hasLiveTab(tab) {
-  return tab.status === 'captured' || tab.status === 'discarded';
+/**
+ * Read the addresses of every open tab. RESTORE_TAB switches to a tab whose url or pendingUrl equals the
+ * note's address exactly, so the labels use the same match. Without tab addresses nothing counts as open.
+ */
+async function loadOpenUrls() {
+  try {
+    const tabs = await chrome.tabs.query({});
+    openUrls = new Set(tabs.flatMap(t => [t.url, t.pendingUrl]).filter(Boolean));
+  } catch (err) {
+    console.debug('Failed to read open tabs:', err);
+    openUrls = new Set();
+  }
 }
+
+/** A note has a tab to switch to only while its address is open; otherwise Reopen tab opens a new one. */
+const hasLiveTab = (tab) => openUrls.has(tab.url);
 
 function cardHtml(tab) {
   const q = state.query;
@@ -596,6 +616,7 @@ async function copyText(text, message, btn) {
 async function deleteCard(tab, card = null) {
   // Animate synchronously for instant feedback, before the IndexedDB write lands.
   card?.classList.add('removing');
+  clearSelection(); // before the write lands, so a fast second Delete cannot reach the next card
   try {
     await softDeleteTab(tab.id);
   } catch (err) {
@@ -604,7 +625,6 @@ async function deleteCard(tab, card = null) {
     showToast('Could not delete that note.', true);
     return;
   }
-  clearSelection();
   setResultsCount($('tabs-feed').querySelectorAll('.tab-card:not(.removing)').length);
   updateStats();
   renderSidebarFilters();
@@ -734,18 +754,25 @@ function liveCards() {
 function selectCard(index, { focus = true } = {}) {
   const cards = liveCards();
   if (cards.length === 0) {
-    selectedIndex = -1;
+    selectedId = null;
     return;
   }
-  selectedIndex = Math.max(0, Math.min(index, cards.length - 1));
-  cards.forEach((card, i) => card.classList.toggle('keyboard-selected', i === selectedIndex));
-  cards[selectedIndex].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  const selected = cards[Math.max(0, Math.min(index, cards.length - 1))];
+  selectedId = selected.dataset.id;
+  cards.forEach(card => card.classList.toggle('keyboard-selected', card === selected));
+  selected.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   // Real focus on the card so screen readers announce the selected note by its title.
-  if (focus) cards[selectedIndex].focus({ preventScroll: true });
+  if (focus) selected.focus({ preventScroll: true });
+}
+
+/** The card a key acts on: the one holding focus (a Tab-ed to star button counts), else the j/k selection. */
+function keyCard() {
+  const focused = document.activeElement?.closest?.('#tabs-feed .tab-card:not(.removing)');
+  return focused || liveCards().find(card => card.dataset.id === selectedId) || null;
 }
 
 function clearSelection() {
-  selectedIndex = -1;
+  selectedId = null;
   document.querySelectorAll('#tabs-feed .keyboard-selected').forEach(c => c.classList.remove('keyboard-selected'));
 }
 
@@ -982,6 +1009,7 @@ async function checkPermissions() {
  * hairline note once any note exists, which the user can dismiss for good.
  */
 function syncPermBanner() {
+  if (noteTotal === null) return; // the note count decides loud or quiet; stay hidden until it is known
   const quiet = noteTotal > 0;
   const banner = $('perm-banner');
   banner.classList.toggle('quiet', quiet);
@@ -1068,6 +1096,13 @@ function setupEventListeners() {
   }, true);
 
   feed.addEventListener('click', onFeedClick);
+  // Focus moving into a card (Tab to its star button, a click) makes it the selected one.
+  feed.addEventListener('focusin', (e) => {
+    const card = e.target.closest('.tab-card:not(.removing)');
+    if (!card || card.dataset.id === selectedId) return;
+    selectedId = card.dataset.id;
+    liveCards().forEach(c => c.classList.toggle('keyboard-selected', c === card));
+  });
   const toastEl = $('toast');
   toastEl.addEventListener('mouseenter', () => setToastPaused(true));
   toastEl.addEventListener('mouseleave', () => setToastPaused(false));
@@ -1246,6 +1281,7 @@ function setupEventListeners() {
         return;
       }
       clearSelection();
+      if (feed.contains(el)) el.blur(); // focus in a card would keep it the target of s / o / Delete
       await clearSearch();
       return;
     }
@@ -1268,17 +1304,17 @@ function setupEventListeners() {
 
     if (e.key === 'j' || e.key === 'ArrowDown') {
       e.preventDefault();
-      selectCard(selectedIndex + 1);
+      selectCard(liveCards().indexOf(keyCard()) + 1);
     } else if (e.key === 'k' || e.key === 'ArrowUp') {
       e.preventDefault();
-      selectCard(selectedIndex - 1);
-    } else if (e.key === 'Enter' && selectedIndex >= 0 && !el?.closest('button, a, summary')) {
+      selectCard(liveCards().indexOf(keyCard()) - 1);
+    } else if (e.key === 'Enter' && keyCard() && !el?.closest('button, a, summary')) {
       e.preventDefault();
-      liveCards()[selectedIndex]?.querySelector('.restore-btn')?.click();
-    } else if (Object.hasOwn(CARD_KEYS, e.key) && selectedIndex >= 0 && !e.ctrlKey && !e.metaKey && !e.altKey &&
+      keyCard().querySelector('.restore-btn')?.click();
+    } else if (Object.hasOwn(CARD_KEYS, e.key) && keyCard() && !e.ctrlKey && !e.metaKey && !e.altKey &&
         (!el || el === document.body || feed.contains(el))) {
-      // Act on the selected card, but never on a key pressed in the sidebar or another control.
-      const card = liveCards()[selectedIndex];
+      // Act on the focused or selected card, but never on a key pressed in the sidebar or another control.
+      const card = keyCard();
       const tab = card && tabsById.get(card.dataset.id);
       if (!tab) return;
       e.preventDefault();
