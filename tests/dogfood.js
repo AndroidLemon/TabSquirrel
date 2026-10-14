@@ -291,7 +291,7 @@ async function runDogfood() {
     if (download) {
       const filename = download.suggestedFilename();
       console.log(`✓ Triggered browser download: ${filename}`);
-      if (!filename.startsWith('tab-squirrel-wiki-export-') || !filename.endsWith('.md')) {
+      if (!filename.startsWith('tab-squirrel-notes-') || !filename.endsWith('.md')) {
         throw new Error(`Unexpected export filename: ${filename}`);
       }
     } else {

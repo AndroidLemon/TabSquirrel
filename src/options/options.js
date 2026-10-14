@@ -138,14 +138,14 @@ function setupListeners() {
   document.getElementById('export-json-btn').addEventListener('click', async () => {
     const tabs = await getArchivedTabs({ limit: Infinity, includeText: true });
     const json = exportToJSON(tabs);
-    triggerDownload(json, 'TabSquirrel_Backup.json', 'application/json;charset=utf-8');
+    triggerDownload(json, `tab-squirrel-notes-${Date.now()}.json`, 'application/json;charset=utf-8');
     showToast('Exported JSON backup');
   });
 
   document.getElementById('export-md-btn').addEventListener('click', async () => {
     const tabs = await getArchivedTabs({ limit: 10000 });
     const md = exportToMarkdown(tabs);
-    triggerDownload(md, 'TabSquirrel_Notes_Export.md', 'text/markdown;charset=utf-8');
+    triggerDownload(md, `tab-squirrel-notes-${Date.now()}.md`, 'text/markdown;charset=utf-8');
     showToast('Exported Markdown');
   });
 

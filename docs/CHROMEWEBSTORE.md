@@ -38,7 +38,7 @@ We open dozens of tabs intending to read them, but the tab bar quickly becomes a
 - **Local by default**: with the default provider, Tab Squirrel makes no network requests at all. Nothing is synced or sent anywhere unless you configure a summarizer.
 
 ### Single Purpose
-Tab Squirrel archives inactive browser tabs: it summarizes them, stores the summary locally, and closes the tab or puts it to sleep. Every permission below serves that one purpose.
+Tab Squirrel closes inactive browser tabs or puts them to sleep. Before it does either, it summarizes the tab and saves the summary locally as a note. Every permission below serves that one purpose.
 
 ---
 
@@ -51,8 +51,8 @@ One entry per dashboard text box.
 | `tabs` | `chrome.tabs.query`, `chrome.tabs.discard`, `chrome.tabs.remove`, `chrome.tabs.create`, `chrome.tabs.update` | Needed to detect inactive tabs, read tab URLs and titles for summarization, put eligible tabs to sleep or close them, and reopen or switch to a tab from the notebook. |
 | `storage` | `chrome.storage.local`, `chrome.storage.session` | Needed to store user preferences (thresholds, domain lists, provider settings) and ephemeral per-tab activity timestamps. |
 | `alarms` | `chrome.alarms.create` | Needed to schedule periodic inactivity sweeps without keeping the background service worker constantly awake. |
-| `idle` | `chrome.idle.queryState` | Needed so that time away from the computer does not count toward a tab's inactivity, and tabs are never archived while the user is away. |
-| `scripting` | `chrome.scripting.executeScript` | Needed to inject the article extractor into an eligible background tab to read its text and check for unsaved input before archiving. |
+| `idle` | `chrome.idle.queryState` | Needed so that time away from the computer does not count toward a tab's inactivity, and tabs are never closed or put to sleep while the user is away. |
+| `scripting` | `chrome.scripting.executeScript` | Needed to inject the article extractor into an eligible background tab to read its text and check for unsaved input before the tab is closed or put to sleep. |
 | `sidePanel` | `chrome.sidePanel` | Needed to show the notebook alongside browsing and to close the panel when the user opens the full-page view. |
 | `unlimitedStorage` | IndexedDB persistent quota | Needed to keep saved page text and summaries in the user's browser without quota eviction. |
 | `notifications` | `chrome.notifications.create` | Needed for confirmations that otherwise give no feedback: a manual save triggered by the keyboard shortcut (including when it fails), and adding a site to a domain list from the tab context menu. Automatic closing never notifies. |
@@ -71,7 +71,7 @@ See section 1.
 For the dashboard's data-use checkboxes:
 
 - **Website content**: article text is read from eligible tabs to summarize it. Stored locally.
-- **Web history**: the URL, title and capture time of each archived tab are stored locally so the tab can be reopened and the notebook searched.
+- **Web history**: the URL, title and capture time of each tab Tab Squirrel saves as a note are stored locally so the tab can be reopened and the notebook searched.
 - **Nothing else.** No personal identifiers, health, financial, authentication, personal communication, location, or user-activity data.
 
 ### Certifications
@@ -80,7 +80,7 @@ For the dashboard's data-use checkboxes:
 - Data is not used or transferred to determine creditworthiness or for lending.
 
 ### Disclosure text
-- **Host permissions**: Tab Squirrel requests `<all_urls>` as an optional permission during onboarding so it can extract article text from tabs eligible for archival. Until granted, Tab Squirrel leaves tabs on that site alone.
+- **Host permissions**: Tab Squirrel requests `<all_urls>` as an optional permission during onboarding so it can extract article text from tabs eligible to be closed or put to sleep. Until granted, Tab Squirrel leaves tabs on that site alone.
 - **Favicons**: site icons come from Chrome's local favicon cache via the `favicon` permission, never from the live site or a third-party favicon service. No extra request, no leak.
 - **Storage**: content parsing, summarization by the default provider, and storage all happen on the user's device, in the browser's IndexedDB and `chrome.storage.local`. Nothing is synced.
 - **Network**: with the default provider, Tab Squirrel makes no network requests. The only exceptions are summarization providers the user configures:
@@ -111,7 +111,7 @@ https://github.com/AndroidLemon/TabSquirrel/blob/main/PRIVACY.md
   - Inactivity tracking with `chrome.storage.session` and alarm sweeps; idle, locked and sleep time excluded.
   - Close or sleep mode: close plain pages at the threshold, put interactive ones to sleep, close sleeping tabs at twice the threshold; Sleep only and Close all modes.
   - Closing gated on an AI-written summary; heuristic-only summaries put the tab to sleep instead.
-  - In-tab article extraction with shadow DOM, rich-editor and dirty-form guards; last-moment re-check before archiving.
+  - In-tab article extraction with shadow DOM, rich-editor and dirty-form guards; last-moment re-check before closing or sleeping the tab.
   - Four summarization tiers: offline heuristic, Chrome's on-device model, local OpenAI-compatible server (streamed), Gemini with the user's key.
   - Never-touch and always-close site lists, editable from Settings or a tab context menu.
   - IndexedDB notebook with full-text search, Inbox / Reopened / All, starred, tags, domains, timeline, reader view, undo, and note fading.

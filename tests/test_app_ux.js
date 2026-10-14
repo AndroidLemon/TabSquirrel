@@ -572,7 +572,7 @@ async function runAppUXTests() {
       page.waitForEvent('download', { timeout: 5000 }),
       page.click('.export-option-btn[data-format="obsidian"]')
     ]);
-    assert.match(download.suggestedFilename(), /^tab-squirrel-obsidian-vault-\d+\.zip$/, 'Obsidian export downloads a .zip vault');
+    assert.match(download.suggestedFilename(), /^tab-squirrel-notes-\d+\.zip$/, 'Obsidian export downloads a .zip vault');
     console.log(`✓ Export dropdown verified (downloaded ${download.suggestedFilename()})\n`);
 
     // --- TEST 10: Live refresh on TABS_CLOSED; Closed today is the top of the feed ---

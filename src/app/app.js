@@ -1002,13 +1002,13 @@ export async function performExport(format = 'markdown') {
   }
   const stamp = Date.now();
   if (format === 'json') {
-    triggerDownload(exportToJSON(tabs), `tab-squirrel-wiki-export-${stamp}.json`, 'application/json;charset=utf-8');
+    triggerDownload(exportToJSON(tabs), `tab-squirrel-notes-${stamp}.json`, 'application/json;charset=utf-8');
     showToast('Exported a JSON backup.');
   } else if (format === 'obsidian') {
-    triggerDownload(exportToObsidianZip(tabs), `tab-squirrel-obsidian-vault-${stamp}.zip`, 'application/zip');
+    triggerDownload(exportToObsidianZip(tabs), `tab-squirrel-notes-${stamp}.zip`, 'application/zip');
     showToast('Exported an Obsidian vault.');
   } else {
-    triggerDownload(exportToMarkdown(tabs), `tab-squirrel-wiki-export-${stamp}.md`, 'text/markdown;charset=utf-8');
+    triggerDownload(exportToMarkdown(tabs), `tab-squirrel-notes-${stamp}.md`, 'text/markdown;charset=utf-8');
     showToast('Exported notes as Markdown.');
   }
 }
