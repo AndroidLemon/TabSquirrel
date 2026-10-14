@@ -525,9 +525,13 @@ export function getAllDomains() {
 export async function getStats() {
   const tabs = await getArchivedTabs({ limit: Infinity });
   const todayStart = startOfDay(0);
+  const yesterdayStart = startOfDay(1);
+  const weekAgo = Date.now() - 7 * DAY_MS; // the same boundaries as getArchivedTabs' time ranges
   return {
     total: tabs.length,
     today: tabs.filter(t => t.capturedAt >= todayStart).length,
+    yesterday: tabs.filter(t => t.capturedAt >= yesterdayStart && t.capturedAt < todayStart).length,
+    week: tabs.filter(t => t.capturedAt >= weekAgo).length,
     favorites: tabs.filter(t => t.isFavorite).length,
     inbox: tabs.filter(isInInbox).length, // same rule as getArchivedTabs' 'inbox' view
     reopened: tabs.filter(t => t.restoredAt).length,

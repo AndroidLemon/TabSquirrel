@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tab Squirrel Settings & Permissions</title>
+  <script src="../shared/theme-boot.js"></script>
   <link rel="stylesheet" href="../fonts/fonts.css">
   <link rel="stylesheet" href="options.css">
 </head>
@@ -34,6 +35,31 @@
         <div class="permission-status" id="permission-status">Checking permission status...</div>
       </div>
       <button id="grant-perm-btn" class="primary-btn">Enable Extraction</button>
+    </section>
+
+    <!-- Appearance: the same choice as the notebook's footer button -->
+    <section class="settings-card">
+      <h2>Appearance</h2>
+      <div class="setting-row">
+        <div class="setting-label-group">
+          <label id="theme-label">Theme</label>
+          <span class="setting-desc">Light or dark for the notebook and this page. System follows your browser or operating system.</span>
+        </div>
+        <div class="radio-group" role="radiogroup" aria-labelledby="theme-label">
+          <label class="radio-option">
+            <input type="radio" name="theme" value="system" id="theme-system">
+            <div><strong>System</strong></div>
+          </label>
+          <label class="radio-option">
+            <input type="radio" name="theme" value="light" id="theme-light">
+            <div><strong>Light</strong></div>
+          </label>
+          <label class="radio-option">
+            <input type="radio" name="theme" value="dark" id="theme-dark">
+            <div><strong>Dark</strong></div>
+          </label>
+        </div>
+      </div>
     </section>
 
     <!-- Inactivity & Archival Mode -->

@@ -23,7 +23,7 @@ Tab suspenders free memory but leave the clutter and keep no record. Read-later 
 ## Operating Context
 
 - Lives in desktop Chrome (minimum version 141, Manifest V3). The notebook is one page that runs in the side panel (narrow, single column) and as a full tab (sidebar plus grid). Options open in their own tab.
-- Shortcuts: Cmd/Ctrl+Shift+S opens the panel and Cmd/Ctrl+Shift+E archives the active tab. In the notebook: j/k or the arrow keys move between cards, Enter reopens, `o` reads, `s` stars, Delete deletes, `/` searches, the first Escape leaves search and keeps the query, a second clears it, and Escape closes dialogs. `?` lists shortcuts.
+- Shortcuts: Cmd/Ctrl+Shift+S opens the panel and Cmd/Ctrl+Shift+E archives the active tab. In the notebook: j/k or the arrow keys move between cards, Enter reopens, `o` reads, `s` stars, Delete or Backspace deletes, `u` undoes while the Undo bar shows, `/` searches, the first Escape leaves search and keeps the query, a second clears it, and Escape closes dialogs. `?` lists shortcuts.
 - Note lifecycle: notes start in the Inbox and leave it when they are read in the reader, starred or reopened (unstarring does not put a note back; a fresh capture of the same page does). Reopened notes also move to Reopened. Notes fade unless starred (30 days if never reopened, 7 days after the last reopen; both configurable, 0 means never). Tabs closed today head the feed as a "Closed today" section, each note shown once (ADR 0005). There are no per-tab notifications.
 - Exports to Obsidian (zip of .md files), Markdown and JSON. JSON can be re-imported.
 
@@ -59,4 +59,4 @@ Tab suspenders free memory but leave the clutter and keep no record. Read-later 
 
 ## Accessibility & Inclusion
 
-WCAG 2.2 AA: AA contrast in both light and dark, full keyboard operation of the notebook and options (keeping the existing shortcuts), visible focus, and `prefers-reduced-motion` respected.
+WCAG 2.2 AA: AA contrast in both light and dark (System by default, with a System / Light / Dark choice in the notebook footer and the options page), reflow at 200% zoom in the side panel, controls at least 24px, full keyboard operation of the notebook and options (keeping the existing shortcuts), visible focus, and `prefers-reduced-motion` respected.

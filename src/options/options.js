@@ -4,6 +4,7 @@
 
 import { getSettings, saveSettings, setDomainList, getArchivedTabs, saveArchivedTab, getStorageEstimate, clearAllHistory } from '../storage/db.js';
 import { escapeHtml } from '../shared/html.js';
+import { THEME_LABELS, setTheme, startTheme } from '../shared/theme.js';
 import { exportToMarkdown, exportToJSON, triggerDownload } from '../shared/export.js';
 
 let currentSettings = {};
@@ -12,6 +13,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   currentSettings = await getSettings();
   populateForm(currentSettings);
   setupListeners();
+  startTheme(choice => { document.getElementById(`theme-${choice}`).checked = true; });
   await updateStorageMeter();
   await checkPermissions();
 });
@@ -54,6 +56,13 @@ function setupListeners() {
     } catch (err) {
       console.error('Permission request failed:', err);
     }
+  });
+
+  document.querySelectorAll('input[name="theme"]').forEach(radio => {
+    radio.addEventListener('change', async (e) => {
+      await setTheme(e.target.value);
+      showToast(`Theme: ${THEME_LABELS[e.target.value]}`);
+    });
   });
 
   document.getElementById('timeout-select').addEventListener('change', async (e) => {

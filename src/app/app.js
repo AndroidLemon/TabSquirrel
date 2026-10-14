@@ -26,6 +26,7 @@ import {
 } from '../storage/db.js';
 import { escapeHtml, highlightSearch, faviconUrl, fadeChipHtml, fadeDateHtml } from '../shared/html.js';
 import { fadeChipLabel, fadeDateLabel, fadeExplanation } from '../shared/fade.js';
+import { THEME_LABELS, nextTheme, setTheme, startTheme } from '../shared/theme.js';
 import {
   exportToMarkdown,
   exportToObsidianZip,
@@ -56,6 +57,10 @@ const RECEIPT_SEEN_KEY = 'closed_today_seen'; // { day, upTo }: Closed today was
 const CLOSED_TODAY_VISIBLE = 6; // more closures than this and the rest sit behind "Show all"
 const REOPEN_ALL_CONFIRM_ABOVE = 5; // more still-closed notes than this and Reopen all asks first
 const PERM_DISMISSED_KEY = 'perm_banner_dismissed'; // the quiet permission note was dismissed
+const PERM_TEXT = {
+  loud: 'Without it, tabs from sites you haven\'t allowed stay open and get no note.',
+  quiet: 'Some sites can\'t be read, so their tabs stay open with no note.' // no heading above it, so it carries its own subject
+};
 const VIEW_LABELS = { inbox: 'Inbox', reopened: 'Reopened' };
 
 let fadeSettings = null;
@@ -85,7 +90,13 @@ const ICONS = {
   reader: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>',
   copy: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>',
   trash: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>',
-  empty: '<img class="empty-icon" src="../assets/icons/icon-48.png" alt="" width="40" height="40">'
+  empty: '<img class="empty-icon" src="../assets/icons/icon-48.png" alt="" width="40" height="40">',
+  // The theme button shows the current choice: a monitor for System, a sun, a moon.
+  theme: {
+    system: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>',
+    light: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>',
+    dark: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>'
+  }
 };
 
 // Keys that act on the j/k-selected card.
@@ -127,6 +138,7 @@ async function init() {
 
   setupEventListeners();
   syncControls();
+  startTheme(renderThemeButton);
   await loadDensity();
   await loadSort();
   checkPermissions();
@@ -160,6 +172,8 @@ async function updateStats() {
   set('count-inbox', stats.inbox);
   set('count-reopened', stats.reopened);
   set('count-today', stats.today);
+  set('count-yesterday', stats.yesterday);
+  set('count-week', stats.week);
   set('count-favorites', stats.favorites || 0);
   noteTotal = stats.total;
   syncPermBanner();
@@ -498,8 +512,9 @@ function emptyStateHtml(settings, total) {
     title = 'No matching notes';
     lines = ['Try adjusting your search terms or filters.'];
   }
-  // Fading is explained where the notebook is empty and in the shortcuts list, not above every feed.
-  const fade = !hasFilter && fadeExplanation(settings);
+  // Fading is explained in the shortcuts list and when an Inbox empties, not above every feed or on the
+  // first run, where nothing can fade yet and the sentence only lengthens a promise that is already three lines.
+  const fade = !hasFilter && total > 0 && fadeExplanation(settings);
   if (fade) lines.push(`<span id="fade-note" class="fade-note">${escapeHtml(fade)}</span>`);
   return `<div class="empty-state">${ICONS.empty}<div class="empty-title">${title}</div><div class="empty-desc">${lines.map(line => `<p>${line}</p>`).join('')}</div>${action}</div>`;
 }
@@ -664,7 +679,14 @@ async function toggleStar(tab, card) {
   // The fade chip and date depend on isFavorite; refresh them without a full re-render.
   card.querySelector('.fade-chip')?.remove();
   card.querySelector('.fade-date')?.remove();
-  card.querySelector('.card-source').insertAdjacentHTML('beforeend', fadeChipHtml(tab, fadeSettings, state.sortBy));
+  // Same place as cardHtml: the last chip in .card-flags, which exists only while the card has a flag.
+  let flags = card.querySelector('.card-flags');
+  if (!flags) {
+    card.querySelector('.card-header').insertAdjacentHTML('beforeend', '<div class="card-flags"></div>');
+    flags = card.querySelector('.card-flags');
+  }
+  flags.insertAdjacentHTML('beforeend', fadeChipHtml(tab, fadeSettings, state.sortBy));
+  if (!flags.children.length) flags.remove();
   card.querySelector('.card-time').insertAdjacentHTML('beforeend', fadeDateHtml(tab, fadeSettings, state.sortBy));
 }
 
@@ -695,14 +717,20 @@ async function deleteCard(tab, card = null) {
   // Closed today's heading counts its notes, so a delete there redraws the section. Read before any
   // await: a refresh landing meanwhile replaces the card element.
   const fromClosedToday = Boolean(card?.closest('#closed-today'));
+  const position = card ? liveCards().indexOf(card) : -1;
+  const keyboard = card && (card.contains(document.activeElement) || card.dataset.id === selectedId);
   // Animate synchronously for instant feedback, before the IndexedDB write lands.
   card?.classList.add('removing');
-  clearSelection(); // before the write lands, so a fast second Delete cannot reach the next card
+  // Hand the selection to the card that now sits at this position (the last card if this was last),
+  // before the write lands: a fast second Delete then acts on it, never on the card being deleted.
+  if (keyboard && position >= 0) selectCard(position);
+  else clearSelection();
   try {
     await softDeleteTab(tab.id);
   } catch (err) {
     console.error('Error deleting tab:', err);
     card?.classList.remove('removing');
+    if (keyboard && position >= 0) selectCard(liveCards().indexOf(card));
     showToast('Could not delete that note.', true);
     return;
   }
@@ -760,8 +788,14 @@ function showUndoToast(message, id, restore, restoredMessage = 'Note restored') 
     const restored = cardById(id);
     if (restored) {
       restored.classList.add('undo-restored');
-      restored.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       setTimeout(() => restored.classList.remove('undo-restored'), 1200);
+      // Put the keyboard back on the returned note, unless the user has since moved to another control.
+      const active = document.activeElement;
+      if (!active || active === document.body || inFeed(active) || $('toast').contains(active)) {
+        selectCard(liveCards().indexOf(restored));
+      } else {
+        restored.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
     }
     if (restoredOk) showToast(restoredMessage);
     else showToast(failMessage, true);
@@ -947,6 +981,10 @@ async function openReader(tab) {
     : '<p>No overview available</p>';
   $('modal-text-content').innerHTML = '<p class="empty-article-text">Loading article text…</p>';
   dialog.showModal();
+  // Start at the title, not the first focusable element (the external source link, where Enter would
+  // leave the notebook). A heading is what a screen reader reads first, in the dialog named by it, and
+  // Tab then goes on to the source link and the actions in order. Close would make a stray Enter close it.
+  $('modal-title').focus({ preventScroll: true });
 
   // List results omit cleanText; fetch the full record for the article body.
   try {
@@ -964,10 +1002,9 @@ async function openReader(tab) {
 function updateReaderActions() {
   if (!readerTab) return;
   $('modal-fade').textContent = fadeChipLabel(readerTab, fadeSettings, state.sortBy) || fadeDateLabel(readerTab, fadeSettings);
-  const reopen = hasLiveTab(readerTab) ? 'Go to tab' : 'Reopen';
-  $('modal-reopen-btn').querySelector('.btn-label').textContent = reopen;
-  $('modal-reopen-btn').title = hasLiveTab(readerTab) ? 'Switch to this tab' : 'Reopen this tab';
-  $('modal-reopen-btn').setAttribute('aria-label', reopen === 'Reopen' ? 'Reopen tab' : reopen);
+  const live = hasLiveTab(readerTab); // the same labels as the card's button
+  $('modal-reopen-btn').querySelector('.btn-label').textContent = live ? 'Go to tab' : 'Reopen tab';
+  $('modal-reopen-btn').title = live ? 'Switch to this tab' : 'Reopen this tab';
   const star = starLabel(readerTab.isFavorite);
   const btn = $('modal-star-btn');
   btn.title = star;
@@ -1117,6 +1154,7 @@ function syncPermBanner() {
   const banner = $('perm-banner');
   banner.classList.toggle('quiet', quiet);
   $('perm-dismiss-btn').hidden = !quiet;
+  $('perm-text').textContent = quiet ? PERM_TEXT.quiet : PERM_TEXT.loud;
   banner.hidden = !permMissing || (quiet && permDismissed);
 }
 
@@ -1140,6 +1178,7 @@ function showToast(message, isError = false, onUndo = null, duration = 2600) {
   const progress = $('toast-progress');
   clearTimeout(toastTimer);
   $('toast-message').textContent = message;
+  announce(onUndo ? `${message}. Press U to undo.` : message);
   toast.classList.toggle('error', isError);
   undoBtn.hidden = !onUndo;
   undoBtn.onclick = onUndo ? (e) => { e.stopPropagation(); onUndo(); } : null;
@@ -1153,6 +1192,35 @@ function showToast(message, isError = false, onUndo = null, duration = 2600) {
   toast.showPopover();
   toastDuration = duration;
   toastTimer = setTimeout(hideToast, duration);
+}
+
+/**
+ * Say a toast out loud. The toast itself is display:none until shown, which makes it a poor live
+ * region, so a visually hidden one that is always present carries the message. Clearing first and
+ * writing a moment later makes a repeated message announce again.
+ */
+function announce(text) {
+  const live = $('toast-live');
+  live.textContent = '';
+  setTimeout(() => { live.textContent = text; }, 60);
+}
+
+/** Press the visible toast's Undo, if it has one. */
+function undoFromKeyboard() {
+  const btn = $('toast-undo-btn');
+  if ($('toast').classList.contains('hidden') || btn.hidden) return false;
+  btn.click();
+  return true;
+}
+
+/** The theme button names the current choice and the one a press switches to. */
+function renderThemeButton(theme) {
+  const btn = $('theme-btn');
+  const label = `Theme: ${THEME_LABELS[theme]}. Switch to ${THEME_LABELS[nextTheme(theme)]}.`;
+  btn.innerHTML = ICONS.theme[theme];
+  btn.dataset.theme = theme;
+  btn.title = label;
+  btn.setAttribute('aria-label', label);
 }
 
 /** Hold the auto-dismiss while the toast is hovered or focused (WCAG 2.2.1); restart it on leave. */
@@ -1239,6 +1307,11 @@ function setupEventListeners() {
     await closeSidePanel();
   });
   $('settings-btn').addEventListener('click', () => chrome.runtime.openOptionsPage());
+  $('theme-btn').addEventListener('click', () => {
+    const choice = nextTheme($('theme-btn').dataset.theme);
+    renderThemeButton(choice);
+    setTheme(choice);
+  });
   $('perm-dismiss-btn').addEventListener('click', dismissPermBanner);
   $('enable-perm-btn').addEventListener('click', async () => {
     try {
@@ -1422,6 +1495,10 @@ function setupEventListeners() {
     }
     if (typing || drawerOpen) return;
 
+    if (e.key === 'u' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      if (undoFromKeyboard()) e.preventDefault();
+      return;
+    }
     if (e.key === 'j' || e.key === 'ArrowDown') {
       e.preventDefault();
       selectCard(liveCards().indexOf(keyCard()) + 1);
@@ -1460,7 +1537,7 @@ const relativeTimeFormatter = new Intl.RelativeTimeFormat('en', { style: 'narrow
 
 function formatTimeAgo(timestamp) {
   const mins = Math.floor((Date.now() - timestamp) / 60000);
-  if (mins < 1) return 'Just now';
+  if (mins < 1) return 'just now'; // always follows "saved"
   if (mins < 60) return relativeTimeFormatter.format(-mins, 'minute');
   const hours = Math.floor(mins / 60);
   if (hours < 24) return relativeTimeFormatter.format(-hours, 'hour');

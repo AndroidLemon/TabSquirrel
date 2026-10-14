@@ -34,8 +34,11 @@
   --toast-ink: #EDE9E0;
 }
 
+/* Dark tokens, written twice because CSS cannot share a block between a media query and an attribute
+   selector: once for System (unless Light is chosen), once for an explicit Dark choice.
+   Keep the two identical; tests/test_app_unit.js compares them. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg-primary: #161513;
     --bg-surface: #1F1E1B;
     --border-color: #34322D;
@@ -60,6 +63,40 @@
     --toast-bg: #2E2D29;
     --toast-border: var(--border-strong);
   }
+}
+
+:root[data-theme="dark"] {
+  --bg-primary: #161513;
+  --bg-surface: #1F1E1B;
+  --border-color: #34322D;
+  --border-strong: #4A4740;
+  --text-primary: #EDE9E0;
+  --text-secondary: #B5AFA3;
+  --text-muted: #9A9487;
+  --accent: #9DB4DE;
+  --accent-hover: #B8C9E8;
+  --accent-light: #232C3F;
+  --accent-text: #B8C9E8;
+  --accent-fill: #3E5C8F;
+  --accent-fill-hover: #476699;
+  --accent-fill-ink: #EDE9E0;
+  --border-input: #7D7869;
+  --success: #8DBF93;
+  --danger: #E08A7C;
+  --danger-light: #3A201C;
+  --danger-border: #6E3A32;
+  --danger-contrast: #161513;
+  --focus-ring: 0 0 0 3px rgb(157 180 222 / 0.3);
+  --toast-bg: #2E2D29;
+  --toast-border: var(--border-strong);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 ::placeholder {

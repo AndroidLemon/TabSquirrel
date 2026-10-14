@@ -180,7 +180,7 @@ Density follows the surface. In the side panel it is compact (13px body, one col
 - Serif for content, sans for controls, mono for data.
 - Flat surfaces separated by hairline rules. Shadows only on things that float.
 - Status shown by a muted hue plus a word, never by colour alone.
-- A full dark scheme through `prefers-color-scheme`, with every token redefined.
+- A full dark scheme with every token redefined, following the system by default and switchable to Light or Dark by the user (ADR 0006).
 
 ## Colors
 
@@ -298,11 +298,14 @@ Ruled and restrained.
 - **Sidebar nav items:** transparent, secondary text, 13px, padding 7px by 10px. Hover fills with paper muted. Active gets an ink wash, ink text and 600 weight. Section labels are uppercase, 12px, muted, with 0.05em tracking.
 - **Narrow layout:** the same sidebar becomes a left drawer behind a Filters button.
 
+### Theme toggle
+One icon button in the sidebar footer, beside the shortcuts `?` and Settings, in the footer button style (paper surface, 1px rule, secondary text). Each press cycles System, Light, Dark, and the icon shows the current choice: a monitor, a sun or a moon. Its aria-label and tooltip name both states ("Theme: System. Switch to Light."). In the narrow layout it lives in the Filters drawer. The options page offers the same choice as an Appearance setting with three radios, and the two stay in sync live. System is the default and writes no `data-theme` attribute; Light and Dark set `data-theme` on `<html>` and `color-scheme` to match, so native controls follow. A classic script in `<head>` applies the stored choice before first paint (ADR 0006).
+
 ### Toast (signature)
-A fixed charcoal bar in both schemes, shown as a manual popover so it stays above the open reader dialog. It sits at bottom centre in the narrow layout and bottom right in the wide one. The Undo button is a pale-ink pill. A 2px ink progress bar counts down the 5-second Undo window. The error variant switches to a brick fill.
+A fixed charcoal bar in both schemes, shown as a manual popover so it stays above the open reader dialog. It sits at bottom centre in the narrow layout and bottom right in the wide one. The Undo button is a pale-ink pill labelled "Undo (U)", and pressing `u` (when not typing) activates it. A 2px ink progress bar counts down the 5-second Undo window. The error variant switches to a brick fill. The toast is display:none while hidden, so a separate visually hidden live region announces each message, with "Press U to undo" when there is an Undo.
 
 ### Reader Dialog (signature)
-A native `<dialog>`: 20px radius, up to 820px wide and 85vh tall, with the overlay shadow and a blurred scrim. On open it fades and scales up from 96% (200ms). The header holds a 22px serif title and the ink source link. The body is an 18px Newsreader column, 68ch wide, with line height 1.6.
+A native `<dialog>`: 20px radius, up to 820px wide and 85vh tall, with the overlay shadow and a blurred scrim. On open it fades and scales up from 96% (200ms). The header holds a 22px serif title and the ink source link; focus starts on the title (a heading with tabindex -1), not the link, so Enter cannot leave the notebook. The actions follow the button rules by weight: Reopen tab / Go to tab is the ink primary, Delete is a secondary in brick text, and Star and Copy are quiet (no fill, no border until hover). The body is an 18px Newsreader column, 68ch wide, with line height 1.6.
 
 ### Motion
 One easing curve, `cubic-bezier(.2, .7, .2, 1)`. Durations: 120ms for colour and border changes, 200ms for entrances, chevrons and toasts, and 320ms for the drawer. Under `prefers-reduced-motion`, transforms and loops drop out and only opacity fades remain.
@@ -310,12 +313,13 @@ One easing curve, `cubic-bezier(.2, .7, .2, 1)`. Durations: 120ms for colour and
 ## Do's and Don'ts
 
 ### Do:
-- **Do** take every colour from the tokens on `:root` and define its dark counterpart under `prefers-color-scheme: dark`.
+- **Do** take every colour from the tokens on `:root` and define its dark counterpart twice: under `@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) }` for System, and under `:root[data-theme="dark"]` for an explicit Dark choice. The two blocks must stay identical (a unit test compares them), and `color-scheme` follows the chosen mode.
 - **Do** set content in Newsreader, controls in Plex Sans and data in Plex Mono (the Three Voices Rule).
 - **Do** separate surfaces with 1px rules and tonal steps. Reserve shadows for menus, dialogs and toasts.
 - **Do** pair every status hue with a word, and leave Closed unbadged.
 - **Do** keep filled ink buttons at `night-ink-fill` in dark mode, not the bright `night-ink`, and set their text in `--accent-fill-ink` (dark text on the quiet fill is only 2.7:1).
 - **Do** keep a visible focus halo and AA contrast in both schemes, and respect reduced motion.
+- **Do** keep every control at least 24px in both directions (card icon buttons are 28px), and let the layout reflow at 190 CSS px wide (200% zoom in the side panel) with no sideways scroll.
 
 ### Don't:
 - **Don't** add a second accent colour, or use moss, ochre or brick decoratively.
@@ -323,3 +327,4 @@ One easing curve, `cubic-bezier(.2, .7, .2, 1)`. Durations: 120ms for colour and
 - **Don't** put shadows on resting cards, inputs or the sidebar.
 - **Don't** use font weights that aren't bundled, or load fonts from a CDN.
 - **Don't** fork token names between pages. `src/app/app.css` and `src/options/options.css` define the same tokens under the same names, and a value changed in one changes in the other.
+- **Don't** add a dark token to only one of the two dark blocks, or style a scheme with `prefers-color-scheme` alone: the user's Light/Dark choice sets `data-theme`, and a rule that ignores it breaks the toggle.

@@ -51,7 +51,9 @@ async function runAppUXTests() {
     assert.strictEqual(await page.locator('#perm-banner').isVisible(), true, 'An empty notebook without the permission shows the permission note');
     assert.strictEqual(await page.locator('#perm-banner').evaluate(el => el.classList.contains('quiet')), false, 'It is not quiet before the first note');
     assert.strictEqual(await page.locator('#perm-dismiss-btn').isHidden(), true, 'It cannot be dismissed before the first note');
-    assert.strictEqual(await page.locator('#fade-note').count(), 1, 'The fade sentence shows in the empty state');
+    assert.strictEqual(await page.locator('#fade-note').count(), 0, 'The first run leaves the fade sentence until a first note exists');
+    assert.match(await page.textContent('#perm-text'), /^Without it, tabs from sites you haven't allowed stay open and get no note\.$/, 'The loud note keeps its first-run copy');
+    assert.strictEqual((await page.textContent('#enable-perm-btn')).trim(), 'Allow all sites', 'and its action says what it does');
     const firstRunPanel = await context.newPage();
     await firstRunPanel.addInitScript(() => { chrome.tabs.getCurrent = () => Promise.resolve(undefined); });
     await firstRunPanel.setViewportSize(NARROW);
@@ -216,8 +218,11 @@ async function runAppUXTests() {
       window.__realSend = chrome.runtime.sendMessage;
       chrome.runtime.sendMessage = async (msg) => { window.__sent = msg; return { success: true, restoredInPlace: false }; };
     });
+    await page.evaluate(() => { window.__cardBeforeReopen = document.querySelector('.tab-card[data-id="test-tab-1"]'); });
     await page.keyboard.press('Enter');
     await page.waitForFunction(() => window.__sent);
+    // The reopen redraws the feed; let that land before the next keys, or it replaces the card they just selected
+    await page.waitForFunction(() => document.querySelector('.tab-card[data-id="test-tab-1"]') !== window.__cardBeforeReopen);
     const sent = await page.evaluate(() => {
       chrome.runtime.sendMessage = window.__realSend;
       return window.__sent;
@@ -1258,7 +1263,7 @@ async function runAppUXTests() {
     assert.strictEqual((await hub.textContent('#modal-reopen-btn')).trim(), 'Go to tab', 'The reader says the same');
     await hub.keyboard.press('Escape');
     await hub.click('.tab-card[data-id="gone-saved-note"] .reader-btn');
-    assert.strictEqual((await hub.textContent('#modal-reopen-btn')).trim(), 'Reopen', 'The reader says Reopen for a note whose tab is not open');
+    assert.strictEqual((await hub.textContent('#modal-reopen-btn')).trim(), 'Reopen tab', 'The reader says Reopen tab for a note whose tab is not open, as the card does');
     await hub.keyboard.press('Escape');
     await savedTabPage.close(); // closing the tab later flips the label, whatever the status says
     await refreshHub();
@@ -1404,7 +1409,8 @@ async function runAppUXTests() {
     assert.strictEqual(await permBanner.isVisible(), true, 'The permission note shows while permission is missing');
     assert.strictEqual(await permBanner.evaluate(el => el.classList.contains('quiet')), true, 'With notes it is quiet');
     assert.strictEqual(await permBanner.evaluate(el => getComputedStyle(el).backgroundColor), 'rgba(0, 0, 0, 0)', 'Quiet means no ink-wash fill');
-    assert.match(await permBanner.textContent(), /stay open and get no note/, 'It says what happens without the permission');
+    assert.strictEqual((await hub.textContent('#perm-text')).trim(), "Some sites can't be read, so their tabs stay open with no note.", 'Quiet, it is a full sentence with its own subject');
+    assert.strictEqual((await hub.textContent('#enable-perm-btn')).trim(), 'Allow all sites', 'and the action says what it does');
     await hub.click('#perm-dismiss-btn');
     assert.strictEqual(await permBanner.isHidden(), true, 'Dismiss hides the note');
     assert.strictEqual(await hub.evaluate(async () => (await chrome.storage.local.get('perm_banner_dismissed')).perm_banner_dismissed), true, 'The dismissal is stored');
@@ -1430,7 +1436,315 @@ async function runAppUXTests() {
     assert.strictEqual(await flashPage.evaluate(() => window.__permLoud), false, 'It never showed loud on the way');
     await flashPage.close();
     console.log('✓ Permission note does not flash loud before the note count is known\n');
+
+    // --- TEST 15: keyboard flow after Delete, Undo from the keyboard, reader focus, legend, reader action weight ---
+    console.log('--- Test 15: Delete Focus, Undo Key, Reader Focus, Legend, Reader Actions ---');
+    await hub.bringToFront();
+    await hub.click('.nav-item[data-view=""]');
+    await hub.waitForFunction(() => document.querySelectorAll('#closed-today-list .tab-card, #tabs-feed .tab-card').length > 3);
+    const liveIds = () => hub.$$eval('#closed-today-list .tab-card:not(.removing), #tabs-feed .tab-card:not(.removing)', cards => cards.map(c => c.dataset.id));
+    const focusedId = () => hub.evaluate(() => document.activeElement?.dataset?.id ?? null);
+    const idsNow = await liveIds();
+    assert.ok(idsNow.length >= 4, `Enough notes to walk through: ${idsNow}`);
+    await hub.evaluate(() => document.activeElement?.blur());
+    await hub.keyboard.press('j');
+    await hub.keyboard.press('j');
+    assert.strictEqual(await focusedId(), idsNow[1], 'j j selects the second note');
+    await hub.keyboard.press('Delete');
+    await hub.waitForFunction((id) => document.activeElement?.dataset?.id === id, idsNow[2]);
+    await hub.locator('#toast-undo-btn').waitFor({ state: 'visible', timeout: 2000 });
+    assert.strictEqual(await focusedId(), idsNow[2], 'Delete moves the selection to the note now in that position');
+    await hub.keyboard.press('Delete');
+    await hub.waitForFunction((id) => document.activeElement?.dataset?.id === id, idsNow[3]);
+    assert.strictEqual(await focusedId(), idsNow[3], 'Delete again deletes that note and selects the next: Delete, Delete works');
+    await hub.waitForFunction(() => document.querySelectorAll('.tab-card.removing').length === 0);
+    assert.deepStrictEqual((await liveIds()).slice(0, 2), [idsNow[0], idsNow[3]], 'Both notes left the list');
+    assert.strictEqual((await hub.locator('#toast-undo-btn').textContent()).trim(), 'Undo (U)', 'The toast names its key');
+    assert.strictEqual(await hub.locator('#toast-undo-btn').getAttribute('aria-keyshortcuts'), 'u', 'and exposes it');
+    await hub.waitForFunction(() => /^Note deleted\. Press U to undo\.$/.test(document.getElementById('toast-live').textContent));
+    assert.strictEqual(await hub.locator('#toast-live').getAttribute('aria-live'), 'polite', 'A persistent live region announces the toast and its Undo');
+    // Typing a "u" in search is just a letter
+    await hub.keyboard.press('/');
+    await hub.keyboard.type('u');
+    assert.strictEqual(await hub.locator('#toast').evaluate(el => el.classList.contains('hidden')), false, 'u typed in search does not undo');
+    await hub.keyboard.press('Escape');
+    await hub.keyboard.press('Escape');
+    await hub.waitForFunction(() => document.getElementById('search-input').value === '');
+    await hub.waitForSelector('#tabs-feed .tab-card');
+    await hub.evaluate(() => document.activeElement?.blur());
+    await hub.keyboard.press('u');
+    await hub.waitForSelector(`.tab-card[data-id="${idsNow[2]}"]`);
+    await hub.waitForFunction((id) => document.activeElement?.dataset?.id === id, idsNow[2]);
+    assert.strictEqual(await focusedId(), idsNow[2], 'u undoes the last delete and puts focus on the returned note');
+    assert.strictEqual(await hub.evaluate(async (id) => (await (await import('/src/storage/db.js')).getArchivedTabs({ limit: Infinity })).some(t => t.id === id), idsNow[2]), true, 'and the note is back in the database');
+    await hub.keyboard.press('u'); // the Undo bar is gone: nothing to undo
+    assert.strictEqual(await hub.locator('#toast-undo-btn').isHidden(), true, 'u with no Undo bar does nothing');
+    for (let i = 0; i < idsNow.length; i++) await hub.keyboard.press('j');
+    const walk = await liveIds();
+    assert.strictEqual(await focusedId(), walk[walk.length - 1], 'j walks to the last note');
+    await hub.keyboard.press('Delete');
+    await hub.waitForFunction((id) => document.activeElement?.dataset?.id === id, walk[walk.length - 2]);
+    assert.strictEqual(await focusedId(), walk[walk.length - 2], 'Deleting the last note selects the one before it');
+    await hub.locator('#toast-undo-btn').waitFor({ state: 'visible', timeout: 2000 });
+    await hub.keyboard.press('u');
+    await hub.waitForFunction((id) => document.activeElement?.dataset?.id === id, walk[walk.length - 1]);
+    await hub.evaluate(async (id) => (await import('/src/storage/db.js')).restoreDeletedTab(id), idsNow[1]);
+    await refreshHub();
+    await hub.waitForSelector(`.tab-card[data-id="${idsNow[1]}"]`);
+    console.log('✓ Delete hands the selection to the next note, u undoes from the keyboard and returns focus, the toast is announced\n');
+
+    // Reader: opens on the title, so Enter cannot leave the notebook
+    const pagesBeforeReader = context.pages().length;
+    await hub.evaluate(() => document.activeElement?.blur());
+    await hub.keyboard.press('j');
+    await hub.keyboard.press('o');
+    await hub.waitForSelector('#reader-dialog[open]');
+    assert.strictEqual(await hub.evaluate(() => document.activeElement.id), 'modal-title', 'The reader opens with focus on its title');
+    assert.strictEqual(await hub.locator('#modal-title').getAttribute('tabindex'), '-1', 'The title is focusable but not a tab stop');
+    await hub.keyboard.press('Enter');
+    assert.strictEqual(context.pages().length, pagesBeforeReader, 'Enter in the reader opens nothing');
+    assert.strictEqual(await hub.evaluate(() => document.getElementById('reader-dialog').open), true, 'and leaves the reader open');
+    await hub.keyboard.press('Tab');
+    assert.strictEqual(await hub.evaluate(() => document.activeElement.id), 'modal-source-link', 'Tab goes on to the source link');
+    // Reader actions by weight: Reopen primary, Delete brick text, Star and Copy quiet
+    const weights = await hub.evaluate(() => Object.fromEntries(['modal-reopen-btn', 'modal-star-btn', 'modal-delete-btn', 'modal-copy-btn'].map(id => {
+      const css = getComputedStyle(document.getElementById(id));
+      return [id, { bg: css.backgroundColor, color: css.color, border: css.borderTopColor }];
+    })));
+    const clear = 'rgba(0, 0, 0, 0)';
+    assert.strictEqual(weights['modal-reopen-btn'].bg, 'rgb(46, 74, 122)', 'Reopen tab is the ink-filled primary');
+    assert.strictEqual(weights['modal-delete-btn'].color, 'rgb(166, 61, 47)', 'Delete is brick text');
+    assert.notStrictEqual(weights['modal-delete-btn'].bg, clear, 'on a surface with a rule, a secondary');
+    for (const id of ['modal-star-btn', 'modal-copy-btn']) {
+      assert.strictEqual(weights[id].bg, clear, `${id} has no fill`);
+      assert.strictEqual(weights[id].border, clear, `${id} has no border`);
+    }
+    await hub.keyboard.press('Escape');
+    console.log('✓ The reader opens on its title (Enter cannot leave the notebook); Reopen tab is primary, Delete brick, Star and Copy quiet\n');
+
+    // The legend: descriptions left-aligned in one column, Backspace beside Delete, u listed
+    await hub.keyboard.press('?');
+    await hub.waitForSelector('#shortcuts-dialog[open]');
+    const legend = await hub.evaluate(() => ({
+      lefts: [...document.querySelectorAll('#shortcuts-dialog dd')].map(dd => Math.round(dd.getBoundingClientRect().left)),
+      align: getComputedStyle(document.querySelector('#shortcuts-dialog dd')).textAlign,
+      keys: [...document.querySelectorAll('#shortcuts-dialog dt')].map(dt => dt.textContent.trim().replace(/\s+/g, ' '))
+    }));
+    assert.strictEqual(new Set(legend.lefts).size, 1, `Legend descriptions share one left edge: ${legend.lefts}`);
+    assert.ok(['left', 'start'].includes(legend.align), 'and are left-aligned');
+    assert.ok(legend.keys.includes('Del Backspace'), 'Delete is listed with Backspace');
+    assert.ok(legend.keys.includes('u'), 'and u (Undo) is listed');
+    await hub.keyboard.press('Escape');
+    console.log('✓ The legend is a left-aligned column that lists Backspace and u\n');
+
+    // Time filters carry count badges like the others, and each equals what its filter lists
+    for (const time of ['today', 'yesterday', 'week', 'favorites']) {
+      await hub.click(`.nav-item[data-time="${time}"]`);
+      await hub.waitForFunction((t) => document.querySelector(`.nav-item[data-time="${t}"]`).getAttribute('aria-current') === 'page', time);
+      const badge = await hub.textContent(`.nav-item[data-time="${time}"] .badge`);
+      // The list redraws asynchronously after the click; it must settle on exactly the badge's count
+      await hub.waitForFunction((n) => document.getElementById('results-count').textContent === `${n} ${n === 1 ? 'note' : 'notes'}` && document.querySelectorAll('#tabs-feed .tab-card').length === n, Number(badge), { timeout: 3000 })
+        .catch(async () => assert.fail(`The ${time} badge (${badge}) differs from the ${await hub.locator('#tabs-feed .tab-card').count()} notes its filter lists`));
+    }
+    console.log('✓ Yesterday and Past 7 days have count badges that match their lists\n');
+
+    // Card details: "saved just now", and the fade chip goes back where it was drawn
+    await hub.click('.nav-item[data-view=""]');
+    await hub.evaluate(async () => {
+      const { saveArchivedTab } = await import('/src/storage/db.js');
+      await saveArchivedTab({ id: 'fresh-note', url: 'https://notes.example/fresh', title: 'fresh-note', capturedAt: Date.now(), status: 'archived', summary: { tldr: 'fresh gist', bullets: [], tags: [] } });
+    });
+    await refreshHub();
+    await hub.waitForSelector('.tab-card[data-id="fresh-note"]');
+    const freshMeta = await hub.textContent('.tab-card[data-id="fresh-note"] .card-time');
+    assert.match(freshMeta, /saved just now/, 'A note from this minute reads "saved just now"');
+    assert.ok(!/Just now/.test(freshMeta), 'with no capital J mid-sentence');
+    const fading = hub.locator('.tab-card[data-id="fading-note"]');
+    const fadingStarred = () => fading.locator('.star-btn').evaluate(el => el.classList.contains('active'));
+    if (await fadingStarred()) { // earlier steps may have left it starred
+      await fading.locator('.star-btn').click();
+      await hub.waitForFunction(() => !document.querySelector('.tab-card[data-id="fading-note"] .star-btn').classList.contains('active'));
+    }
+    assert.strictEqual(await fading.locator('.card-flags > .fade-chip').count(), 1, 'An unstarred note near its fade date shows the chip in .card-flags');
+    await fading.locator('.star-btn').click();
+    await hub.waitForFunction(() => document.querySelector('.tab-card[data-id="fading-note"] .star-btn').classList.contains('active'));
+    assert.strictEqual(await fading.locator('.fade-chip').count(), 0, 'Starring removes the fade chip');
+    await fading.locator('.star-btn').click();
+    await hub.waitForFunction(() => !document.querySelector('.tab-card[data-id="fading-note"] .star-btn').classList.contains('active'));
+    assert.strictEqual(await fading.locator('.card-flags > .fade-chip').count(), 1, 'Unstarring puts the chip back in .card-flags');
+    assert.strictEqual(await fading.locator('.card-source .fade-chip').count(), 0, 'not in the domain line');
+    await hub.evaluate(async () => { const db = await import('/src/storage/db.js'); await db.softDeleteTab('fresh-note'); await db.purgeDeletedTabs(0); });
+    await refreshHub();
+    console.log('✓ "saved just now"; the toggled fade chip lives in .card-flags\n');
     await hub.close();
+
+    // --- TEST 16: Theme: System / Light / Dark, live across pages, persisted, no flash ---
+    console.log('--- Test 16: Theme ---');
+    const DARK_PAPER = 'rgb(22, 21, 19)'; // night-paper #161513
+    const LIGHT_PAPER = 'rgb(246, 243, 236)'; // paper #F6F3EC
+    const OPTIONS_URL = `chrome-extension://${extensionId}/src/options/index.html`;
+    const paper = (p) => p.evaluate(() => getComputedStyle(document.body).backgroundColor);
+    const attr = (p) => p.evaluate(() => document.documentElement.getAttribute('data-theme'));
+    const scheme = (p) => p.evaluate(() => getComputedStyle(document.documentElement).colorScheme);
+    const stored = (p) => p.evaluate(async () => (await chrome.storage.local.get('theme')).theme ?? null);
+    const themeBtn = (p) => p.getAttribute('#theme-btn', 'aria-label');
+    const tp = await context.newPage();
+    await tp.emulateMedia({ colorScheme: 'light' });
+    await tp.setViewportSize(WIDE);
+    await tp.goto(APP_URL);
+    await tp.waitForSelector('.tab-card');
+    assert.strictEqual(await attr(tp), null, 'System is the default: no data-theme attribute');
+    assert.strictEqual(await paper(tp), LIGHT_PAPER, 'System under a light OS is the light paper');
+    assert.strictEqual(await scheme(tp), 'light dark', 'and lets native controls follow the OS');
+    assert.strictEqual(await themeBtn(tp), 'Theme: System. Switch to Light.', 'The button names the current and the next state');
+    assert.strictEqual(await tp.locator('#theme-btn').getAttribute('title'), 'Theme: System. Switch to Light.', 'and says so in its tooltip');
+    // The button sits in the sidebar footer beside ? and Settings
+    const footerKids = await tp.$$eval('.sidebar-footer > *', els => els.map(el => el.id || el.className));
+    assert.ok(footerKids.includes('theme-btn') && footerKids.includes('shortcuts-btn') && footerKids.includes('settings-btn'), `Theme sits with ? and Settings: ${footerKids}`);
+    await tp.click('#theme-btn');
+    await tp.waitForFunction(() => document.documentElement.dataset.theme === 'light');
+    assert.strictEqual(await scheme(tp), 'light', 'Light sets color-scheme: light');
+    assert.strictEqual(await themeBtn(tp), 'Theme: Light. Switch to Dark.');
+    await tp.click('#theme-btn');
+    await tp.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
+    assert.strictEqual(await paper(tp), DARK_PAPER, 'Dark is the night paper even while the OS is light');
+    assert.strictEqual(await scheme(tp), 'dark', 'and Dark sets color-scheme: dark so native controls follow');
+    assert.strictEqual(await themeBtn(tp), 'Theme: Dark. Switch to System.');
+    await tp.waitForFunction(async () => (await chrome.storage.local.get('theme')).theme === 'dark');
+    assert.strictEqual(await tp.evaluate(() => localStorage.getItem('theme')), 'dark', 'The choice is mirrored to localStorage for the boot script');
+
+    // Persists across a reload, and is on <html> before the app script runs (no flash)
+    await tp.close();
+    const rp = await context.newPage();
+    await rp.emulateMedia({ colorScheme: 'light' });
+    await rp.addInitScript(() => {
+      window.__themeSetWhile = null;
+      new MutationObserver(() => {
+        if (window.__themeSetWhile === null && document.documentElement.dataset.theme) window.__themeSetWhile = document.readyState;
+      }).observe(document, { attributes: true, subtree: true, attributeFilter: ['data-theme'] });
+    });
+    await rp.setViewportSize(WIDE);
+    await rp.goto(APP_URL);
+    await rp.waitForSelector('.tab-card');
+    assert.strictEqual(await attr(rp), 'dark', 'Dark survives a reload');
+    assert.strictEqual(await paper(rp), DARK_PAPER);
+    assert.strictEqual(await rp.evaluate(() => window.__themeSetWhile), 'loading', 'theme-boot.js set it while the page was still parsing, before first paint');
+    assert.strictEqual(await themeBtn(rp), 'Theme: Dark. Switch to System.', 'and the button agrees');
+
+    // The options page reflects it, and the two pages follow each other live
+    const op = await context.newPage();
+    await op.emulateMedia({ colorScheme: 'light' });
+    await op.goto(OPTIONS_URL);
+    await op.waitForFunction(() => document.getElementById('theme-dark').checked);
+    assert.strictEqual(await attr(op), 'dark', 'The options page is dark too');
+    assert.strictEqual(await paper(op), DARK_PAPER, 'with the same paper token');
+    assert.strictEqual(await op.locator('input[name="theme"]').count(), 3, 'Appearance offers three radios');
+    assert.deepStrictEqual(await op.$$eval('input[name="theme"]', r => r.map(x => x.value)), ['system', 'light', 'dark']);
+    await op.check('#theme-light');
+    await rp.waitForFunction(() => document.documentElement.dataset.theme === 'light');
+    assert.strictEqual(await paper(rp), LIGHT_PAPER, 'Choosing Light in Settings changes the open notebook live');
+    assert.strictEqual(await themeBtn(rp), 'Theme: Light. Switch to Dark.', 'and its button');
+    assert.strictEqual(await stored(op), 'light');
+    await rp.click('#theme-btn'); // Dark
+    await op.waitForFunction(() => document.getElementById('theme-dark').checked);
+    assert.strictEqual(await paper(op), DARK_PAPER, 'The notebook button changes the options page live');
+    // Light under a dark OS is light; System under a dark OS is dark
+    await rp.emulateMedia({ colorScheme: 'dark' });
+    await op.emulateMedia({ colorScheme: 'dark' });
+    await op.check('#theme-light');
+    await rp.waitForFunction(() => document.documentElement.dataset.theme === 'light');
+    assert.strictEqual(await paper(rp), LIGHT_PAPER, 'Light beats a dark OS');
+    assert.strictEqual(await paper(op), LIGHT_PAPER, 'on the options page too');
+    await op.check('#theme-system');
+    await rp.waitForFunction(() => !document.documentElement.hasAttribute('data-theme'));
+    assert.strictEqual(await paper(rp), DARK_PAPER, 'System follows a dark OS');
+    assert.strictEqual(await rp.evaluate(() => localStorage.getItem('theme')), null, 'and clears the mirror');
+    assert.strictEqual(await stored(op), 'system');
+    await rp.emulateMedia({ colorScheme: 'light' });
+    assert.strictEqual(await paper(rp), LIGHT_PAPER, 'System follows the OS back to light');
+    await op.close();
+    await rp.close();
+
+    // Narrow: the button is in the Filters drawer, reachable by keyboard
+    const dp = await context.newPage();
+    await dp.addInitScript(() => { chrome.tabs.getCurrent = () => Promise.resolve(undefined); });
+    await dp.setViewportSize(NARROW);
+    await dp.goto(APP_URL);
+    await dp.waitForSelector('.tab-card');
+    await dp.click('#filters-btn');
+    await dp.waitForSelector('#theme-btn:visible');
+    await dp.focus('#theme-btn');
+    await dp.keyboard.press('Enter');
+    await dp.waitForFunction(() => document.documentElement.dataset.theme === 'light');
+    assert.strictEqual(await attr(dp), 'light', 'The drawer button cycles the theme from the keyboard');
+    const footerFits = await dp.evaluate(() => {
+      const side = document.getElementById('sidebar').getBoundingClientRect();
+      return [...document.querySelectorAll('.sidebar-footer > *')].every(el => el.getBoundingClientRect().right <= side.right + 0.5);
+    });
+    assert.strictEqual(footerFits, true, 'The footer buttons fit inside the drawer');
+    await dp.evaluate(() => chrome.storage.local.remove('theme'));
+    await dp.waitForFunction(() => !document.documentElement.hasAttribute('data-theme'));
+    await dp.close();
+    console.log('✓ Theme: System/Light/Dark, native controls follow, persists, no flash, options page and notebook in sync, drawer reachable\n');
+
+    // --- TEST 17: 200% zoom reflow (WCAG 1.4.10) and target sizes ---
+    console.log('--- Test 17: 190px Reflow & Target Sizes ---');
+    const zp = await context.newPage();
+    await zp.addInitScript(() => { chrome.tabs.getCurrent = () => Promise.resolve(undefined); });
+    await zp.setViewportSize({ width: 190, height: 700 });
+    await zp.goto(APP_URL);
+    await zp.waitForSelector('.tab-card');
+    await zp.evaluate(async () => {
+      const { saveArchivedTab, markClosedByTabSquirrel } = await import('/src/storage/db.js');
+      const fields = { domain: 'a-fairly-long-domain-name.example.org', status: 'archived', capturedAt: Date.now() - 4 * 3600000, readingTimeMinutes: 12,
+        summary: { tldr: 'A gist long enough to wrap onto several lines in a very narrow column.', bullets: ['One takeaway.', 'Another takeaway.'], tags: ['long-tag-name', 'another'] } };
+      await saveArchivedTab({ ...fields, id: 'zoom-1', url: 'https://a-fairly-long-domain-name.example.org/p/1', title: 'A long title with Supercalifragilisticexpialidocious in it' });
+      await saveArchivedTab({ ...fields, id: 'zoom-2', url: 'https://a-fairly-long-domain-name.example.org/p/2', title: 'Second', lastActiveAt: Date.now() - 4 * 3600000 });
+      await markClosedByTabSquirrel('zoom-2');
+    });
+    await zp.evaluate(() => chrome.storage.local.remove('closed_today_seen'));
+    await zp.reload();
+    await zp.waitForSelector('#closed-today-list .tab-card');
+    const reflow = (label) => zp.evaluate((l) => {
+      const root = document.documentElement;
+      const search = document.getElementById('search-input').getBoundingClientRect();
+      const wide = [...document.querySelectorAll('.tab-card *, .closed-today *, .view-tabs *, .search-row *')].filter(el => el.offsetParent && el.getBoundingClientRect().right > root.clientWidth + 0.5).map(el => `${el.className || el.tagName}`);
+      return { label: l, scroll: root.scrollWidth, client: root.clientWidth, searchWidth: search.width, wide };
+    }, label);
+    for (const [label, action] of [['expanded', async () => {}], ['one line each', async () => zp.click('#closed-today-toggle')]]) {
+      await action();
+      const r = await reflow(label);
+      assert.ok(r.scroll <= r.client, `Closed today ${label}: no sideways scroll at 190px (${r.scroll} > ${r.client})`);
+      assert.ok(r.searchWidth >= 120, `Closed today ${label}: search stays at least 120px wide, got ${r.searchWidth}`);
+      assert.deepStrictEqual(r.wide, [], `Closed today ${label}: nothing runs past the viewport`);
+    }
+    await zp.click('#closed-today-toggle'); // expanded again
+    const searchRow = await zp.evaluate(() => ({ search: document.getElementById('search-input').getBoundingClientRect().top, filters: document.getElementById('filters-btn').getBoundingClientRect().top }));
+    assert.ok(searchRow.filters > searchRow.search, 'Filters drops below the search box instead of squeezing it');
+    const ctHeadingBox = await zp.locator('#closed-today-toggle').boundingBox();
+    assert.ok(ctHeadingBox.height > 24, 'The Closed today heading wraps to more than one line');
+    assert.ok(ctHeadingBox.x + ctHeadingBox.width <= 190, 'and stays inside the panel');
+    // Target sizes
+    const targets = await zp.evaluate(() => {
+      const first = (sel) => { const r = document.querySelector(sel).getBoundingClientRect(); return { w: r.width, h: r.height }; };
+      return { toggle: first('#tabs-feed .takeaways-toggle, #closed-today-list .takeaways-toggle'), icon: first('.action-icon-btn') };
+    });
+    assert.ok(targets.toggle.h >= 24, `The takeaways toggle is at least 24px tall, got ${targets.toggle.h}`);
+    assert.ok(targets.icon.w >= 28 && targets.icon.h >= 28, `Card icon buttons are 28px, got ${targets.icon.w}x${targets.icon.h}`);
+    // Tags and titles are text-sized targets that pass WCAG 2.5.8 on spacing (no other target within 24px of their centres), so they are not held to 24px of height.
+    const small = await zp.evaluate(() => [...document.querySelectorAll('button, a[href], summary, select, input')].filter(el => el.offsetParent && !el.closest('.sidebar') && !el.closest('dialog') && !el.matches('.card-tag, .card-title-btn')).map(el => { const r = el.getBoundingClientRect(); return { id: el.id || el.className, w: Math.round(r.width), h: Math.round(r.height) }; }).filter(t => t.h < 24 || t.w < 24));
+    assert.deepStrictEqual(small, [], `Every visible control is at least 24x24: ${JSON.stringify(small)}`);
+    // The drawer at 190px
+    await zp.click('#filters-btn');
+    const drawer = await zp.evaluate(() => {
+      const side = document.getElementById('sidebar').getBoundingClientRect();
+      return { overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth, kids: [...document.querySelectorAll('.sidebar-footer > *')].every(el => el.getBoundingClientRect().right <= side.right + 0.5) };
+    });
+    assert.strictEqual(drawer.overflow, 0, 'The open drawer adds no sideways scroll');
+    assert.strictEqual(drawer.kids, true, 'and its footer buttons stay inside it');
+    await zp.evaluate(async () => { const db = await import('/src/storage/db.js'); for (const id of ['zoom-1', 'zoom-2']) await db.softDeleteTab(id); await db.purgeDeletedTabs(0); });
+    await zp.close();
+    console.log('✓ At 190px nothing scrolls sideways, search keeps 120px+, Closed today wraps; targets are 24px+ (icons 28px)\n');
 
     console.log('========================================================');
     console.log('🎉 ALL KNOWLEDGE HUB UX TESTS PASSED (NARROW + WIDE LAYOUTS, PANEL + TAB SURFACES)! 🎉');

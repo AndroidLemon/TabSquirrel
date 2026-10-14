@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tab Squirrel Notebook</title>
+  <script src="../shared/theme-boot.js"></script>
   <link rel="stylesheet" href="../fonts/fonts.css">
   <link rel="stylesheet" href="app.css">
 </head>
@@ -55,10 +56,12 @@
         <button class="nav-item" data-time="yesterday">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
           Yesterday
+          <span class="badge" id="count-yesterday">0</span>
         </button>
         <button class="nav-item" data-time="week">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
           Past 7 days
+          <span class="badge" id="count-week">0</span>
         </button>
 
         <div class="nav-section-title">Tags</div>
@@ -91,6 +94,7 @@
           </div>
         </div>
         <button id="shortcuts-btn" class="footer-btn shortcuts-btn" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts" aria-haspopup="dialog">?</button>
+        <button id="theme-btn" class="footer-btn theme-btn" type="button"></button>
         <button id="settings-btn" class="footer-btn">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
           Settings
@@ -121,9 +125,9 @@
       <div id="perm-banner" class="perm-banner" hidden>
         <div>
           <strong>Let Tab Squirrel read pages</strong>
-          <p>Without it, tabs from sites you haven't allowed stay open and get no note.</p>
+          <p id="perm-text">Without it, tabs from sites you haven't allowed stay open and get no note.</p>
         </div>
-        <button id="enable-perm-btn" class="perm-btn">Enable</button>
+        <button id="enable-perm-btn" class="perm-btn">Allow all sites</button>
         <button id="perm-dismiss-btn" class="icon-btn perm-dismiss-btn" title="Dismiss" aria-label="Dismiss" hidden>✕</button>
       </div>
 
@@ -185,7 +189,7 @@
           <button id="closed-today-reopen-all" class="closed-today-reopen-btn" type="button">Reopen all</button>
           <div id="closed-today-confirm" class="closed-today-confirm" role="group" aria-label="Confirm Reopen all" hidden>
             <span id="closed-today-confirm-text"></span>
-            <button id="closed-today-confirm-yes" class="closed-today-reopen-btn" type="button">Reopen</button>
+            <button id="closed-today-confirm-yes" class="closed-today-reopen-btn" type="button">Reopen all</button>
             <button id="closed-today-confirm-no" class="closed-today-cancel-btn" type="button">Cancel</button>
           </div>
         </div>
@@ -202,18 +206,18 @@
     <div class="modal-card">
       <header class="modal-header">
         <div class="modal-title-group">
-          <h2 id="modal-title" class="modal-title"></h2>
+          <h2 id="modal-title" class="modal-title" tabindex="-1"></h2>
           <a id="modal-source-link" target="_blank" rel="noopener" class="modal-source-link"></a>
           <div id="modal-fade" class="modal-fade"></div>
         </div>
         <div class="modal-header-actions">
-          <button id="modal-reopen-btn" class="modal-copy-btn" type="button" title="Reopen this tab" aria-label="Reopen tab">
-            <span class="btn-label">Reopen</span>
+          <button id="modal-reopen-btn" class="modal-copy-btn modal-btn-primary" type="button" title="Reopen this tab">
+            <span class="btn-label">Reopen tab</span>
           </button>
           <button id="modal-star-btn" class="modal-copy-btn" type="button">
             <span class="btn-label">Star</span>
           </button>
-          <button id="modal-delete-btn" class="modal-copy-btn" type="button" title="Delete note" aria-label="Delete note">
+          <button id="modal-delete-btn" class="modal-copy-btn modal-btn-danger" type="button" title="Delete note" aria-label="Delete note">
             <span class="btn-label">Delete</span>
           </button>
           <button id="modal-copy-btn" class="modal-copy-btn" title="Copy Markdown" aria-label="Copy Markdown">
@@ -240,7 +244,8 @@
       <div><dt><kbd>Enter</kbd></dt><dd>Reopen the selected note (or go to its tab, if it is still open)</dd></div>
       <div><dt><kbd>o</kbd></dt><dd>Open the selected note in the reader</dd></div>
       <div><dt><kbd>s</kbd></dt><dd>Star or unstar the selected note</dd></div>
-      <div><dt><kbd>Del</kbd></dt><dd>Delete the selected note (Undo for 5 seconds)</dd></div>
+      <div><dt><kbd>Del</kbd> <kbd>Backspace</kbd></dt><dd>Delete the selected note</dd></div>
+      <div><dt><kbd>u</kbd></dt><dd>Undo, while the Undo bar shows (5 seconds)</dd></div>
       <div><dt><kbd>/</kbd></dt><dd>Search</dd></div>
       <div><dt><kbd>Enter</kbd> <kbd>↓</kbd></dt><dd>In search: jump to the first result</dd></div>
       <div><dt><kbd>Esc</kbd></dt><dd>Leave search (press again to clear it), or close a panel</dd></div>
@@ -251,9 +256,11 @@
     <p id="shortcuts-fade-note" class="fade-note"></p>
   </dialog>
 
-  <div id="toast" class="toast hidden" popover="manual" role="status" aria-live="polite">
+  <!-- The toast is display:none while hidden, so it cannot announce itself; this persistent region does. -->
+  <div id="toast-live" class="sr-only" role="status" aria-live="polite"></div>
+  <div id="toast" class="toast hidden" popover="manual">
     <span id="toast-message" class="toast-message"></span>
-    <button id="toast-undo-btn" class="toast-undo-btn" hidden>Undo</button>
+    <button id="toast-undo-btn" class="toast-undo-btn" aria-keyshortcuts="u" hidden>Undo (U)</button>
     <div id="toast-progress" class="toast-progress"></div>
   </div>
 

@@ -171,6 +171,8 @@ const stats = await getStats();
 assert.strictEqual(stats.total, 2);
 assert.strictEqual(stats.today, 1, 'Only records since local midnight count as today');
 assert.strictEqual(stats.favorites, 1);
+assert.strictEqual(stats.yesterday, 1, 'Yesterday counts the previous calendar day only');
+assert.strictEqual(stats.week, 2, 'Past 7 days counts both, the same boundary as the time range');
 assert.strictEqual(stats.inbox, 2, 'Never-reopened notes make up the Inbox count');
 assert.strictEqual(stats.reopened, 0);
 await saveArchivedTab({ id: 'd-reopened', url: 'https://d.example/reopened', status: 'restored', restoredAt: Date.now(), capturedAt: midnight.getTime() - 2000 });
@@ -180,6 +182,7 @@ await softDeleteTab('d-reopened');
 assert.ok(stats.totalReadingMinutes >= 2);
 assert.deepStrictEqual((await getArchivedTabs({ timeRange: 'today' })).map(t => t.id), ['d-today']);
 assert.deepStrictEqual((await getArchivedTabs({ timeRange: 'yesterday' })).map(t => t.id), ['d-yesterday']);
+assert.strictEqual((await getArchivedTabs({ timeRange: 'week' })).length, stats.week, 'The Past 7 days count equals what its filter lists');
 console.log('✓ Calendar-day stats verified');
 
 // Test 10b: a note leaves the Inbox when it is reopened, read (markFiled) or starred; unstarring

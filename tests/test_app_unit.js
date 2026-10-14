@@ -197,4 +197,38 @@ const manifest = JSON.parse(fs.readFileSync(path.resolve('manifest.json'), 'utf-
 assert.strictEqual(manifest.side_panel.default_path, 'src/app/index.html', 'Side panel must load the merged page');
 assert.ok(!fs.existsSync(path.resolve('src/sidepanel')) && !fs.existsSync(path.resolve('src/wiki')), 'The pre-merge src/sidepanel/ and src/wiki/ pages must be gone');
 
+// Test 14: Theme choice. The dark tokens exist twice (System via media query, explicit Dark via data-theme)
+// because CSS cannot share a block between the two; the copies must never drift apart.
+console.log('Verifying the theme tokens and boot script...');
+// The token blocks are flat (no nested braces), so a block runs from its selector to the next "}".
+const declarations = (css, selector) => {
+  const start = css.indexOf(`${selector} {`);
+  assert.ok(start >= 0, `${selector} block exists`);
+  const body = css.slice(css.indexOf('{', start) + 1, css.indexOf('}', start));
+  return body.split(';').map(d => d.trim().replace(/\s+/g, ' ')).filter(Boolean).sort();
+};
+for (const file of ['src/app/app.css', 'src/options/options.css']) {
+  const css = fs.readFileSync(path.resolve(file), 'utf-8');
+  const media = css.slice(css.indexOf('@media (prefers-color-scheme: dark)'));
+  const system = declarations(media, ':root:not([data-theme="light"])');
+  const explicit = declarations(css.slice(css.indexOf(':root[data-theme="dark"] {')), ':root[data-theme="dark"]');
+  assert.ok(system.length > 20, `${file}: the System dark block holds the tokens`);
+  assert.deepStrictEqual(explicit, system, `${file}: :root[data-theme="dark"] repeats the System dark tokens exactly`);
+  assert.ok(/:root\[data-theme="light"\]\s*\{\s*color-scheme: light;/.test(css), `${file}: Light sets color-scheme: light for native controls`);
+  assert.ok(/:root\[data-theme="dark"\]\s*\{\s*color-scheme: dark;/.test(css), `${file}: Dark sets color-scheme: dark for native controls`);
+}
+for (const file of ['src/app/index.html', 'src/options/index.html']) {
+  const html = fs.readFileSync(path.resolve(file), 'utf-8');
+  const head = html.slice(html.indexOf('<head>'), html.indexOf('</head>'));
+  const firstScript = head.indexOf('<script');
+  assert.ok(firstScript >= 0 && head.slice(firstScript).startsWith('<script src="../shared/theme-boot.js"></script>'), `${file}: theme-boot.js is a classic script and the first <script>`);
+  assert.ok(head.indexOf('theme-boot.js') < head.indexOf('rel="stylesheet"'), `${file}: theme-boot.js loads before the stylesheets`);
+}
+const theme = await import('../src/shared/theme.js');
+assert.strictEqual(theme.nextTheme('system'), 'light');
+assert.strictEqual(theme.nextTheme('light'), 'dark');
+assert.strictEqual(theme.nextTheme('dark'), 'system');
+assert.strictEqual(theme.normalizeTheme('purple'), 'system', 'an unknown value is System');
+console.log('✓ Theme tokens match, native controls follow the theme, boot script comes first');
+
 console.log('--- All Knowledge Hub Unit & Markup Verification Tests Passed Successfully! ---');
