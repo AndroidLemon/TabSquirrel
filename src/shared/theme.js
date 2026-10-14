@@ -43,18 +43,30 @@ export async function loadTheme() {
 /** Apply a choice here and store it, which tells every other open page through onChanged. */
 export async function setTheme(theme) {
   const choice = applyTheme(theme);
+  pendingTheme = choice;
+  pendingWrites++;
   try {
     await chrome.storage.local.set({ [THEME_KEY]: choice });
   } catch (err) {
     console.debug('Failed to save theme:', err);
+  } finally {
+    if (--pendingWrites === 0) pendingTheme = null;
   }
   return choice;
 }
+
+// The latest choice made on this page while its write is in flight. onChanged also reports this page's own
+// earlier writes, which arrive late in a fast run of clicks; applying them would flicker or end on the wrong mode.
+let pendingTheme = null;
+let pendingWrites = 0;
 
 /** Apply the stored choice, then follow changes made on any other page. `onChange(choice)` runs after each apply. */
 export async function startTheme(onChange = () => {}) {
   onChange(applyTheme(await loadTheme()));
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && changes[THEME_KEY]) onChange(applyTheme(changes[THEME_KEY].newValue));
+    if (area !== 'local' || !changes[THEME_KEY]) return;
+    const incoming = normalizeTheme(changes[THEME_KEY].newValue);
+    if (pendingTheme !== null && incoming !== pendingTheme) return;
+    onChange(applyTheme(incoming));
   });
 }

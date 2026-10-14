@@ -110,9 +110,11 @@ assert.strictEqual(closedException({}), '', 'nor is it for a record with no clos
 assert.match(closedException({ closedFrom: 'suspended' }), /Slept first/, 'a tab that slept first is an exception');
 assert.match(closedException({ closureReason: 'Closed: trusted domain' }), /always-close list/, 'so is the always-close list');
 const at = (minutesIdle, extra = {}) => ({ lastClosedAt: closedAtMs, lastActiveAt: closedAtMs - minutesIdle * 60000, closedAt: closedAtMs, ...extra });
-const mixed = [at(64), at(125, { closedFrom: 'suspended' }), at(70, { closureReason: 'Closed: trusted domain' }), at(61, { closedAt: null })];
+const mixed = [at(64), at(125, { closedFrom: 'suspended' }), at(70, { closureReason: 'Closed: trusted domain' }), at(61, { closedAt: null, status: 'restored' })];
 assert.strictEqual(closedTodayHeading(mixed, 60), 'Closed 4 tabs for you today, all idle 60+ min · 1 reopened',
   'mixed reasons share one true lower bound: every closure sat idle past the threshold');
+assert.strictEqual(closedTodayHeading([at(64), at(61, { closedAt: null, status: 'captured' })], 60), 'Closed 2 tabs for you today, all idle 60+ min',
+  'a note saved by hand (tab left open, no closedAt) is not counted as reopened');
 assert.strictEqual(closedTodayHeading([at(64)], 60), 'Closed 1 tab for you today, idle 60+ min', 'singular, and no reopened part at 0');
 assert.strictEqual(closedTodayHeading([at(64), { lastClosedAt: closedAtMs, closedAt: closedAtMs }], 60), 'Closed 2 tabs for you today, all idle 60+ min',
   'a record with no idle stamp does not contradict the threshold');
@@ -212,6 +214,7 @@ for (const file of ['src/app/app.css', 'src/options/options.css']) {
   const media = css.slice(css.indexOf('@media (prefers-color-scheme: dark)'));
   const system = declarations(media, ':root:not([data-theme="light"])');
   const explicit = declarations(css.slice(css.indexOf(':root[data-theme="dark"] {')), ':root[data-theme="dark"]');
+  assert.strictEqual(css.split('prefers-color-scheme').length - 1, 1, `${file}: prefers-color-scheme appears exactly once, so the token blocks cannot grow a third copy`);
   assert.ok(system.length > 20, `${file}: the System dark block holds the tokens`);
   assert.deepStrictEqual(explicit, system, `${file}: :root[data-theme="dark"] repeats the System dark tokens exactly`);
   assert.ok(/:root\[data-theme="light"\]\s*\{\s*color-scheme: light;/.test(css), `${file}: Light sets color-scheme: light for native controls`);
@@ -223,6 +226,16 @@ for (const file of ['src/app/index.html', 'src/options/index.html']) {
   const firstScript = head.indexOf('<script');
   assert.ok(firstScript >= 0 && head.slice(firstScript).startsWith('<script src="../shared/theme-boot.js"></script>'), `${file}: theme-boot.js is a classic script and the first <script>`);
   assert.ok(head.indexOf('theme-boot.js') < head.indexOf('rel="stylesheet"'), `${file}: theme-boot.js loads before the stylesheets`);
+}
+// Dialogs are modal, which makes #toast-live inert: each carries its own status region for announce()
+{
+  const html = fs.readFileSync(path.resolve('src/app/index.html'), 'utf-8');
+  for (const id of ['reader-dialog', 'shortcuts-dialog']) {
+    const dialog = html.slice(html.indexOf(`<dialog id="${id}"`), html.indexOf('</dialog>', html.indexOf(`<dialog id="${id}"`)));
+    assert.ok(/class="dialog-live sr-only" role="status"/.test(dialog), `#${id} holds a visually hidden status region`);
+  }
+  assert.ok(appJs.indexOf("renderThemeButton('system')") > 0 && appJs.indexOf("renderThemeButton('system')") < appJs.indexOf('startTheme(renderThemeButton)'),
+    'the theme button is rendered as System before the stored choice loads, so it always has an accessible name');
 }
 const theme = await import('../src/shared/theme.js');
 assert.strictEqual(theme.nextTheme('system'), 'light');

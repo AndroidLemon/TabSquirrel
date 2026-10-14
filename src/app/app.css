@@ -2176,3 +2176,16 @@ dialog.shortcuts-dialog::backdrop {
   color: var(--text-secondary);
 }
 
+
+/* A note in Closed today that has left the Inbox (read or starred): the Inbox view says so, quietly. */
+.filed-cue {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.inbox-empty-line {
+  margin: 0;
+  padding: 8px 4px;
+  font-size: 13px;
+  color: var(--text-muted);
+}

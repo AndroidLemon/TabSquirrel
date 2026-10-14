@@ -215,6 +215,10 @@ assert.ok(!(await getArchivedTabs({ view: 'reopened' })).some(t => t.id === 'i-r
 assert.ok(!isInInbox({ filedAt: 1 }) && !isInInbox({ restoredAt: 1 }) && isInInbox({}), 'isInInbox: neither stamp means Inbox');
 const refiled = await saveArchivedTab({ url: 'https://i.example/i-read', status: 'archived' });
 assert.strictEqual(refiled.filedAt, undefined, 'A recapture puts a read note back in the Inbox, as it does a reopened one');
+await saveArchivedTab({ id: 'i-keep', url: 'https://i.example/keep', status: 'archived' });
+await toggleFavoriteTab('i-keep');
+const starredRecapture = await saveArchivedTab({ url: 'https://i.example/keep', status: 'archived' });
+assert.ok(starredRecapture.isFavorite && starredRecapture.filedAt > 0 && !isInInbox(starredRecapture), 'A recapture of a starred note keeps it filed, out of the Inbox');
 const importedFiled = await saveArchivedTab({ id: 'i-imp', url: 'https://i.example/imp', status: 'archived', filedAt: 1234 });
 assert.strictEqual(importedFiled.filedAt, 1234, 'JSON import keeps filedAt');
 assert.strictEqual((await saveArchivedTab({ id: 'i-bad', url: 'https://i.example/bad', filedAt: 'soon' })).filedAt, undefined, 'An invalid filedAt is dropped');

@@ -125,8 +125,9 @@ export async function saveArchivedTab(tabData) {
         lastActiveAt: timestamp(tabData.lastActiveAt, Date.now()),
         restoredAt: timestamp(tabData.restoredAt, undefined), // kept on JSON import; a recapture clears it
         // First read in the reader or first star: the note leaves the Inbox. Kept on JSON import;
-        // a recapture clears it, like restoredAt, so a fresh capture lands in the Inbox again.
-        filedAt: timestamp(tabData.filedAt, undefined),
+        // a recapture clears it, like restoredAt, so a fresh capture lands in the Inbox again, unless
+        // the note is starred.
+        filedAt: timestamp(tabData.filedAt, existing?.isFavorite ? existing.filedAt : undefined),
         readingTimeMinutes: Math.max(1, Math.round(Number(tabData.readingTimeMinutes)) || 1),
         summary: sanitizeSummary(tabData.summary),
         // Unknown values (JSON import) must not pass the AI-only close gate

@@ -70,12 +70,14 @@ let selectedId = null; // the j/k-selected note, by id so a refresh that reorder
 let openUrls = new Set(); // addresses of the tabs open right now: decides Go to tab vs Reopen tab
 let searchTimer = null;
 let toastTimer = null;
+let announceTimer = null;
 let toastDuration = 2600;
 let readerTab = null;
 let receiptSeenUpTo = null; // newest lastClosedAt already shown today; null until read from storage
 let closedTodayTabs = []; // every note closed today, shown or behind Show all: Reopen all works from these
 let closedTodayExpanded = null; // full cards (true) or one line each (false); null until the first render
 let closedTodayShowAll = false; // past CLOSED_TODAY_VISIBLE, Show all was pressed
+let closedTodayShowAllKey = ''; // the view, filters and day Show all was pressed in
 let reopenFailedIds = new Set(); // notes the last Reopen all could not reopen
 let readerFiled = false; // opening the reader just took its note out of the Inbox view on screen
 let readerFiling = null; // the markFiled write, so the redraw on close sees it
@@ -103,9 +105,11 @@ const ICONS = {
 const CARD_KEYS = {
   s: (tab, card) => toggleStar(tab, card),
   o: (tab) => openReader(tab),
-  Delete: (tab, card) => deleteCard(tab, card),
-  Backspace: (tab, card) => deleteCard(tab, card)
+  Delete: (tab, card, opts) => deleteCard(tab, card, opts),
+  Backspace: (tab, card, opts) => deleteCard(tab, card, opts)
 };
+
+const INBOX_EMPTY_LINE = 'Nothing new in your Inbox. Notes leave it when you read, star or reopen them.';
 
 const SKELETONS = '<div class="skeleton-card"><div class="skeleton-line" style="width:40%"></div><div class="skeleton-line" style="width:75%;height:16px"></div><div class="skeleton-line" style="height:32px"></div></div>'.repeat(3);
 
@@ -138,6 +142,7 @@ async function init() {
 
   setupEventListeners();
   syncControls();
+  renderThemeButton('system'); // named at once; startTheme corrects it when the stored choice arrives
   startTheme(renderThemeButton);
   await loadDensity();
   await loadSort();
@@ -265,7 +270,7 @@ const idleMinutes = (tab) => Math.round((tab.lastClosedAt - tab.lastActiveAt) / 
  */
 export function closedTodayHeading(tabs, timeoutMinutes) {
   const n = tabs.length;
-  const reopened = tabs.filter(tab => !tab.closedAt).length;
+  const reopened = tabs.filter(tab => tab.status === 'restored').length;
   const timeout = Number(timeoutMinutes);
   // Under a minute (or no stamp) is no idle data, as in closedWhen; only real data can contradict.
   const holds = timeout > 0 && tabs.every(tab => !(idleMinutes(tab) >= 1 && idleMinutes(tab) < timeout));
@@ -336,18 +341,22 @@ function renderClosedTodayFrame(tabs, settings) {
   more.setAttribute('aria-expanded', String(closedTodayShowAll));
   more.textContent = closedTodayShowAll ? 'Show fewer' : `Show all ${tabs.length} closed today`;
   const shown = capped && !closedTodayShowAll ? tabs.slice(0, CLOSED_TODAY_VISIBLE) : tabs;
-  closedTodayCappedOut = tabs.length - shown.length;
+  closedTodayCappedOut = tabs.slice(shown.length).filter(countsInResults).length;
   return shown;
 }
+
+/** In the Inbox view a Closed today note counts as a result only while it is still in the Inbox. */
+const countsInResults = (tab) => state.view !== 'inbox' || isInInbox(tab);
 
 /** What a Closed today card adds: when it closed, a reason only when unusual, and its state today. */
 function closedTodayExtras(tab) {
   const failed = tab.closedAt && reopenFailedIds.has(String(tab.id));
-  const reopened = !tab.closedAt && tab.status !== 'restored'; // a restored note already has the badge
+  // The card's own status badge says Reopened (restored) or Saved/Sleeping; only Inbox-view cues are added here.
+  const filed = !countsInResults(tab) && !tab.restoredAt; // read or starred: still the day's record, no longer in the Inbox
   const exception = closedException(tab);
   const [time, idle] = closedWhen(tab).split(' · ');
   return {
-    flags: (reopened ? '<span class="badge-status restored" title="Reopened today">Reopened</span>' : '') +
+    flags: (filed ? `<span class="filed-cue">${tab.isFavorite ? 'Starred' : 'Read'}</span>` : '') +
       (failed ? '<span class="badge-status failed">Could not reopen</span>' : ''),
     // The one-line view keeps the time and drops the idle span, so the two are separate spans.
     line: `<p class="card-closed"><span class="card-closed-when">${escapeHtml(time)}${idle ? `<span class="card-closed-idle"> · ${escapeHtml(idle)}</span>` : ''}</span>${exception ? `<span class="card-closed-reason">${escapeHtml(exception)}</span>` : ''}</p>`
@@ -434,7 +443,14 @@ async function renderFeed(showSkeletons = false, { keepIndex = false } = {}) {
   const todayIds = new Set(today.map(tab => String(tab.id)));
   const rest = tabs.filter(tab => !todayIds.has(String(tab.id)));
   tabsById = new Map([...today, ...rest].map(tab => [String(tab.id), tab]));
-  setResultsCount(today.length + rest.length);
+  // Show all belongs to one view of one day: any change of view, filter or day starts it closed again.
+  const showAllKey = [state.view, state.query, state.tag, state.domain, state.time, localDayKey()].join('\n');
+  if (showAllKey !== closedTodayShowAllKey) closedTodayShowAll = false;
+  closedTodayShowAllKey = showAllKey;
+  // In the Inbox the section also keeps notes read or starred today; they are not in the Inbox,
+  // so they stay out of its count, which then matches the sidebar badge.
+  const todayInInbox = today.filter(countsInResults).length;
+  setResultsCount(todayInInbox + rest.length);
 
   // Re-rendering destroys the focused card; take focus back only if it was in the feed (or
   // nowhere), never from the search box or another control the user moved to.
@@ -455,7 +471,10 @@ async function renderFeed(showSkeletons = false, { keepIndex = false } = {}) {
     clearSelection();
     return;
   }
-  feed.innerHTML = rest.map(tab => cardHtml(tab)).join('');
+  // The section can hold only notes already read or starred: say so rather than leave the Inbox looking unfinished.
+  feed.innerHTML = state.view === 'inbox' && !rest.length && !todayInInbox
+    ? `<p class="inbox-empty-line">${INBOX_EMPTY_LINE}</p>`
+    : rest.map(tab => cardHtml(tab)).join('');
   if (selectedId !== null) {
     const cards = liveCards();
     const index = cards.findIndex(card => card.dataset.id === selectedId);
@@ -516,7 +535,7 @@ function emptyStateHtml(settings, total) {
   // first run, where nothing can fade yet and the sentence only lengthens a promise that is already three lines.
   const fade = !hasFilter && total > 0 && fadeExplanation(settings);
   if (fade) lines.push(`<span id="fade-note" class="fade-note">${escapeHtml(fade)}</span>`);
-  return `<div class="empty-state">${ICONS.empty}<div class="empty-title">${title}</div><div class="empty-desc">${lines.map(line => `<p>${line}</p>`).join('')}</div>${action}</div>`;
+  return `<div class="empty-state">${ICONS.empty}<div class="empty-title" tabindex="-1">${title}</div><div class="empty-desc">${lines.map(line => `<p>${line}</p>`).join('')}</div>${action}</div>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -621,7 +640,7 @@ async function onFeedClick(e) {
   } else if (target.matches('.copy-btn')) {
     await copyText(formatNoteSection(tab), 'Copied the note as Markdown.', target);
   } else if (target.matches('.delete-btn')) {
-    await deleteCard(tab, card);
+    await deleteCard(tab, card, { viaKeyboard: e.detail === 0 }); // detail 0: Enter or Space on the button
   } else if (target.matches('.card-tag')) {
     await applyFilters({ tag: target.dataset.tag, domain: '' });
   }
@@ -713,12 +732,12 @@ async function copyText(text, message, btn) {
  * Delete is durable immediately (tombstone via softDeleteTab), with a 5-second Undo toast
  * that calls restoreDeletedTab.
  */
-async function deleteCard(tab, card = null) {
+async function deleteCard(tab, card = null, { viaKeyboard = false } = {}) {
   // Closed today's heading counts its notes, so a delete there redraws the section. Read before any
   // await: a refresh landing meanwhile replaces the card element.
   const fromClosedToday = Boolean(card?.closest('#closed-today'));
   const position = card ? liveCards().indexOf(card) : -1;
-  const keyboard = card && (card.contains(document.activeElement) || card.dataset.id === selectedId);
+  const keyboard = Boolean(card) && viaKeyboard; // a pointer delete leaves no halo on the next card
   // Animate synchronously for instant feedback, before the IndexedDB write lands.
   card?.classList.add('removing');
   // Hand the selection to the card that now sits at this position (the last card if this was last),
@@ -737,10 +756,15 @@ async function deleteCard(tab, card = null) {
   setResultsCount(liveCards().length + closedTodayCappedOut);
   updateStats();
   renderSidebarFilters();
-  setTimeout(() => {
+  setTimeout(async () => {
     const stale = card && !card.isConnected; // a refresh drew the list again before the delete landed
     card?.remove();
-    if (fromClosedToday || stale || !$('tabs-feed').querySelector('.tab-card')) renderFeed();
+    if (fromClosedToday || stale || !$('tabs-feed').querySelector('.tab-card')) await renderFeed();
+    // The last note is gone and so is the focused card: land on the empty state, not on <body>.
+    const active = document.activeElement;
+    if (!liveCards().length && (!active || active === document.body)) {
+      ($('tabs-feed').querySelector('.empty-title') || $('search-input')).focus({ preventScroll: true });
+    }
   }, 260);
 
   showUndoToast('Note deleted', tab.id, () => restoreDeletedTab(tab.id));
@@ -960,11 +984,10 @@ async function openReader(tab) {
   readerTab = tab;
   // Reading files the note: it leaves the Inbox. In the Inbox view its card goes when the reader closes.
   if (isInInbox(tab)) {
-    tab.filedAt = Date.now();
     readerFiled = state.view === 'inbox';
     readerFiling = markFiled(tab.id)
-      .then(() => updateStats())
-      .catch(err => console.error('Failed to file the note:', err));
+      .then(() => { tab.filedAt = Date.now(); return updateStats(); })
+      .catch(err => { readerFiled = false; console.error('Failed to file the note:', err); });
   }
   const dialog = $('reader-dialog');
   $('modal-title').textContent = tab.title || 'Untitled tab';
@@ -1016,7 +1039,7 @@ function updateReaderActions() {
  * Reader Reopen / Star / Delete reuse the card handlers, working from the note itself: the card
  * may be gone (a re-render after Unstar in Starred drops it) and its actions must still work.
  */
-async function onReaderAction(action) {
+async function onReaderAction(action, viaKeyboard = false) {
   if (!readerTab) return;
   const tab = tabsById.get(String(readerTab.id)) || readerTab;
   const card = cardById(tab.id);
@@ -1030,7 +1053,7 @@ async function onReaderAction(action) {
   readerFiled = false; // reopen and delete update the feed themselves
   $('reader-dialog').close();
   if (action === 'reopen') await reopenTab(tab.url, tab.id);
-  else await deleteCard(tab, card);
+  else await deleteCard(tab, card, { viaKeyboard });
 }
 
 /**
@@ -1200,9 +1223,20 @@ function showToast(message, isError = false, onUndo = null, duration = 2600) {
  * writing a moment later makes a repeated message announce again.
  */
 function announce(text) {
-  const live = $('toast-live');
-  live.textContent = '';
-  setTimeout(() => { live.textContent = text; }, 60);
+  const live = liveRegion();
+  clearAnnouncement();
+  announceTimer = setTimeout(() => { live.textContent = text; }, 60);
+}
+
+/** An open modal dialog makes the rest of the page inert, so its own region speaks instead of #toast-live. */
+function liveRegion() {
+  return document.querySelector('dialog[open] .dialog-live') || $('toast-live');
+}
+
+/** Cancel a pending announcement and blank every region, so a stale message cannot linger or fire late. */
+function clearAnnouncement() {
+  clearTimeout(announceTimer);
+  document.querySelectorAll('#toast-live, .dialog-live').forEach(el => { el.textContent = ''; });
 }
 
 /** Press the visible toast's Undo, if it has one. */
@@ -1243,6 +1277,7 @@ function setToastPaused(paused) {
 
 function hideToast() {
   clearTimeout(toastTimer);
+  clearAnnouncement();
   const toast = $('toast');
   toast.classList.add('hidden');
   toast.classList.remove('paused');
@@ -1442,7 +1477,7 @@ function setupEventListeners() {
   });
   $('modal-reopen-btn').addEventListener('click', () => onReaderAction('reopen'));
   $('modal-star-btn').addEventListener('click', () => onReaderAction('star'));
-  $('modal-delete-btn').addEventListener('click', () => onReaderAction('delete'));
+  $('modal-delete-btn').addEventListener('click', (e) => onReaderAction('delete', e.detail === 0));
   $('modal-copy-btn').addEventListener('click', (e) => {
     if (readerTab) copyText(formatStandaloneNote(readerTab), 'Copied the note as Markdown.', e.currentTarget);
   });
@@ -1495,7 +1530,7 @@ function setupEventListeners() {
     }
     if (typing || drawerOpen) return;
 
-    if (e.key === 'u' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    if (e.key.toLowerCase() === 'u' && !e.ctrlKey && !e.metaKey && !e.altKey) {
       if (undoFromKeyboard()) e.preventDefault();
       return;
     }
@@ -1514,8 +1549,10 @@ function setupEventListeners() {
       const card = keyCard();
       const tab = card && tabsById.get(card.dataset.id);
       if (!tab) return;
+      // One-line view hides Star and Delete; a key must not act on an action nobody can see.
+      if (card.closest('#closed-today-list.lines') && ['s', 'Delete', 'Backspace'].includes(e.key)) return;
       e.preventDefault();
-      await CARD_KEYS[e.key](tab, card);
+      await CARD_KEYS[e.key](tab, card, { viaKeyboard: true });
     }
   });
 }

@@ -650,6 +650,31 @@ async function runAppUXTests() {
     await page.waitForFunction(() => !document.getElementById('reader-dialog').open);
     await page.waitForTimeout(300); // the redraw that follows closing the reader
     assert.ok((await sectionIds()).includes('closed-slept'), 'A closure that left the Inbox still shows in Closed today in the Inbox view');
+    // The results count is the Inbox, not the section: the read note stays on screen but is not counted
+    const inboxBadge = () => page.textContent('#count-inbox');
+    const resultsText = () => page.textContent('#results-count');
+    assert.strictEqual(await resultsText(), `${await inboxBadge()} ${await inboxBadge() === '1' ? 'note' : 'notes'}`, 'In the Inbox the results count equals the sidebar badge');
+    assert.strictEqual(await inboxBadge(), '2', 'Two of the three closures are still in the Inbox');
+    assert.strictEqual((await page.textContent('#closed-today-list .tab-card[data-id="closed-slept"] .filed-cue')).trim(), 'Read', 'The filed note carries a quiet "Read" cue');
+    assert.strictEqual(await page.locator('#closed-today-list .tab-card[data-id="closed-trusted"] .filed-cue').count(), 0, 'and a note still in the Inbox does not');
+    // With every closure filed too, the section stays and the Inbox says it is empty beneath it
+    const setFiled = (ids, filed) => page.evaluate(async ([list, on]) => {
+      const db = await import('/src/storage/db.js');
+      for (const id of list) {
+        if (on) await db.markFiled(id);
+        else await db.saveArchivedTab({ ...(await db.getTabById(id)), filedAt: undefined });
+      }
+    }, [ids, filed]);
+    await setFiled(['closed-note', 'closed-trusted'], true);
+    await tellClosed(); // the page redraws from the new data
+    await page.waitForSelector('#tabs-feed .inbox-empty-line');
+    assert.strictEqual((await page.textContent('#tabs-feed .inbox-empty-line')).trim(), 'Nothing new in your Inbox. Notes leave it when you read, star or reopen them.', 'An Inbox of only filed notes says so under the section');
+    assert.strictEqual(await page.textContent('#results-count'), '0 notes', 'and counts zero, like the badge');
+    assert.strictEqual(await inboxBadge(), '0');
+    assert.strictEqual((await sectionIds()).length, 3, 'while the section keeps the day\'s record');
+    await setFiled(['closed-note', 'closed-trusted'], false);
+    await tellClosed();
+    await page.waitForFunction(() => !document.querySelector('#tabs-feed .inbox-empty-line') && document.getElementById('results-count').textContent === '2 notes');
     await page.click('.nav-item[data-view=""]');
     await page.waitForSelector('#closed-today:not([hidden])');
     console.log('✓ Closed today: mixed-reason heading, exceptions only, each note once, hidden under search and filters, a record in the Inbox');
@@ -676,6 +701,21 @@ async function runAppUXTests() {
     assert.strictEqual(await page.locator('#closed-today-list .card-tldr').first().isVisible(), true, 'with their TL;DRs');
     await page.click('#closed-today-toggle');
     assert.strictEqual(await expanded(), false, 'and again collapses them');
+    // Star and Delete are hidden in the one-line view, so their keys must not act on them
+    await page.evaluate(() => document.activeElement?.blur());
+    await page.keyboard.press('j');
+    const lineKeyId = await page.evaluate(() => document.activeElement.dataset.id);
+    assert.ok(await page.evaluate((id) => Boolean(document.querySelector(`#closed-today-list.lines .tab-card[data-id="${id}"]`)), lineKeyId), 'j selects a one-line note');
+    await page.keyboard.press('s');
+    await page.keyboard.press('Delete');
+    await page.keyboard.press('Backspace');
+    await page.waitForTimeout(500);
+    const lineNote = await page.evaluate(async (id) => { const t = await (await import('/src/storage/db.js')).getTabById(id); return { star: t.isFavorite, deleted: Boolean(t.deletedAt) }; }, lineKeyId);
+    assert.deepStrictEqual(lineNote, { star: false, deleted: false }, 's, Delete and Backspace leave a one-line note alone');
+    assert.strictEqual(await page.locator(`#closed-today-list .tab-card[data-id="${lineKeyId}"]`).count(), 1, 'its line is still there');
+    await page.keyboard.press('o');
+    await page.waitForSelector('#reader-dialog[open]');
+    await page.keyboard.press('Escape'); // o still works on a line
 
     // Keys run across both parts as one list: j/k cross from Closed today into the feed and back
     await page.goto(APP_URL); // the Inbox holds only today's closures now; All notes has a feed below them
@@ -694,6 +734,10 @@ async function runAppUXTests() {
     assert.strictEqual(await page.textContent('#modal-title'), await page.textContent(`#closed-today-list .tab-card[data-id="${keyedId}"] .card-title-btn`), 'o opens a collapsed line in the reader');
     await page.keyboard.press('Escape');
     const starOf = () => page.evaluate(async (id) => (await (await import('/src/storage/db.js')).getTabById(id)).isFavorite, keyedId);
+    // Star and Delete need the full card (the one-line view hides them and ignores their keys)
+    await page.click('#closed-today-toggle');
+    assert.strictEqual(await expanded(), true);
+    await page.focus(`#closed-today-list .tab-card[data-id="${keyedId}"]`);
     await page.keyboard.press('s');
     await page.waitForFunction(async (id) => (await (await import('/src/storage/db.js')).getTabById(id)).isFavorite, keyedId);
     await page.keyboard.press('s');
@@ -809,6 +853,14 @@ async function runAppUXTests() {
     await page.waitForFunction(() => document.querySelectorAll('#closed-today-list .tab-card').length === 7);
     assert.strictEqual((await more.textContent()).trim(), 'Show fewer', 'Show all reveals the rest');
     await more.click();
+    await page.waitForFunction(() => document.querySelectorAll('#closed-today-list .tab-card').length === 6);
+    // Show all belongs to one view: changing the view starts it closed again
+    await more.click();
+    await page.waitForFunction(() => document.querySelectorAll('#closed-today-list .tab-card').length === 7);
+    await page.click('.nav-item[data-view="inbox"]');
+    await page.waitForFunction(() => document.querySelectorAll('#closed-today-list .tab-card').length === 6);
+    assert.strictEqual((await more.textContent()).trim(), 'Show all 7 closed today', 'Switching view puts Show all back');
+    await page.click('.nav-item[data-view=""]');
     await page.waitForFunction(() => document.querySelectorAll('#closed-today-list .tab-card').length === 6);
     await assertEachNoteOnce('with seven closures');
     assert.strictEqual(await page.textContent('#closed-today-list .tab-card[data-id="r7"] .card-tldr'), 'r7 gist', 'Each closure shows its TL;DR once, as its card');
@@ -1491,7 +1543,30 @@ async function runAppUXTests() {
     await hub.evaluate(async (id) => (await import('/src/storage/db.js')).restoreDeletedTab(id), idsNow[1]);
     await refreshHub();
     await hub.waitForSelector(`.tab-card[data-id="${idsNow[1]}"]`);
-    console.log('✓ Delete hands the selection to the next note, u undoes from the keyboard and returns focus, the toast is announced\n');
+    // A click on the trash icon is not a keyboard delete: no halo lands on the next card
+    await hub.evaluate(() => document.activeElement?.blur());
+    const clickId = (await liveIds())[1];
+    await hub.click(`.tab-card[data-id="${clickId}"] .delete-btn`);
+    await hub.waitForFunction((id) => !document.querySelector(`.tab-card[data-id="${id}"]`), clickId);
+    assert.strictEqual(await hub.locator('.tab-card.keyboard-selected').count(), 0, 'Deleting with the pointer leaves no card selected');
+    await hub.waitForFunction(() => /Press U to undo/.test(document.getElementById('toast-live').textContent));
+    // The announcement does not outlive the toast: "Press U to undo" is cleared when it hides
+    await hub.waitForFunction(() => document.getElementById('toast-live').textContent === '', null, { timeout: 8000 });
+    await hub.evaluate(async (id) => (await import('/src/storage/db.js')).restoreDeletedTab(id), clickId);
+    await refreshHub();
+    await hub.waitForSelector(`.tab-card[data-id="${clickId}"]`);
+    // Shift+U (or Caps Lock) undoes too
+    await hub.evaluate(() => document.activeElement?.blur());
+    await hub.keyboard.press('j');
+    const shiftId = await focusedId();
+    await hub.keyboard.press('Delete');
+    await hub.waitForFunction((id) => !document.querySelector(`.tab-card[data-id="${id}"]:not(.removing)`), shiftId);
+    await hub.waitForFunction(() => !document.getElementById('toast').classList.contains('hidden') && /^Note deleted/.test(document.getElementById('toast-message').textContent)); // the new toast, not the last one fading
+    await hub.keyboard.press('Shift+U');
+    await hub.waitForSelector(`.tab-card[data-id="${shiftId}"]:not(.removing)`);
+    assert.strictEqual(await hub.evaluate(async (id) => (await (await import('/src/storage/db.js')).getArchivedTabs({ limit: Infinity })).some(t => t.id === id), shiftId), true, 'Shift+U undid the delete');
+    for (const _ of await liveIds()) await hub.keyboard.press('j'); // selection on the last note, where the reader step below expects it
+    console.log('✓ Delete hands the selection to the next note, u and Shift+U undo from the keyboard and return focus, the toast is announced and then cleared, a pointer delete selects nothing\n');
 
     // Reader: opens on the title, so Enter cannot leave the notebook
     const pagesBeforeReader = context.pages().length;
@@ -1506,6 +1581,15 @@ async function runAppUXTests() {
     assert.strictEqual(await hub.evaluate(() => document.getElementById('reader-dialog').open), true, 'and leaves the reader open');
     await hub.keyboard.press('Tab');
     assert.strictEqual(await hub.evaluate(() => document.activeElement.id), 'modal-source-link', 'Tab goes on to the source link');
+    // A modal dialog makes #toast-live inert, so the reader announces through its own live region
+    const starWas = (await hub.textContent('#modal-star-btn')).trim();
+    await hub.click('#modal-star-btn');
+    await hub.waitForFunction(() => /^(Starred|Unstarred)/.test(document.querySelector('#reader-dialog .dialog-live').textContent));
+    assert.strictEqual(await hub.textContent('#toast-live'), '', 'The page-level region stays silent while the reader is open');
+    assert.match(await hub.locator('#reader-dialog').ariaSnapshot(), /status.*(Starred|Unstarred)/s, 'and the accessibility tree of the reader holds the message');
+    await hub.click('#modal-star-btn'); // leave the note as it was
+    await hub.waitForFunction((was) => document.getElementById('modal-star-btn').textContent.trim() === was, starWas);
+    await hub.mouse.move(0, 0); // off the button, so the rest state is measured below
     // Reader actions by weight: Reopen primary, Delete brick text, Star and Copy quiet
     const weights = await hub.evaluate(() => Object.fromEntries(['modal-reopen-btn', 'modal-star-btn', 'modal-delete-btn', 'modal-copy-btn'].map(id => {
       const css = getComputedStyle(document.getElementById(id));
@@ -1573,6 +1657,15 @@ async function runAppUXTests() {
     await hub.waitForFunction(() => !document.querySelector('.tab-card[data-id="fading-note"] .star-btn').classList.contains('active'));
     assert.strictEqual(await fading.locator('.card-flags > .fade-chip').count(), 1, 'Unstarring puts the chip back in .card-flags');
     assert.strictEqual(await fading.locator('.card-source .fade-chip').count(), 0, 'not in the domain line');
+    // Deleting the only note on screen lands on the empty state, and Undo gives focus back to the note
+    await hub.fill('#search-input', 'fresh-note');
+    await hub.waitForFunction(() => document.querySelectorAll('#tabs-feed .tab-card').length === 1);
+    await hub.click('.tab-card[data-id="fresh-note"] .delete-btn');
+    await hub.waitForFunction(() => document.activeElement?.classList.contains('empty-title'));
+    await hub.click('#toast-undo-btn');
+    await hub.waitForFunction(() => document.activeElement?.dataset?.id === 'fresh-note');
+    await hub.fill('#search-input', '');
+    await hub.waitForFunction(() => document.querySelectorAll('#closed-today-list .tab-card, #tabs-feed .tab-card').length > 3);
     await hub.evaluate(async () => { const db = await import('/src/storage/db.js'); await db.softDeleteTab('fresh-note'); await db.purgeDeletedTabs(0); });
     await refreshHub();
     console.log('✓ "saved just now"; the toggled fade chip lives in .card-flags\n');
@@ -1612,6 +1705,28 @@ async function runAppUXTests() {
     assert.strictEqual(await themeBtn(tp), 'Theme: Dark. Switch to System.');
     await tp.waitForFunction(async () => (await chrome.storage.local.get('theme')).theme === 'dark');
     assert.strictEqual(await tp.evaluate(() => localStorage.getItem('theme')), 'dark', 'The choice is mirrored to localStorage for the boot script');
+
+    // Fast clicks: every write echoes back through storage.onChanged, and a late echo must not move the page
+    const clickTimes = (n) => tp.evaluate((count) => { for (let i = 0; i < count; i++) document.getElementById('theme-btn').click(); }, n);
+    await tp.evaluate(() => {
+      window.__themeSeen = [];
+      new MutationObserver((records) => records.forEach(r => window.__themeSeen.push(r.oldValue))) // each write's previous value
+        .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'], attributeOldValue: true });
+    });
+    await clickTimes(3); // System, Light, Dark
+    await tp.waitForTimeout(600);
+    assert.deepStrictEqual(await tp.evaluate(() => [...window.__themeSeen, document.documentElement.getAttribute('data-theme')].filter((v, i, all) => i === 0 || v !== all[i - 1])), ['dark', null, 'light', 'dark'], 'The page went through the three choices once each: no echo of an earlier write changed the mode back');
+    assert.strictEqual(await attr(tp), 'dark', 'Three fast clicks come round to the same mode');
+    assert.strictEqual(await themeBtn(tp), 'Theme: Dark. Switch to System.', 'with a button that agrees');
+    assert.strictEqual(await stored(tp), 'dark', 'and the stored choice is the last one made');
+    await clickTimes(2); // System, Light
+    await tp.waitForTimeout(600);
+    assert.strictEqual(await attr(tp), 'light', 'Two more land on Light, not on an earlier write');
+    assert.strictEqual(await stored(tp), 'light');
+    await clickTimes(1); // back to Dark for what follows
+    await tp.waitForFunction(async () => (await chrome.storage.local.get('theme')).theme === 'dark');
+    await tp.waitForTimeout(300);
+    assert.strictEqual(await attr(tp), 'dark');
 
     // Persists across a reload, and is on <html> before the app script runs (no flash)
     await tp.close();
