@@ -18,6 +18,8 @@ import {
   restoreDeletedTab,
   markReopened,
   getTabById,
+  markFiled,
+  isInInbox,
   toggleFavoriteTab,
   getSettings,
   DEFAULT_SETTINGS
@@ -50,9 +52,9 @@ const SIDEBAR_DOMAINS_VISIBLE = 5;
 const SIDEBAR_LIST_MAX = 50; // visible plus the "More" disclosure
 const SORT_KEY = 'notebook_sort';
 const DENSITY_KEY = 'sidepanel_density'; // pre-merge storage key, kept so saved preferences survive
-const RECEIPT_SEEN_KEY = 'closed_today_seen'; // { day, upTo }: today's receipt was shown up to this lastClosedAt
-const RECEIPT_ROWS_VISIBLE = 3; // the rest sit behind "Show all"
-const REOPEN_ALL_CONFIRM_ABOVE = 5; // more still-closed rows than this and Reopen all asks first
+const RECEIPT_SEEN_KEY = 'closed_today_seen'; // { day, upTo }: Closed today was shown up to this lastClosedAt
+const CLOSED_TODAY_VISIBLE = 6; // more closures than this and the rest sit behind "Show all"
+const REOPEN_ALL_CONFIRM_ABOVE = 5; // more still-closed notes than this and Reopen all asks first
 const PERM_DISMISSED_KEY = 'perm_banner_dismissed'; // the quiet permission note was dismissed
 const VIEW_LABELS = { inbox: 'Inbox', reopened: 'Reopened' };
 
@@ -66,8 +68,13 @@ let toastTimer = null;
 let toastDuration = 2600;
 let readerTab = null;
 let receiptSeenUpTo = null; // newest lastClosedAt already shown today; null until read from storage
-let receiptById = new Map(); // today's receipt rows, so a row title can open its note in the reader
-let reopenFailedIds = new Set(); // rows the last Reopen all could not reopen
+let closedTodayTabs = []; // every note closed today, shown or behind Show all: Reopen all works from these
+let closedTodayExpanded = null; // full cards (true) or one line each (false); null until the first render
+let closedTodayShowAll = false; // past CLOSED_TODAY_VISIBLE, Show all was pressed
+let reopenFailedIds = new Set(); // notes the last Reopen all could not reopen
+let readerFiled = false; // opening the reader just took its note out of the Inbox view on screen
+let readerFiling = null; // the markFiled write, so the redraw on close sees it
+let closedTodayCappedOut = 0; // notes closed today behind Show all, for the results count
 let permMissing = false; // the all-sites permission is not granted
 let permDismissed = false; // the user dismissed the quiet permission note
 let noteTotal = null; // every note, whatever the view: decides how loud the permission note is; null until read
@@ -100,7 +107,7 @@ if (typeof document !== 'undefined') {
     init();
   }
 
-  // Tab Squirrel closes idle tabs in the background; refresh stats/feed/"Closed today" when that
+  // Tab Squirrel closes idle tabs in the background; refresh stats and the feed (Closed today included) when that
   // happens. Must not call sendResponse or return true (no response expected here).
   chrome.runtime.onMessage.addListener((message) => {
     if (message?.type === 'TABS_CLOSED') refresh();
@@ -131,7 +138,7 @@ async function init() {
 // ---------------------------------------------------------------------------
 
 async function refresh(showSkeletons = false) {
-  await Promise.all([updateStats(), renderSidebarFilters(), renderClosedToday(), renderFeed(showSkeletons)]);
+  await Promise.all([updateStats(), renderSidebarFilters(), renderFeed(showSkeletons)]);
 }
 
 function currentFilters() {
@@ -211,11 +218,20 @@ export function closedReason(tab) {
   return 'Sat idle, so it was closed';
 }
 
+/**
+ * The reason a card in Closed today states, or '' for the common one. Sitting idle past the
+ * threshold is true of every closure, so the heading says it once (closedTodayHeading).
+ */
+export function closedException(tab) {
+  const reason = closedReason(tab);
+  return reason === closedReason({}) ? '' : reason;
+}
+
 /** "closed 10:42 · idle 64 min", from what the record holds; no idle time unless both stamps are real. */
 export function closedWhen(tab) {
   if (!Number.isFinite(tab.lastClosedAt)) return '';
   const time = new Date(tab.lastClosedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  const idle = Math.round((tab.lastClosedAt - tab.lastActiveAt) / 60000); // NaN when lastActiveAt is missing
+  const idle = idleMinutes(tab);
   if (!(idle >= 1)) return `closed ${time}`;
   const hours = Math.floor(idle / 60);
   const minutes = idle % 60;
@@ -223,101 +239,130 @@ export function closedWhen(tab) {
   return `closed ${time} · idle ${span}`;
 }
 
-function receiptRowHtml(tab) {
-  const id = escapeHtml(tab.id);
-  const closed = Boolean(tab.closedAt);
-  const failed = closed && reopenFailedIds.has(String(tab.id));
-  const side = !closed ? '<span class="closed-today-state reopened">Reopened</span>' : `
-      <div class="closed-today-side">
-        ${failed ? '<span class="closed-today-state failed">Could not reopen</span>' : ''}
-        <button class="closed-today-reopen-btn" data-url="${escapeHtml(tab.url)}" data-id="${id}">Reopen</button>
-      </div>`;
-  return `
-    <div class="closed-today-row">
-      <img class="favicon" src="${escapeHtml(faviconUrl(tab.url))}" alt="">
-      <div class="closed-today-info">
-        <button class="closed-today-title" type="button" data-id="${id}" title="${escapeHtml(tab.title)}">${escapeHtml(tab.title)}</button>
-        <div class="closed-today-meta">
-          <span class="closed-today-domain">${escapeHtml(tab.domain)}</span>
-          <span class="closed-today-reason">${closedReason(tab)}</span>
-        </div>
-        <div class="closed-today-when">${closedWhen(tab)}</div>
-      </div>
-      ${side}
-    </div>`;
+/** Whole minutes between the last use and the close; NaN when lastActiveAt is missing. */
+const idleMinutes = (tab) => Math.round((tab.lastClosedAt - tab.lastActiveAt) / 60000);
+
+/**
+ * The Closed today heading: "Closed 8 tabs for you today, all idle 60+ min · 2 reopened".
+ * Every closure comes from the idle sweep, and a tab that slept first sat idle twice as long,
+ * so "idle {timeout}+ min" holds whatever the mix of reasons. It is dropped if any record shows
+ * a shorter idle time (the threshold was raised since), so the line never overstates.
+ * The common reason lives here; cards state only the exceptions (closedException).
+ */
+export function closedTodayHeading(tabs, timeoutMinutes) {
+  const n = tabs.length;
+  const reopened = tabs.filter(tab => !tab.closedAt).length;
+  const timeout = Number(timeoutMinutes);
+  // Under a minute (or no stamp) is no idle data, as in closedWhen; only real data can contradict.
+  const holds = timeout > 0 && tabs.every(tab => !(idleMinutes(tab) >= 1 && idleMinutes(tab) < timeout));
+  const span = timeout >= 120 && timeout % 60 === 0 ? `${timeout / 60}+ h` : `${timeout}+ min`;
+  const idle = holds ? `, ${n === 1 ? 'idle' : 'all idle'} ${span}` : '';
+  return `Closed ${n} ${n === 1 ? 'tab' : 'tabs'} for you today${idle}${reopened ? ` · ${reopened} reopened` : ''}`;
 }
 
 /**
- * The receipt: every note Tab Squirrel last closed today, kept after a reopen (marked Reopened) so
- * the day's record doesn't rewrite itself. Open when it holds closures not yet shown today (so
- * first open of the day, or new closures since), collapsed on later opens, hidden when empty.
- * Three rows show; the rest sit behind "Show all".
+ * Closed today shows only in the plain Inbox or All notes view: any search, tag, domain or time
+ * filter (Starred included) hides it, and so does Reopened, which is its own list.
  */
-async function renderClosedToday() {
-  let tabs = [];
+function showsClosedToday() {
+  return !state.query && !state.tag && !state.domain && !state.time && (state.view === 'inbox' || state.view === '');
+}
+
+/**
+ * Today's closures, newest first, except that any the last Reopen all could not reopen come first,
+ * so a failure never hides behind Show all. [] when the section is not shown in this view.
+ */
+async function loadClosedToday() {
+  if (!showsClosedToday()) return [];
   try {
-    tabs = await getArchivedTabs({ closedSince: startOfLocalDay(), limit: 50 });
+    const tabs = await getArchivedTabs({ closedSince: startOfLocalDay(), limit: Infinity });
+    const failed = (tab) => (tab.closedAt && reopenFailedIds.has(String(tab.id)) ? 1 : 0);
+    return tabs.sort((a, b) => failed(b) - failed(a) || b.lastClosedAt - a.lastClosedAt);
   } catch (err) {
     console.debug('Failed to load closed-today tabs:', err);
+    return [];
   }
-  tabs.sort((a, b) => b.lastClosedAt - a.lastClosedAt);
-  receiptById = new Map(tabs.map(tab => [String(tab.id), tab]));
+}
+
+/**
+ * Expanded when the section holds closures not yet shown today (the first open of the day, or new
+ * closures since), one line per note on later opens; the toggle switches for this page only.
+ */
+async function syncClosedTodaySeen(tabs) {
   if (receiptSeenUpTo === null) receiptSeenUpTo = await loadReceiptSeen();
-  const reopened = tabs.filter(tab => !tab.closedAt).length;
-  $('closed-today-count').textContent = tabs.length;
-  $('closed-today-noun').textContent = tabs.length === 1 ? 'tab' : 'tabs';
-  $('closed-today-reopened').textContent = reopened ? ` · ${reopened} reopened` : '';
-  $('closed-today').hidden = tabs.length === 0;
-  $('closed-today-intro').hidden = reopened === tabs.length; // nothing left to reopen
-  setReopenAllConfirm(0);
   const newest = Math.max(0, ...tabs.map(tab => tab.lastClosedAt));
   if (tabs.length && newest > receiptSeenUpTo) {
-    $('closed-today').open = true;
+    closedTodayExpanded = true;
     receiptSeenUpTo = newest;
     chrome.storage.local.set({ [RECEIPT_SEEN_KEY]: { day: localDayKey(), upTo: newest } })
       .catch(err => console.debug('Failed to save receipt state:', err));
+  } else if (closedTodayExpanded === null) {
+    closedTodayExpanded = false;
   }
-  $('closed-today-list').innerHTML = tabs.slice(0, RECEIPT_ROWS_VISIBLE).map(receiptRowHtml).join('');
-  const rest = tabs.slice(RECEIPT_ROWS_VISIBLE);
-  $('closed-today-more').hidden = rest.length === 0;
-  $('closed-today-more-summary').innerHTML =
-    `<span class="more-closed">Show all ${tabs.length}</span><span class="more-open">Show fewer</span>`;
-  $('closed-today-more-list').innerHTML = rest.map(receiptRowHtml).join('');
 }
 
-function onReceiptClick(e) {
-  const reopen = e.target.closest('.closed-today-row .closed-today-reopen-btn');
-  if (reopen) {
-    reopenTab(reopen.dataset.url, reopen.dataset.id);
-    return;
+/** The section's heading, Reopen all, list layout and Show all, from the day's records. */
+function renderClosedTodayFrame(tabs, settings) {
+  const section = $('closed-today');
+  section.hidden = tabs.length === 0;
+  closedTodayTabs = tabs;
+  closedTodayCappedOut = 0;
+  if (!tabs.length) {
+    $('closed-today-list').innerHTML = '';
+    return [];
   }
-  const title = e.target.closest('.closed-today-title');
-  const tab = title && receiptById.get(title.dataset.id);
-  if (tab) openReader(tab);
+  const toggle = $('closed-today-toggle');
+  toggle.textContent = closedTodayHeading(tabs, { ...DEFAULT_SETTINGS, ...settings }.timeoutMinutes);
+  toggle.setAttribute('aria-expanded', String(closedTodayExpanded));
+  $('closed-today-list').classList.toggle('lines', !closedTodayExpanded);
+  setReopenAllConfirm(0); // also hides Reopen all when nothing is left to reopen
+  const capped = tabs.length > CLOSED_TODAY_VISIBLE;
+  const more = $('closed-today-more');
+  more.hidden = !capped;
+  more.setAttribute('aria-expanded', String(closedTodayShowAll));
+  more.textContent = closedTodayShowAll ? 'Show fewer' : `Show all ${tabs.length} closed today`;
+  const shown = capped && !closedTodayShowAll ? tabs.slice(0, CLOSED_TODAY_VISIBLE) : tabs;
+  closedTodayCappedOut = tabs.length - shown.length;
+  return shown;
 }
 
-const stillClosedButtons = () => Array.from(document.querySelectorAll('#closed-today .closed-today-row .closed-today-reopen-btn'));
+/** What a Closed today card adds: when it closed, a reason only when unusual, and its state today. */
+function closedTodayExtras(tab) {
+  const failed = tab.closedAt && reopenFailedIds.has(String(tab.id));
+  const reopened = !tab.closedAt && tab.status !== 'restored'; // a restored note already has the badge
+  const exception = closedException(tab);
+  const [time, idle] = closedWhen(tab).split(' · ');
+  return {
+    flags: (reopened ? '<span class="badge-status restored" title="Reopened today">Reopened</span>' : '') +
+      (failed ? '<span class="badge-status failed">Could not reopen</span>' : ''),
+    // The one-line view keeps the time and drops the idle span, so the two are separate spans.
+    line: `<p class="card-closed"><span class="card-closed-when">${escapeHtml(time)}${idle ? `<span class="card-closed-idle"> · ${escapeHtml(idle)}</span>` : ''}</span>${exception ? `<span class="card-closed-reason">${escapeHtml(exception)}</span>` : ''}</p>`
+  };
+}
+
+const stillClosedToday = () => closedTodayTabs.filter(tab => tab.closedAt);
 
 /** Show "Reopen N tabs?" with Reopen / Cancel in place of the Reopen all button; 0 puts the button back. */
 function setReopenAllConfirm(count, { focus = false } = {}) {
   const asking = count > 0;
   $('closed-today-confirm').hidden = !asking;
-  $('closed-today-reopen-all').hidden = asking;
+  $('closed-today-reopen-all').hidden = asking || !stillClosedToday().length;
   if (asking) $('closed-today-confirm-text').textContent = `Reopen ${count} tabs?`;
   if (focus) (asking ? $('closed-today-confirm-yes') : $('closed-today-reopen-all')).focus();
 }
 
 function onReopenAllClick() {
-  const count = stillClosedButtons().length;
+  const count = stillClosedToday().length;
   if (count > REOPEN_ALL_CONFIRM_ABOVE) setReopenAllConfirm(count, { focus: true });
   else reopenAllClosedToday();
 }
 
-/** Reopen every row still closed, one after another with progress in the button, then refresh once and say how it went. */
+/** Reopen every note closed today that is still closed (shown or behind Show all), one after another with progress in the button, then refresh once and say how it went. */
 async function reopenAllClosedToday() {
-  const rows = stillClosedButtons().map(btn => btn.dataset);
+  const rows = stillClosedToday().map(tab => ({ url: tab.url, id: String(tab.id) }));
   const button = $('closed-today-reopen-all');
   setReopenAllConfirm(0);
+  button.hidden = false;
   button.disabled = true;
   reopenFailedIds = new Set();
   let reopened = 0;
@@ -338,7 +383,7 @@ async function reopenAllClosedToday() {
   button.textContent = 'Reopen all';
   await refresh();
   if (document.activeElement === document.body) { // the confirm that held focus is gone
-    (button.checkVisibility() ? button : document.querySelector('#closed-today > summary')).focus();
+    (button.checkVisibility() ? button : $('closed-today-toggle')).focus();
   }
   const failed = rows.length - reopened;
   const done = `Reopened ${reopened} ${reopened === 1 ? 'tab' : 'tabs'}.`;
@@ -347,38 +392,61 @@ async function reopenAllClosedToday() {
   else showToast(summary, failed > 0);
 }
 
-async function renderFeed(showSkeletons = false) {
+/**
+ * The feed. In the plain Inbox or All notes view, today's closures come first as their own
+ * section (each note once, as its card), then the rest of the view under a quiet heading,
+ * without those notes. Any filter or search renders the plain filtered feed.
+ * `keepIndex`: if the selected note left the view (read or starred out of the Inbox), select
+ * the card now at its position instead of dropping the selection.
+ */
+async function renderFeed(showSkeletons = false, { keepIndex = false } = {}) {
   const feed = $('tabs-feed');
   const seq = ++renderSeq;
-  if (showSkeletons || feed.children.length === 0) feed.innerHTML = SKELETONS;
+  if (showSkeletons || (feed.children.length === 0 && $('closed-today').hidden)) feed.innerHTML = SKELETONS;
 
   // Settings first: the 'expiring-soon' sort needs the fade windows, and passing them in
   // keeps getArchivedTabs free of a hidden settings dependency. One read per render, not two.
   const [settings] = await Promise.all([getSettings().catch(() => null), loadOpenUrls()]);
   // ponytail: newest 200 matches only (search/filters still reach older notes); fading keeps
   // most libraries under this. Add a "Load more" button if real libraries outgrow it.
-  const tabs = await getArchivedTabs({
-    ...currentFilters(), sortBy: state.sortBy, limit: 200, fadeSettings: settings
-  });
+  const [tabs, today] = await Promise.all([
+    getArchivedTabs({ ...currentFilters(), sortBy: state.sortBy, limit: 200, fadeSettings: settings }),
+    loadClosedToday()
+  ]);
   if (seq !== renderSeq) return; // a newer render started while this one was loading
+  if (today.length) await syncClosedTodaySeen(today);
+  if (seq !== renderSeq) return;
   fadeSettings = settings;
-  tabsById = new Map(tabs.map(tab => [String(tab.id), tab]));
-  setResultsCount(tabs.length);
+  const todayIds = new Set(today.map(tab => String(tab.id)));
+  const rest = tabs.filter(tab => !todayIds.has(String(tab.id)));
+  tabsById = new Map([...today, ...rest].map(tab => [String(tab.id), tab]));
+  setResultsCount(today.length + rest.length);
 
-  if (tabs.length === 0) {
-    const total = (await getStats().catch(() => null))?.total ?? 1; // unknown: don't claim a first run
-    if (seq !== renderSeq) return;
-    feed.innerHTML = emptyStateHtml(settings, total);
-    return;
-  }
   // Re-rendering destroys the focused card; take focus back only if it was in the feed (or
   // nowhere), never from the search box or another control the user moved to.
   const active = document.activeElement;
-  const hadFeedFocus = !active || active === document.body || feed.contains(active);
-  feed.innerHTML = tabs.map(cardHtml).join('');
+  const hadFeedFocus = !active || active === document.body || inFeed(active);
+  const prevIndex = liveCards().findIndex(card => card.dataset.id === selectedId);
+
+  const shown = renderClosedTodayFrame(today, settings);
+  $('closed-today-list').innerHTML = shown.map(tab => cardHtml(tab, closedTodayExtras(tab))).join('');
+  const heading = $('feed-heading');
+  heading.hidden = !today.length || !rest.length;
+  heading.textContent = state.view === 'inbox' ? 'Rest of your Inbox' : 'Other notes';
+
+  if (today.length === 0 && rest.length === 0) {
+    const total = (await getStats().catch(() => null))?.total ?? 1; // unknown: don't claim a first run
+    if (seq !== renderSeq) return;
+    feed.innerHTML = emptyStateHtml(settings, total);
+    clearSelection();
+    return;
+  }
+  feed.innerHTML = rest.map(tab => cardHtml(tab)).join('');
   if (selectedId !== null) {
-    const index = liveCards().findIndex(card => card.dataset.id === selectedId);
+    const cards = liveCards();
+    const index = cards.findIndex(card => card.dataset.id === selectedId);
     if (index >= 0) selectCard(index, { focus: hadFeedFocus });
+    else if (keepIndex && prevIndex >= 0 && cards.length) selectCard(prevIndex, { focus: hadFeedFocus });
     else clearSelection(); // the selected note is gone
   }
 }
@@ -421,7 +489,7 @@ function emptyStateHtml(settings, total) {
     ({ title, lines } = firstRunCopy(settings, state.surface));
   } else if (state.view === 'inbox' && !hasFilter) {
     title = 'Nothing new in your Inbox';
-    lines = ['New captures land here until you reopen, star, or delete them.'];
+    lines = ['Notes leave it when you read, star or reopen them.'];
   } else if (state.query && scope) {
     title = `No matches in ${scope}`;
     lines = [`Searched ${scope} only for “${escapeHtml(state.query)}”.`];
@@ -479,12 +547,13 @@ async function loadOpenUrls() {
 /** A note has a tab to switch to only while its address is open; otherwise Reopen tab opens a new one. */
 const hasLiveTab = (tab) => openUrls.has(tab.url);
 
-function cardHtml(tab) {
+/** One note's card. `extras` (Closed today only) adds flags and a line saying when and why it closed. */
+function cardHtml(tab, extras = null) {
   const q = state.query;
   const bullets = toSafeStringArray(tab.summary?.bullets);
   const tags = toSafeStringArray(tab.summary?.tags).map(t => t.replace(/^#/, ''));
   const star = starLabel(tab.isFavorite);
-  const flags = getStatusBadge(tab) + fadeChipHtml(tab, fadeSettings, state.sortBy);
+  const flags = (extras?.flags || '') + getStatusBadge(tab) + fadeChipHtml(tab, fadeSettings, state.sortBy);
   return `
     <article class="tab-card" data-id="${escapeHtml(tab.id)}" tabindex="-1" aria-label="${escapeHtml(tab.title)}">
       <div class="card-header">
@@ -495,6 +564,7 @@ function cardHtml(tab) {
         <span class="card-time" title="Saved ${escapeHtml(new Date(tab.capturedAt).toLocaleString())}">${tab.readingTimeMinutes || 1} min read · saved ${formatTimeAgo(tab.capturedAt)}${fadeDateHtml(tab, fadeSettings, state.sortBy)}</span>
         ${flags ? `<div class="card-flags">${flags}</div>` : ''}
       </div>
+      ${extras?.line || ''}
       <h3 class="card-title"><button class="card-title-btn" type="button" title="${escapeHtml(tab.title)}" aria-label="Read note: ${escapeHtml(tab.title)}">${highlightSearch(tab.title, q)}</button></h3>
       ${tab.summary?.tldr ? `<div class="card-tldr">${highlightSearch(tab.summary.tldr, q)}</div>` : '<div class="card-tldr card-tldr-empty">No AI note for this tab</div>'}
       ${bullets.length ? `
@@ -561,9 +631,11 @@ async function reopenTab(url, recordId) {
 }
 
 async function toggleStar(tab, card) {
+  const wasInInbox = isInInbox(tab);
   try {
     const updated = await toggleFavoriteTab(tab.id);
     tab.isFavorite = updated ? updated.isFavorite : !tab.isFavorite;
+    if (updated) tab.filedAt = updated.filedAt;
   } catch (err) {
     console.error('Error toggling favorite:', err);
     showToast('Could not update the star', true);
@@ -575,11 +647,17 @@ async function toggleStar(tab, card) {
     btn.title = starLabel(tab.isFavorite);
     btn.setAttribute('aria-label', btn.title);
   }
-  showToast(tab.isFavorite ? 'Starred. This note will not fade.' : 'Unstarred');
+  const leftInbox = wasInInbox && !isInInbox(tab); // starring files a note; unstarring never puts it back
+  showToast(tab.isFavorite ? `Starred. This note will not fade.${leftInbox ? ' It left your Inbox.' : ''}` : 'Unstarred');
   updateStats();
   // No card (the reader outlived it) in Starred means the note has to come back, or go, with the feed.
   if (state.time === 'favorites' && (!tab.isFavorite || !card)) {
     await renderFeed();
+    return;
+  }
+  // Starred out of the Inbox: the card goes, and the selection stays at its place in the list.
+  if (leftInbox && state.view === 'inbox') {
+    await renderFeed(false, { keepIndex: true });
     return;
   }
   if (!card) return;
@@ -614,6 +692,9 @@ async function copyText(text, message, btn) {
  * that calls restoreDeletedTab.
  */
 async function deleteCard(tab, card = null) {
+  // Closed today's heading counts its notes, so a delete there redraws the section. Read before any
+  // await: a refresh landing meanwhile replaces the card element.
+  const fromClosedToday = Boolean(card?.closest('#closed-today'));
   // Animate synchronously for instant feedback, before the IndexedDB write lands.
   card?.classList.add('removing');
   clearSelection(); // before the write lands, so a fast second Delete cannot reach the next card
@@ -625,12 +706,13 @@ async function deleteCard(tab, card = null) {
     showToast('Could not delete that note.', true);
     return;
   }
-  setResultsCount($('tabs-feed').querySelectorAll('.tab-card:not(.removing)').length);
+  setResultsCount(liveCards().length + closedTodayCappedOut);
   updateStats();
   renderSidebarFilters();
   setTimeout(() => {
+    const stale = card && !card.isConnected; // a refresh drew the list again before the delete landed
     card?.remove();
-    if (!$('tabs-feed').querySelector('.tab-card')) renderFeed();
+    if (fromClosedToday || stale || !$('tabs-feed').querySelector('.tab-card')) renderFeed();
   }, 260);
 
   showUndoToast('Note deleted', tab.id, () => restoreDeletedTab(tab.id));
@@ -675,7 +757,7 @@ function showUndoToast(message, id, restore, restoredMessage = 'Note restored') 
       console.error('Error restoring tab:', err);
     }
     await refresh();
-    const restored = $('tabs-feed').querySelector(`.tab-card[data-id="${CSS.escape(String(id))}"]`);
+    const restored = cardById(id);
     if (restored) {
       restored.classList.add('undo-restored');
       restored.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -747,8 +829,19 @@ async function clearSearch() {
 // Keyboard selection
 // ---------------------------------------------------------------------------
 
+/** Every card on screen, Closed today first, as one list for j/k and the card keys. */
 function liveCards() {
-  return Array.from(document.querySelectorAll('#tabs-feed .tab-card:not(.removing)'));
+  return Array.from(document.querySelectorAll('#closed-today-list .tab-card:not(.removing), #tabs-feed .tab-card:not(.removing)'));
+}
+
+/** Whether an element sits in one of the two card lists (Closed today or the feed). */
+function inFeed(el) {
+  return $('tabs-feed').contains(el) || $('closed-today-list').contains(el);
+}
+
+function cardById(id) {
+  const sel = `.tab-card[data-id="${CSS.escape(String(id))}"]`;
+  return document.querySelector(`#closed-today-list ${sel}, #tabs-feed ${sel}`);
 }
 
 function selectCard(index, { focus = true } = {}) {
@@ -767,13 +860,13 @@ function selectCard(index, { focus = true } = {}) {
 
 /** The card a key acts on: the one holding focus (a Tab-ed to star button counts), else the j/k selection. */
 function keyCard() {
-  const focused = document.activeElement?.closest?.('#tabs-feed .tab-card:not(.removing)');
-  return focused || liveCards().find(card => card.dataset.id === selectedId) || null;
+  const focused = document.activeElement?.closest?.('.tab-card:not(.removing)');
+  return (focused && inFeed(focused) ? focused : null) || liveCards().find(card => card.dataset.id === selectedId) || null;
 }
 
 function clearSelection() {
   selectedId = null;
-  document.querySelectorAll('#tabs-feed .keyboard-selected').forEach(c => c.classList.remove('keyboard-selected'));
+  document.querySelectorAll('.tab-card.keyboard-selected').forEach(c => c.classList.remove('keyboard-selected'));
 }
 
 // ---------------------------------------------------------------------------
@@ -831,6 +924,14 @@ export async function performExport(format = 'markdown') {
 
 async function openReader(tab) {
   readerTab = tab;
+  // Reading files the note: it leaves the Inbox. In the Inbox view its card goes when the reader closes.
+  if (isInInbox(tab)) {
+    tab.filedAt = Date.now();
+    readerFiled = state.view === 'inbox';
+    readerFiling = markFiled(tab.id)
+      .then(() => updateStats())
+      .catch(err => console.error('Failed to file the note:', err));
+  }
   const dialog = $('reader-dialog');
   $('modal-title').textContent = tab.title || 'Untitled tab';
   const link = $('modal-source-link');
@@ -881,7 +982,7 @@ function updateReaderActions() {
 async function onReaderAction(action) {
   if (!readerTab) return;
   const tab = tabsById.get(String(readerTab.id)) || readerTab;
-  const card = document.querySelector(`#tabs-feed .tab-card[data-id="${CSS.escape(String(tab.id))}"]`);
+  const card = cardById(tab.id);
   if (card?.classList.contains('removing')) return;
   if (action === 'star') {
     await toggleStar(tab, card);
@@ -889,6 +990,7 @@ async function onReaderAction(action) {
     updateReaderActions();
     return;
   }
+  readerFiled = false; // reopen and delete update the feed themselves
   $('reader-dialog').close();
   if (action === 'reopen') await reopenTab(tab.url, tab.id);
   else await deleteCard(tab, card);
@@ -984,6 +1086,7 @@ async function loadSort() {
 function applyDensity() {
   const compact = state.density === 'compact';
   $('tabs-feed').classList.toggle('compact', compact);
+  $('closed-today-list').classList.toggle('compact', compact);
   const btn = $('density-toggle-btn');
   btn.classList.toggle('active', compact);
   btn.setAttribute('aria-pressed', String(compact));
@@ -1095,14 +1198,17 @@ function setupEventListeners() {
     if (e.target instanceof HTMLImageElement && e.target.classList.contains('favicon')) e.target.hidden = true;
   }, true);
 
-  feed.addEventListener('click', onFeedClick);
-  // Focus moving into a card (Tab to its star button, a click) makes it the selected one.
-  feed.addEventListener('focusin', (e) => {
-    const card = e.target.closest('.tab-card:not(.removing)');
-    if (!card || card.dataset.id === selectedId) return;
-    selectedId = card.dataset.id;
-    liveCards().forEach(c => c.classList.toggle('keyboard-selected', c === card));
-  });
+  // Closed today's cards and the feed's are one list: same clicks, same focus model.
+  for (const list of [feed, $('closed-today-list')]) {
+    list.addEventListener('click', onFeedClick);
+    // Focus moving into a card (Tab to its star button, a click) makes it the selected one.
+    list.addEventListener('focusin', (e) => {
+      const card = e.target.closest('.tab-card:not(.removing)');
+      if (!card || card.dataset.id === selectedId) return;
+      selectedId = card.dataset.id;
+      liveCards().forEach(c => c.classList.toggle('keyboard-selected', c === card));
+    });
+  }
   const toastEl = $('toast');
   toastEl.addEventListener('mouseenter', () => setToastPaused(true));
   toastEl.addEventListener('mouseleave', () => setToastPaused(false));
@@ -1116,7 +1222,15 @@ function setupEventListeners() {
     e.stopPropagation();
     setReopenAllConfirm(0, { focus: true });
   });
-  $('closed-today').addEventListener('click', onReceiptClick);
+  $('closed-today-toggle').addEventListener('click', () => {
+    closedTodayExpanded = !closedTodayExpanded;
+    $('closed-today-toggle').setAttribute('aria-expanded', String(closedTodayExpanded));
+    $('closed-today-list').classList.toggle('lines', !closedTodayExpanded);
+  });
+  $('closed-today-more').addEventListener('click', () => {
+    closedTodayShowAll = !closedTodayShowAll;
+    renderFeed();
+  });
 
   // Surface-specific actions
   $('archive-current-btn').addEventListener('click', (e) => archiveCurrentTab(e.currentTarget));
@@ -1241,6 +1355,12 @@ function setupEventListeners() {
   // Reader dialog: close button, light-dismiss on backdrop, copy full note
   const dialog = $('reader-dialog');
   $('modal-close-btn').addEventListener('click', () => dialog.close());
+  dialog.addEventListener('close', async () => {
+    if (!readerFiled) return;
+    readerFiled = false;
+    await readerFiling;
+    await renderFeed(false, { keepIndex: true }); // the note left the Inbox; the selection keeps its place
+  });
   dialog.addEventListener('click', (e) => {
     if (e.target !== dialog) return;
     const r = dialog.getBoundingClientRect();
@@ -1281,7 +1401,7 @@ function setupEventListeners() {
         return;
       }
       clearSelection();
-      if (feed.contains(el)) el.blur(); // focus in a card would keep it the target of s / o / Delete
+      if (inFeed(el)) el.blur(); // focus in a card would keep it the target of s / o / Delete
       await clearSearch();
       return;
     }
@@ -1312,7 +1432,7 @@ function setupEventListeners() {
       e.preventDefault();
       keyCard().querySelector('.restore-btn')?.click();
     } else if (Object.hasOwn(CARD_KEYS, e.key) && keyCard() && !e.ctrlKey && !e.metaKey && !e.altKey &&
-        (!el || el === document.body || feed.contains(el))) {
+        (!el || el === document.body || inFeed(el))) {
       // Act on the focused or selected card, but never on a key pressed in the sidebar or another control.
       const card = keyCard();
       const tab = card && tabsById.get(card.dataset.id);

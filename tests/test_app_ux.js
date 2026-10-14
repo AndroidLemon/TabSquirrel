@@ -316,6 +316,11 @@ async function runAppUXTests() {
     assert.strictEqual(await page.locator('#filter-banner').isHidden(), true, 'Clearing hides the filter banner');
     console.log('✓ Picking a tag closes the drawer, filters the feed and shows a clearable banner\n');
 
+    // Reading a note files it out of the Inbox (ADR 0005), so from here this page works in All notes,
+    // where test-tab-1 stays on screen after the reader for the delete tests that follow.
+    await page.click('#view-all');
+    await page.waitForFunction(() => document.getElementById('view-all').getAttribute('aria-current') === 'page');
+
     // --- TEST 7: Reader view fills the panel ---
     console.log('--- Test 7: Reader View (narrow) ---');
     assert.strictEqual(await page.getAttribute('.tab-card[data-id="test-tab-1"] .reader-btn', 'aria-label'), 'Read note', 'The reader button is labelled Read note');
@@ -444,6 +449,8 @@ async function runAppUXTests() {
     // --- TEST 9: Wide layout (full view) ---
     console.log('--- Test 9: Wide Layout (1280px): Sidebar, Grid, Filters, Export ---');
     await page.setViewportSize(WIDE);
+    await page.click('.nav-item[data-view=""]'); // the reload above opened the Inbox, which test-tab-1 left when it was read
+    await page.waitForSelector('.tab-card[data-id="test-tab-1"]');
     assert.strictEqual(await page.locator('#sidebar').isVisible(), true, 'Wide layout shows the persistent sidebar');
     assert.strictEqual(await page.locator('#filters-btn').isHidden(), true, 'Wide layout hides the Filters button');
     const [boxA, boxB] = await Promise.all([
@@ -521,6 +528,7 @@ async function runAppUXTests() {
       for (let i = 1; i <= 4; i++) await softDeleteTab(`extra-domain-${i}`);
     });
     await page.reload();
+    await page.click('.nav-item[data-view=""]'); // both remaining notes were read or starred, so they are out of the Inbox
     await page.waitForFunction(() => document.querySelectorAll('#tabs-feed .tab-card').length === 2);
     console.log('✓ Domain filter, card tag-pill filter and banner clear verified');
 
@@ -543,9 +551,18 @@ async function runAppUXTests() {
     assert.match(download.suggestedFilename(), /^tab-squirrel-obsidian-vault-\d+\.zip$/, 'Obsidian export downloads a .zip vault');
     console.log(`✓ Export dropdown verified (downloaded ${download.suggestedFilename()})\n`);
 
-    // --- TEST 10: Live refresh on TABS_CLOSED ---
-    console.log('--- Test 10: "Closed today" refreshes live on TABS_CLOSED ---');
+    // --- TEST 10: Live refresh on TABS_CLOSED; Closed today is the top of the feed ---
+    console.log('--- Test 10: "Closed today" refreshes live on TABS_CLOSED, at the top of the feed ---');
+    const heading = () => page.textContent('#closed-today-toggle');
+    const expanded = async () => (await page.getAttribute('#closed-today-toggle', 'aria-expanded')) === 'true';
+    const sectionIds = () => page.$$eval('#closed-today-list .tab-card', cards => cards.map(c => c.dataset.id));
+    const feedIds = () => page.$$eval('#tabs-feed .tab-card', cards => cards.map(c => c.dataset.id));
+    const assertEachNoteOnce = async (when) => {
+      const ids = [...await sectionIds(), ...await feedIds()];
+      assert.strictEqual(new Set(ids).size, ids.length, `No note appears twice on screen ${when}: ${ids}`);
+    };
     assert.strictEqual(await page.locator('#closed-today').isHidden(), true, 'Closed today hidden when nothing was closed');
+    assert.strictEqual(await page.locator('#feed-heading').isHidden(), true, 'and the feed has no heading: it looks as before');
     await page.evaluate(async () => {
       const { saveArchivedTab, markClosedByTabSquirrel } = await import('/src/storage/db.js');
       await saveArchivedTab({
@@ -556,57 +573,166 @@ async function runAppUXTests() {
     });
     await background.evaluate(() => chrome.runtime.sendMessage({ type: 'TABS_CLOSED' }).catch(() => {}));
     await page.waitForSelector('#closed-today:not([hidden])', { timeout: 5000 });
-    const [receiptBox, searchBox] = await Promise.all([page.locator('#closed-today').boundingBox(), page.locator('#search-input').boundingBox()]);
-    assert.ok(receiptBox.y < searchBox.y, 'The receipt sits above the search row');
-    assert.strictEqual(await page.textContent('#closed-today-count'), '1', 'Closed today counts the newly closed tab');
-    await page.waitForSelector('.tab-card[data-id="closed-note"]', { timeout: 5000 });
-    console.log('✓ TABS_CLOSED refreshes "Closed today" and the feed without a reload\n');
+    await page.waitForSelector('#closed-today-list .tab-card[data-id="closed-note"]', { timeout: 5000 });
+    const [sectionBox, searchBox, firstRestBox] = await Promise.all([
+      page.locator('#closed-today').boundingBox(), page.locator('#search-input').boundingBox(), page.locator('#tabs-feed .tab-card').first().boundingBox()
+    ]);
+    assert.ok(sectionBox.y > searchBox.y && sectionBox.y + sectionBox.height <= firstRestBox.y, 'Closed today sits at the top of the feed: below search, above the other notes');
+    assert.match(await heading(), /^Closed 1 tab for you today/, 'Closed today counts the newly closed tab');
+    assert.strictEqual(await page.locator('#tabs-feed .tab-card[data-id="closed-note"]').count(), 0, 'The closed note is not repeated in the feed below');
+    await assertEachNoteOnce('with a closure today');
+    assert.strictEqual(await page.locator('#feed-heading').isVisible(), true, 'The rest of the feed gets a heading');
+    assert.strictEqual(await page.textContent('#feed-heading'), 'Other notes', 'named for what it holds in All notes');
+    console.log('✓ TABS_CLOSED refreshes "Closed today" at the top of the feed, each note once\n');
 
-    // --- TEST 10b: the receipt (open first, a reason per row, collapse once seen, Reopen all) ---
-    console.log('--- Test 10b: "Closed today" receipt ---');
-    const receiptOpen = () => page.locator('#closed-today').evaluate(el => el.open);
+    // --- TEST 10b: Closed today: expanded first, exceptions only, filters, collapse once seen, keys, Reopen all ---
+    console.log('--- Test 10b: "Closed today" section ---');
     const closeNote = (note) => page.evaluate(async (n) => {
       const { saveArchivedTab, markClosedByTabSquirrel } = await import('/src/storage/db.js');
       await saveArchivedTab({ ...n, domain: 'closed.example', status: 'archived', summary: { tldr: `${n.id} gist`, bullets: [], tags: [] } });
       await markClosedByTabSquirrel(n.id, n.closedFrom ? { closedFrom: n.closedFrom } : undefined);
     }, note);
     const tellClosed = () => background.evaluate(() => chrome.runtime.sendMessage({ type: 'TABS_CLOSED' }).catch(() => {}));
-    assert.strictEqual(await receiptOpen(), true, 'Receipt is open by default when it holds closures not yet seen');
-    assert.match(await page.textContent('#closed-today > summary'), /Closed 1 tab for you today/, 'Receipt opens with one plain sentence');
+    assert.strictEqual(await expanded(), true, 'Closed today shows full cards when it holds closures not yet seen');
+    assert.strictEqual(await page.locator('#closed-today-list').evaluate(el => el.classList.contains('lines')), false, 'not the one-line list');
     await closeNote({ id: 'closed-slept', url: 'https://closed.example/slept', title: 'Slept First', closedFrom: 'suspended', closureTier: 'suspend_only', closureReason: 'Contains form or interactive input controls' });
-    await closeNote({ id: 'closed-trusted', url: 'https://closed.example/trusted', title: 'Trusted', closureTier: 'suspend_only', closureReason: 'Closed: trusted domain' });
+    await closeNote({ id: 'closed-trusted', url: 'https://closed.example/trusted', title: 'Trusted', closureTier: 'suspend_only', closureReason: 'Closed: trusted domain', lastActiveAt: Date.now() - 75 * 60000 });
     await tellClosed();
-    await page.waitForFunction(() => document.getElementById('closed-today-count').textContent === '3');
-    assert.match(await page.textContent('#closed-today > summary'), /Closed 3 tabs for you today/, 'Receipt pluralises');
-    const reasons = await page.locator('#closed-today-list .closed-today-row .closed-today-reason').allTextContents();
-    assert.strictEqual(reasons.length, 3, 'Every row has a reason');
-    assert.ok(reasons.every(r => r.trim().length > 0), 'No row has an empty reason');
-    assert.ok(reasons.some(r => /Slept first/.test(r)) && reasons.some(r => /always-close list/.test(r)) && reasons.some(r => /idle/.test(r)), 'Reasons follow how each tab was closed');
+    await page.waitForFunction(() => document.getElementById('closed-today-toggle').textContent.startsWith('Closed 3 tabs'));
+    assert.strictEqual(await heading(), 'Closed 3 tabs for you today, all idle 60+ min', 'With mixed reasons the heading states the one reason every closure shares, with the real timeout');
+    const reasonOf = (id) => page.locator(`#closed-today-list .tab-card[data-id="${id}"] .card-closed-reason`);
+    assert.strictEqual(await reasonOf('closed-note').count(), 0, 'A plain idle close states no reason on its card');
+    assert.match(await reasonOf('closed-slept').textContent(), /Slept first/, 'A tab that slept first says so');
+    assert.match(await reasonOf('closed-trusted').textContent(), /always-close list/, 'A trusted-domain close names the list');
+    for (const id of ['closed-note', 'closed-slept', 'closed-trusted']) {
+      assert.match(await page.textContent(`#closed-today-list .tab-card[data-id="${id}"] .card-closed-when`), /^closed .*\d/, `${id} says when it closed`);
+      assert.strictEqual(await page.textContent(`#closed-today-list .tab-card[data-id="${id}"] .card-tldr`), `${id === 'closed-note' ? 'Closed by the sweep' : `${id} gist`}`, `${id} shows its TL;DR once, as its card`);
+    }
+    await assertEachNoteOnce('with three closures');
 
-    // Seen once: a later open the same day starts collapsed, until something new is closed.
+    // Any search or filter skips the section and renders the plain filtered feed
+    const sectionGoneWith = async (label) => {
+      await page.waitForFunction(() => document.getElementById('closed-today').hidden);
+      assert.strictEqual(await page.locator('#feed-heading').isHidden(), true, `${label}: no feed heading either`);
+      await assertEachNoteOnce(label);
+    };
+    await page.fill('#search-input', 'gist');
+    await sectionGoneWith('Search');
+    assert.deepStrictEqual((await feedIds()).sort(), ['closed-slept', 'closed-trusted'], 'Search shows its matches in the plain feed');
+    await page.fill('#search-input', '');
+    await page.waitForSelector('#closed-today:not([hidden])');
+    await page.click('.nav-item[data-time="today"]');
+    await sectionGoneWith('The Today filter');
+    assert.ok((await feedIds()).includes('closed-note'), 'The Today filter lists closed notes in the plain feed');
+    await page.click('.nav-item[data-view=""]');
+    await page.waitForSelector('#closed-today:not([hidden])');
+    await page.click('#sidebar-domains [data-domain="closed.example"]');
+    await sectionGoneWith('A domain filter');
+    await page.click('#clear-filter-btn');
+    await page.waitForSelector('#closed-today:not([hidden])');
+    await page.click('.nav-item[data-view="reopened"]');
+    await sectionGoneWith('The Reopened view');
+    await page.click('.nav-item[data-view="inbox"]');
+    await page.waitForSelector('#closed-today:not([hidden])');
+    // Both seeded notes were read or starred, so the Inbox holds only today's closures: nothing below them
+    assert.strictEqual(await page.locator('#feed-heading').isHidden(), true, 'With nothing else in the Inbox there is no heading below Closed today');
+    assert.strictEqual(await page.locator('#tabs-feed .empty-state').count(), 0, 'and no empty state claiming the Inbox is empty under it');
+    // A closure read today leaves the Inbox but stays in the section: it is the day's record
+    await page.click('#closed-today-list .tab-card[data-id="closed-slept"] .card-title-btn');
+    await page.waitForSelector('#reader-dialog[open]');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(async () => !(await (await import('/src/storage/db.js')).getArchivedTabs({ view: 'inbox' })).some(t => t.id === 'closed-slept'));
+    await page.waitForFunction(() => !document.getElementById('reader-dialog').open);
+    await page.waitForTimeout(300); // the redraw that follows closing the reader
+    assert.ok((await sectionIds()).includes('closed-slept'), 'A closure that left the Inbox still shows in Closed today in the Inbox view');
+    await page.click('.nav-item[data-view=""]');
+    await page.waitForSelector('#closed-today:not([hidden])');
+    console.log('✓ Closed today: mixed-reason heading, exceptions only, each note once, hidden under search and filters, a record in the Inbox');
+
+    // Seen once: a later open the same day starts as one line per note, until something new is closed.
     await page.reload();
     await page.waitForSelector('#closed-today:not([hidden])');
-    await page.waitForSelector('.tab-card');
-    assert.strictEqual(await receiptOpen(), false, 'Receipt starts collapsed on a later open the same day');
+    await page.waitForSelector('#closed-today-list .tab-card');
+    assert.strictEqual(await expanded(), false, 'Closed today starts collapsed on a later open the same day');
+    assert.strictEqual(await page.locator('#closed-today').isVisible(), true, 'but the section and its heading stay');
+    const line = page.locator('#closed-today-list .tab-card[data-id="closed-trusted"]');
+    assert.strictEqual(await line.locator('.card-title-btn').isVisible(), true, 'A line shows the title');
+    assert.match(await line.locator('.card-closed-when').textContent(), / · idle 7\d min$/, 'The card holds the idle span');
+    assert.match(await line.locator('.card-closed-when').innerText(), /^closed [^·]*\d/, 'the line shows its closed time');
+    assert.ok(!/idle/.test(await line.locator('.card-closed-when').innerText()), 'without the idle span');
+    assert.strictEqual(await line.locator('.restore-btn').isVisible(), true, 'and its Reopen button');
+    for (const part of ['.card-tldr', '.card-actions', '.card-domain', '.card-tags']) {
+      assert.strictEqual(await line.locator(part).first().isVisible(), false, `A line hides ${part}`);
+    }
+    assert.ok((await line.boundingBox()).height < 56, 'Each collapsed note is a single line');
+    assert.strictEqual(await page.locator('#closed-today-list .card-closed-reason').first().isVisible(), false, 'Lines leave the reasons to the expanded cards');
+    await page.click('#closed-today-toggle');
+    assert.strictEqual(await expanded(), true, 'Clicking the heading expands the cards');
+    assert.strictEqual(await page.locator('#closed-today-list .card-tldr').first().isVisible(), true, 'with their TL;DRs');
+    await page.click('#closed-today-toggle');
+    assert.strictEqual(await expanded(), false, 'and again collapses them');
+
+    // Keys run across both parts as one list: j/k cross from Closed today into the feed and back
+    await page.goto(APP_URL); // the Inbox holds only today's closures now; All notes has a feed below them
+    await page.click('.nav-item[data-view=""]');
+    await page.waitForSelector('#tabs-feed .tab-card');
+    await page.evaluate(() => document.activeElement?.blur());
+    const sectionCount = (await sectionIds()).length;
+    const order = [...await sectionIds(), ...await feedIds()];
+    for (let i = 0; i <= sectionCount; i++) await page.keyboard.press('j');
+    assert.strictEqual(await page.evaluate(() => document.activeElement.dataset.id), order[sectionCount], 'j moves from the last Closed today line to the first card below');
+    await page.keyboard.press('k');
+    assert.strictEqual(await page.evaluate(() => document.activeElement.dataset.id), order[sectionCount - 1], 'k moves back up into Closed today');
+    const keyedId = order[sectionCount - 1];
+    await page.keyboard.press('o');
+    await page.waitForSelector('#reader-dialog[open]');
+    assert.strictEqual(await page.textContent('#modal-title'), await page.textContent(`#closed-today-list .tab-card[data-id="${keyedId}"] .card-title-btn`), 'o opens a collapsed line in the reader');
+    await page.keyboard.press('Escape');
+    const starOf = () => page.evaluate(async (id) => (await (await import('/src/storage/db.js')).getTabById(id)).isFavorite, keyedId);
+    await page.keyboard.press('s');
+    await page.waitForFunction(async (id) => (await (await import('/src/storage/db.js')).getTabById(id)).isFavorite, keyedId);
+    await page.keyboard.press('s');
+    await page.waitForFunction(async (id) => !(await (await import('/src/storage/db.js')).getTabById(id)).isFavorite, keyedId);
+    assert.strictEqual(await starOf(), false, 's stars and unstars a Closed today note');
+    await page.evaluate(() => {
+      window.__sent = null;
+      window.__realSend = chrome.runtime.sendMessage;
+      chrome.runtime.sendMessage = async (msg) => { window.__sent = msg; return { success: true }; };
+    });
+    await page.focus(`#closed-today-list .tab-card[data-id="${keyedId}"]`);
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => window.__sent);
+    assert.strictEqual(await page.evaluate(() => { chrome.runtime.sendMessage = window.__realSend; return window.__sent.recordId; }), keyedId, 'Enter reopens the selected Closed today note');
+    await page.focus(`#closed-today-list .tab-card[data-id="${keyedId}"]`);
+    await page.keyboard.press('Delete');
+    await page.locator('#toast-undo-btn').waitFor({ state: 'visible', timeout: 2000 });
+    await page.waitForFunction(() => document.getElementById('closed-today-toggle').textContent.startsWith('Closed 2 tabs'));
+    assert.strictEqual(await page.locator(`#closed-today-list .tab-card[data-id="${keyedId}"]`).count(), 0, 'Delete removes a Closed today note, and the heading recounts');
+    await page.click('#toast-undo-btn');
+    await page.waitForSelector(`#closed-today-list .tab-card[data-id="${keyedId}"]`);
+    assert.match(await heading(), /^Closed 3 tabs/, 'Undo brings it back into Closed today');
+    await page.keyboard.press('Escape');
+
     await closeNote({ id: 'closed-later', url: 'https://closed.example/later', title: 'Later', closureTier: 'safe_to_close', closureReason: 'Pure stateless reading article' });
     await tellClosed();
-    await page.waitForFunction(() => document.getElementById('closed-today-count').textContent === '4');
-    assert.strictEqual(await receiptOpen(), true, 'New closures since the last look open the receipt again');
+    await page.waitForFunction(() => document.getElementById('closed-today-toggle').textContent.startsWith('Closed 4 tabs'));
+    assert.strictEqual(await expanded(), true, 'New closures since the last look expand Closed today again');
+    await assertEachNoteOnce('after a new closure');
 
-    // Reopen all reopens every row; the rows stay, marked Reopened, and Reopen all has nothing left to do.
+    // Reopen all reopens every note; they stay, marked Reopened, and Reopen all has nothing left to do.
     const pagesBefore = new Set(context.pages());
     await page.click('#closed-today-reopen-all');
-    await page.waitForFunction(() => document.getElementById('closed-today-reopened').textContent.includes('4 reopened'), null, { timeout: 15000 });
+    await page.waitForFunction(() => document.getElementById('closed-today-toggle').textContent.includes('4 reopened'), null, { timeout: 15000 });
     const afterReopenAll = await page.evaluate(async () => {
       const { getTabById } = await import('/src/storage/db.js');
       return Promise.all(['closed-note', 'closed-slept', 'closed-trusted', 'closed-later'].map(async id => (await getTabById(id))?.status));
     });
-    assert.deepStrictEqual(afterReopenAll, ['restored', 'restored', 'restored', 'restored'], 'Reopen all reopened every row');
+    assert.deepStrictEqual(afterReopenAll, ['restored', 'restored', 'restored', 'restored'], 'Reopen all reopened every note');
     assert.match(await page.textContent('#toast-message'), /Reopened 4 tabs\./, 'Reopen all reports what it did');
-    assert.match(await page.textContent('#closed-today > summary'), /Closed 4 tabs for you today · 4 reopened/, 'The headline keeps the day\'s count and says how many were reopened');
-    assert.strictEqual(await page.locator('#closed-today-list .closed-today-state.reopened, #closed-today-more-list .closed-today-state.reopened').count(), 4, 'Every reopened row stays, marked Reopened');
-    assert.strictEqual(await page.locator('#closed-today .closed-today-row .closed-today-reopen-btn').count(), 0, 'A reopened row has no Reopen button');
-    assert.strictEqual(await page.locator('#closed-today-reopen-all').isHidden(), true, 'Reopen all is hidden when no row is still closed');
+    assert.strictEqual(await heading(), 'Closed 4 tabs for you today, all idle 60+ min · 4 reopened', 'The heading keeps the day\'s count and says how many were reopened');
+    assert.strictEqual(await page.locator('#closed-today-list .tab-card .badge-status.restored').count(), 4, 'Every reopened note stays in Closed today, marked Reopened');
+    assert.strictEqual(await page.locator('#closed-today-list .tab-card .restore-btn').count(), 4, 'Each keeps its card\'s own action (Go to tab while its tab is open)');
+    assert.strictEqual(await page.locator('#closed-today-reopen-all').isHidden(), true, 'Reopen all is hidden when no note is still closed');
     // Close the four tabs Reopen all opened; wait for all of them to register first so none
     // lingers (a late one would be picked up by Test 11's waitForEvent('page')).
     for (let i = 0; i < 50 && context.pages().filter(p => !pagesBefore.has(p)).length < 4; i++) await new Promise(r => setTimeout(r, 100));
@@ -616,7 +742,7 @@ async function runAppUXTests() {
       for (const id of ['closed-note', 'closed-slept', 'closed-trusted', 'closed-later']) await softDeleteTab(id);
       await purgeDeletedTabs(0);
     });
-    console.log('✓ Receipt: open with a reason per row, collapses once seen, reopens on new closures, Reopen all keeps its rows marked Reopened\n');
+    console.log('✓ Closed today: collapses to lines once seen, expands on click and on new closures, keys cross both parts, Reopen all keeps its notes marked Reopened\n');
 
     // Reopen all with Remove Notes When Reopened on: one Undo toast brings every note back.
     // RESTORE_TAB is stubbed to do what the worker does (soft-delete, removed: true) without opening tabs.
@@ -627,7 +753,7 @@ async function runAppUXTests() {
     await closeNote({ id: 'removed-a', url: 'https://closed.example/a', title: 'Removed A' });
     await closeNote({ id: 'removed-b', url: 'https://closed.example/b', title: 'Removed B' });
     await tellClosed();
-    await page.waitForFunction(() => document.getElementById('closed-today-count').textContent === '2');
+    await page.waitForFunction(() => document.getElementById('closed-today-toggle').textContent.startsWith('Closed 2 tabs'));
     await page.evaluate(() => {
       window.__realSend = chrome.runtime.sendMessage;
       chrome.runtime.sendMessage = async (msg) => {
@@ -660,38 +786,41 @@ async function runAppUXTests() {
       await saveSettings(DEFAULT_SETTINGS);
     });
 
-    // --- TEST 10c: the receipt scales (3 rows, Show all), confirms big batches, shows progress and failures ---
-    console.log('--- Test 10c: Receipt cap, title opens reader, confirm, progress, failures ---');
+    // --- TEST 10c: Closed today scales (6 cards, Show all), confirms big batches, shows progress and failures ---
+    console.log('--- Test 10c: Closed today cap, title opens reader, confirm, progress, failures ---');
     const ids7 = ['r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7'];
     for (const id of ids7) {
       await closeNote({ id, url: `https://closed.example/${id}`, title: `Receipt ${id}`, lastActiveAt: Date.now() - 70 * 60000 });
     }
     await tellClosed();
-    await page.waitForFunction(() => document.getElementById('closed-today-count').textContent === '7');
-    const rowsIn = (list) => page.locator(`${list} .closed-today-row`).count();
-    assert.strictEqual(await rowsIn('#closed-today-list'), 3, 'Only three receipt rows show at first');
-    assert.strictEqual(await rowsIn('#closed-today-more-list'), 4, 'The rest wait behind Show all');
-    assert.strictEqual(await page.locator('#closed-today-more').evaluate(el => el.open), false, 'Show all starts closed');
-    assert.strictEqual(await page.locator('#closed-today-more .more-closed').innerText(), 'Show all 7', 'The disclosure says how many there are');
-    assert.strictEqual(await page.locator('#closed-today-more-list .closed-today-title').first().isVisible(), false, 'Rows past the cap are hidden');
-    await page.click('#closed-today-more > summary');
-    assert.strictEqual(await page.locator('#closed-today-more-list .closed-today-title').first().isVisible(), true, 'Show all reveals the rest');
-    await page.click('#closed-today-more > summary');
-    assert.strictEqual(await page.locator('.closed-today-tldr').count(), 0, 'Rows no longer repeat the TL;DR');
-    assert.match(await page.locator('#closed-today-list .closed-today-when').first().textContent(), /^closed .*\d.* · idle 7\d min$/, 'A row says when it closed and how long it sat idle');
-    assert.strictEqual(await page.locator('#closed-today-list .closed-today-reason').first().isVisible(), true, 'and keeps its reason');
+    await page.waitForFunction(() => document.getElementById('closed-today-toggle').textContent.startsWith('Closed 7 tabs'));
+    assert.strictEqual(await heading(), 'Closed 7 tabs for you today, all idle 60+ min', 'Real idle times over the threshold keep the shared reason');
+    assert.strictEqual((await sectionIds()).length, 6, 'Six Closed today cards show at first');
+    const more = page.locator('#closed-today-more');
+    assert.strictEqual(await more.isVisible(), true, 'The rest wait behind Show all');
+    assert.strictEqual((await more.textContent()).trim(), 'Show all 7 closed today', 'which says how many there are');
+    assert.strictEqual(await more.getAttribute('aria-expanded'), 'false');
+    await more.click();
+    await page.waitForFunction(() => document.querySelectorAll('#closed-today-list .tab-card').length === 7);
+    assert.strictEqual((await more.textContent()).trim(), 'Show fewer', 'Show all reveals the rest');
+    await more.click();
+    await page.waitForFunction(() => document.querySelectorAll('#closed-today-list .tab-card').length === 6);
+    await assertEachNoteOnce('with seven closures');
+    assert.strictEqual(await page.textContent('#closed-today-list .tab-card[data-id="r7"] .card-tldr'), 'r7 gist', 'Each closure shows its TL;DR once, as its card');
+    assert.match(await page.locator('#closed-today-list .card-closed-when').first().textContent(), /^closed .*\d.* · idle 7\d min$/, 'A card says when it closed and how long it sat idle');
+    assert.strictEqual(await page.locator('#closed-today-list .card-closed-reason').count(), 0, 'The shared idle reason is in the heading, not on each card');
 
-    // The row title is a real button that opens the reader
-    const firstRowTitle = page.locator('#closed-today-list .closed-today-title').first();
-    assert.strictEqual(await firstRowTitle.evaluate(el => el.tagName), 'BUTTON', 'The row title is a button');
+    // The card title is a real button that opens the reader
+    const firstRowTitle = page.locator('#closed-today-list .card-title-btn').first();
+    assert.strictEqual(await firstRowTitle.evaluate(el => el.tagName), 'BUTTON', 'The card title is a button');
     const firstRowName = await firstRowTitle.textContent();
     await firstRowTitle.click();
     await page.waitForFunction(() => document.getElementById('reader-dialog').open);
-    assert.strictEqual(await page.textContent('#modal-title'), firstRowName, 'Clicking a row title opens that note in the reader');
+    assert.strictEqual(await page.textContent('#modal-title'), firstRowName, 'Clicking a card title opens that note in the reader');
     await page.keyboard.press('Escape');
     assert.strictEqual(await page.evaluate(() => document.getElementById('reader-dialog').open), false);
 
-    // Confirm above 5 still-closed rows, not at or below. Reopens are stubbed (r1 always fails, each takes a beat).
+    // Confirm above 5 still-closed notes, not at or below. Reopens are stubbed (r1 always fails, each takes a beat).
     const markReopenedNow = (id) => page.evaluate(async (i) => (await import('/src/storage/db.js')).markReopened(i), id);
     await page.evaluate(() => {
       window.__realSend = chrome.runtime.sendMessage;
@@ -707,7 +836,7 @@ async function runAppUXTests() {
     });
     const confirmShown = () => page.locator('#closed-today-confirm').isVisible();
     await page.click('#closed-today-reopen-all');
-    assert.strictEqual(await confirmShown(), true, 'Seven still-closed rows ask before reopening');
+    assert.strictEqual(await confirmShown(), true, 'Seven still-closed notes ask before reopening');
     assert.strictEqual((await page.textContent('#closed-today-confirm-text')).trim(), 'Reopen 7 tabs?');
     assert.strictEqual(await page.locator('#closed-today-reopen-all').isHidden(), true, 'The confirmation replaces the Reopen all button');
     assert.strictEqual(await page.evaluate(() => window.__restoreCalls), 0, 'Nothing reopens before the user confirms');
@@ -724,42 +853,44 @@ async function runAppUXTests() {
 
     await markReopenedNow('r7');
     await tellClosed();
-    await page.waitForFunction(() => document.getElementById('closed-today-reopened').textContent.includes('1 reopened'));
-    assert.match(await page.textContent('#closed-today > summary'), /Closed 7 tabs for you today · 1 reopened/, 'The headline counts the reopened row');
+    await page.waitForFunction(() => document.getElementById('closed-today-toggle').textContent.includes('1 reopened'));
+    assert.strictEqual(await heading(), 'Closed 7 tabs for you today, all idle 60+ min · 1 reopened', 'The heading counts the reopened note');
     await page.click('#closed-today-reopen-all');
-    assert.strictEqual(await confirmShown(), true, 'Six still-closed rows still ask');
+    assert.strictEqual(await confirmShown(), true, 'Six still-closed notes still ask');
     assert.strictEqual((await page.textContent('#closed-today-confirm-text')).trim(), 'Reopen 6 tabs?');
     await page.click('#closed-today-confirm-no');
 
     await markReopenedNow('r6');
     await tellClosed();
-    await page.waitForFunction(() => document.getElementById('closed-today-reopened').textContent.includes('2 reopened'));
+    await page.waitForFunction(() => document.getElementById('closed-today-toggle').textContent.includes('2 reopened'));
     await page.click('#closed-today-reopen-all'); // five still closed: no question, and progress shows in the button
-    assert.strictEqual(await confirmShown(), false, 'Five still-closed rows reopen without asking');
+    assert.strictEqual(await confirmShown(), false, 'Five still-closed notes reopen without asking');
     await page.waitForFunction(() => /^Reopening \d of 5…$/.test(document.getElementById('closed-today-reopen-all').textContent));
-    await page.waitForFunction(() => document.getElementById('closed-today-reopened').textContent.includes('6 reopened'), null, { timeout: 15000 });
-    assert.strictEqual(await page.evaluate(() => window.__restoreCalls), 5, 'Reopen all only tried the rows that were still closed');
+    await page.waitForFunction(() => document.getElementById('closed-today-toggle').textContent.includes('6 reopened'), null, { timeout: 15000 });
+    assert.strictEqual(await page.evaluate(() => window.__restoreCalls), 5, 'Reopen all only tried the notes that were still closed');
     assert.strictEqual((await page.textContent('#closed-today-reopen-all')).trim(), 'Reopen all', 'The button returns to its label');
     assert.match(await page.textContent('#toast-message'), /Reopened 4 tabs\. 1 could not be reopened\./);
-    const failedRows = page.locator('#closed-today .closed-today-row', { has: page.locator('.closed-today-state.failed') });
-    assert.strictEqual(await failedRows.count(), 1, 'Exactly one row is marked as failed');
-    assert.match(await failedRows.textContent(), /Receipt r1[\s\S]*Could not reopen/, 'The failed row is named and says so');
-    assert.strictEqual(await failedRows.locator('.closed-today-reopen-btn').count(), 1, 'and can be retried');
-    assert.match(await page.textContent('#closed-today > summary'), /Closed 7 tabs for you today · 6 reopened/);
-    assert.strictEqual(await page.locator('#closed-today-reopen-all').isVisible(), true, 'Reopen all stays while a row is still closed');
+    const failedCards = page.locator('#closed-today-list .tab-card', { has: page.locator('.badge-status.failed') });
+    assert.strictEqual(await failedCards.count(), 1, 'Exactly one card is marked as failed');
+    assert.strictEqual((await sectionIds())[0], 'r1', 'The failed note comes first, so it never hides behind Show all');
+    assert.match(await failedCards.textContent(), /Could not reopen/, 'The failed card says so');
+    assert.match(await failedCards.textContent(), /Receipt r1/, 'and is named');
+    assert.strictEqual(await failedCards.locator('.restore-btn').count(), 1, 'and can be retried');
+    assert.strictEqual(await heading(), 'Closed 7 tabs for you today, all idle 60+ min · 6 reopened');
+    assert.strictEqual(await page.locator('#closed-today-reopen-all').isVisible(), true, 'Reopen all stays while a note is still closed');
     await page.evaluate(async (ids) => {
       chrome.runtime.sendMessage = window.__realSend;
       const { softDeleteTab, purgeDeletedTabs } = await import('/src/storage/db.js');
       for (const id of ids) await softDeleteTab(id);
       await purgeDeletedTabs(0);
     }, ids7);
-    console.log('✓ Receipt: three rows and Show all, title opens the reader, confirm above five, progress, named failures');
+    console.log('✓ Closed today: six cards and Show all, title opens the reader, confirm above five, progress, named failures first');
 
-    // Confirming leaves focus inside the receipt, not on <body>
+    // Confirming leaves focus inside Closed today, not on <body>
     const idsG = ['g1', 'g2', 'g3', 'g4', 'g5', 'g6'];
     for (const id of idsG) await closeNote({ id, url: `https://closed.example/${id}`, title: `Focus ${id}` });
     await tellClosed();
-    await page.waitForFunction(() => document.querySelectorAll('.closed-today-reopen-btn[data-id^="g"]').length === 6);
+    await page.waitForFunction(() => document.querySelectorAll('#closed-today-list .tab-card[data-id^="g"]').length === 6);
     await page.evaluate(() => {
       window.__realSend = chrome.runtime.sendMessage;
       chrome.runtime.sendMessage = async (msg) => {
@@ -771,7 +902,7 @@ async function runAppUXTests() {
     await page.click('#closed-today-reopen-all');
     await page.click('#closed-today-confirm-yes');
     await page.waitForFunction(() => /Reopened 6 tabs/.test(document.getElementById('toast-message').textContent));
-    assert.strictEqual(await page.evaluate(() => !!document.activeElement.closest('#closed-today')), true, 'After confirming Reopen all, focus is in the receipt, not on <body>');
+    assert.strictEqual(await page.evaluate(() => !!document.activeElement.closest('#closed-today')), true, 'After confirming Reopen all, focus is in Closed today, not on <body>');
     await page.evaluate(async (ids) => {
       chrome.runtime.sendMessage = window.__realSend;
       const { softDeleteTab, purgeDeletedTabs } = await import('/src/storage/db.js');
@@ -779,7 +910,7 @@ async function runAppUXTests() {
       await purgeDeletedTabs(0);
     }, idsG);
     await tellClosed();
-    console.log('✓ Reopen all confirm: Escape returns focus to the button; Reopen leaves focus in the receipt\n');
+    console.log('✓ Reopen all confirm: Escape returns focus to the button; Reopen leaves focus in Closed today\n');
 
     // --- TEST 11: Side panel surface ---
     console.log('--- Test 11: Side Panel Surface (panel-only controls, Open full view) ---');
@@ -880,6 +1011,77 @@ async function runAppUXTests() {
     assert.deepStrictEqual(await cardIds(hub), ['reopened-note'], 'Reopened view lists only reopened notes');
     assert.strictEqual(reopenedBadge.trim(), 'Reopened', 'Reopened notes carry the Reopened badge');
     console.log('✓ Reopened view lists only reopened notes');
+
+    // --- TEST 12b: reading or starring a note moves it out of the Inbox; unstarring does not bring it back ---
+    console.log('--- Test 12b: Reading or starring files a note out of the Inbox ---');
+    await hub.evaluate(async () => {
+      const { saveArchivedTab } = await import('/src/storage/db.js');
+      for (const [i, id] of ['file-read', 'file-star', 'file-after'].entries()) {
+        await saveArchivedTab({ id, url: `https://notes.example/${id}`, title: id, capturedAt: Date.now() + 3000 - i * 1000, status: 'archived',
+          summary: { tldr: `${id} summary`, bullets: [], tags: [] } });
+      }
+    });
+    await hub.reload(); // opens on the Inbox
+    await hub.waitForSelector('.tab-card[data-id="file-after"]');
+    const inboxCount = () => hub.textContent('#count-inbox').then(Number);
+    const inboxBefore = await inboxCount();
+    const inboxOrder = await cardIds(hub);
+    // Read with o: the count drops at once; the card leaves when the reader closes, and the selection keeps its place
+    await hub.evaluate(() => document.activeElement?.blur());
+    await hub.focus('.tab-card[data-id="file-read"]');
+    await hub.keyboard.press('o');
+    await hub.waitForSelector('#reader-dialog[open]');
+    await hub.waitForFunction((n) => Number(document.getElementById('count-inbox').textContent) === n, inboxBefore - 1);
+    await hub.keyboard.press('Escape');
+    await hub.waitForFunction(() => !document.querySelector('.tab-card[data-id="file-read"]'));
+    assert.ok((await hub.evaluate(async () => (await (await import('/src/storage/db.js')).getTabById('file-read')).filedAt)) > 0, 'Opening the reader files the note');
+    assert.strictEqual(await hub.evaluate(() => document.activeElement.dataset.id), inboxOrder[inboxOrder.indexOf('file-read') + 1], 'Focus moves to the card that took its place, not to the top');
+    // Star: the card leaves the Inbox at once and the toast says so
+    await hub.click('.tab-card[data-id="file-star"] .star-btn');
+    await hub.waitForFunction(() => !document.querySelector('.tab-card[data-id="file-star"]'));
+    assert.match(await hub.textContent('#toast-message'), /^Starred\. This note will not fade\. It left your Inbox\.$/, 'Starring says the note left the Inbox');
+    await hub.waitForFunction((n) => Number(document.getElementById('count-inbox').textContent) === n, inboxBefore - 2);
+    assert.strictEqual(await inboxCount(), (await hub.evaluate(async () => (await (await import('/src/storage/db.js')).getArchivedTabs({ view: 'inbox', limit: Infinity })).length)), 'The Inbox count matches the Inbox view');
+    // Unstar in All notes: the note does not come back to the Inbox
+    await hub.click('.nav-item[data-view=""]');
+    await hub.waitForSelector('.tab-card[data-id="file-star"] .star-btn.active');
+    await hub.click('.tab-card[data-id="file-star"] .star-btn');
+    await hub.waitForSelector('.tab-card[data-id="file-star"] .star-btn:not(.active)');
+    await hub.waitForTimeout(200); // the count refresh after unstarring
+    assert.strictEqual(await inboxCount(), inboxBefore - 2, 'Unstarring does not put the note back in the Inbox count');
+    await hub.click('.nav-item[data-view="inbox"]');
+    await hub.waitForFunction(() => { // the Inbox render has landed: as many cards as the Inbox count
+      const n = Number(document.getElementById('count-inbox').textContent);
+      return document.getElementById('results-count').textContent === `${n} ${n === 1 ? 'note' : 'notes'}` && document.querySelectorAll('#tabs-feed .tab-card').length === n;
+    });
+    assert.ok((await cardIds(hub)).includes('file-after'), 'The Inbox still lists the note nobody touched');
+    assert.ok(!(await cardIds(hub)).some(id => id === 'file-star' || id === 'file-read'), 'nor in the Inbox view');
+    // Every note read, starred or reopened: the Inbox can be empty, and says how notes leave it
+    const filedIds = await hub.evaluate(async () => {
+      const db = await import('/src/storage/db.js');
+      const inbox = await db.getArchivedTabs({ view: 'inbox', limit: Infinity });
+      for (const t of inbox) await db.markFiled(t.id);
+      return inbox.map(t => t.id);
+    });
+    await hub.reload();
+    await hub.waitForSelector('#tabs-feed .empty-state');
+    assert.strictEqual(await hub.textContent('#count-inbox'), '0', 'The Inbox count reaches zero');
+    const emptyInbox = await hub.textContent('#tabs-feed .empty-state');
+    assert.match(emptyInbox, /Nothing new in your Inbox/, 'The empty Inbox says so');
+    assert.match(emptyInbox, /Notes leave it when you read, star or reopen them\./, 'and says how notes leave it');
+    assert.ok(!/until you reopen, star, or delete/.test(emptyInbox), 'The old copy is gone');
+    await hub.evaluate(async (ids) => { // put the fixtures back as they were for the tests below
+      const db = await import('/src/storage/db.js');
+      for (const id of ids) {
+        const rec = await db.getTabById(id);
+        await db.saveArchivedTab({ ...rec, filedAt: undefined });
+      }
+      for (const id of ['file-read', 'file-star', 'file-after']) await db.softDeleteTab(id);
+      await db.purgeDeletedTabs(0);
+    }, filedIds);
+    await hub.reload();
+    await hub.waitForSelector('.tab-card[data-id="inbox-note"]');
+    console.log('✓ Reading or starring files a note out of the Inbox (count and view), unstarring does not bring it back, and the empty Inbox is honest');
 
     await hub.click('.nav-item[data-view=""]');
     await hub.waitForSelector('.tab-card[data-id="fading-note"]');

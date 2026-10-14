@@ -29,6 +29,7 @@
   --chip-moss: 63 107 69;
   --chip-accent: 46 74 122;
   --chip-ochre: 138 90 18;
+  --chip-brick: 166 61 47;
   color-scheme: light dark;
   --font-sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-serif: "Newsreader", Georgia, "Times New Roman", serif;
@@ -83,6 +84,7 @@
     --chip-moss: 141 191 147;
     --chip-accent: 157 180 222;
     --chip-ochre: 217 166 80;
+    --chip-brick: 224 138 124;
     --shadow-md: 0 2px 8px rgb(0 0 0 / 0.4), 0 1px 2px rgb(0 0 0 / 0.3);
     --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.55), 0 2px 6px rgb(0 0 0 / 0.4);
     --focus-ring: 0 0 0 3px rgb(157 180 222 / 0.3);
@@ -233,7 +235,6 @@ button {
 }
 
 .filter-item-btn span:first-child,
-.closed-today-title,
 .card-domain,
 .compact .card-title {
   white-space: nowrap;
@@ -742,145 +743,76 @@ button {
   white-space: nowrap;
 }
 
-/* ---------- Closed today ---------- */
+/* ---------- Closed today (top of the feed) and the feed heading ---------- */
 
-.closed-today {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-}
-
-.closed-today summary {
-  padding: 8px 12px;
+/* Quiet sans headings over the two parts of the feed: more room above than below. */
+.feed-heading {
+  margin: 0;
+  font-family: var(--font-sans);
   font-size: 12px;
   font-weight: 600;
+  line-height: 1.4;
   color: var(--text-secondary);
+}
+
+#feed-heading {
+  margin-top: 6px;
+}
+
+.closed-today {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.closed-today-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 8px;
+}
+
+.closed-today-heading {
+  flex: 1 1 14em;
+  min-width: 0;
+}
+
+.closed-today-toggle {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  max-width: 100%;
+  padding: 2px 4px 2px 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: inherit;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
-  list-style: none;
-  user-select: none;
 }
 
-.closed-today summary::-webkit-details-marker {
-  display: none;
-}
-
-.closed-today summary::before {
+.closed-today-toggle::before {
   content: "▶";
-  display: inline-block;
+  flex-shrink: 0;
   font-size: 12px;
-  margin-right: 6px;
   color: var(--text-muted);
   transition: transform 120ms cubic-bezier(.2, .7, .2, 1);
 }
 
-.closed-today[open] summary::before {
+.closed-today-toggle[aria-expanded="true"]::before {
   transform: rotate(90deg);
 }
 
-.closed-today summary:hover {
-  background: var(--bg-surface-hover);
+.closed-today-toggle:hover {
+  color: var(--text-primary);
 }
 
-.closed-today-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 6px 12px;
-  border-top: 1px solid var(--border-color);
-}
-
-.closed-today-row .favicon {
-  margin-top: 2px; /* sit on the title's line, not centred across the row */
-}
-
-.closed-today-side {
-  align-self: center;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-}
-
-/* Status words pair a hue with the word itself (Reopened is moss, a failure is brick). */
-.closed-today-state {
-  font-size: 12px;
-  font-weight: 600;
-  align-self: center;
-  flex-shrink: 0;
-}
-
-.closed-today-state.reopened {
-  color: var(--success);
-}
-
-.closed-today-state.failed {
-  color: var(--danger);
-}
-
-.closed-today-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.closed-today-title {
-  display: block;
-  max-width: 100%;
-  text-align: left;
-  background: none;
-  border: none;
-  color: inherit;
-  cursor: pointer;
-  font-family: var(--font-serif);
-  font-size: 13px;
-  font-weight: 400;
-}
-
-.closed-today-title:hover {
-  color: var(--accent);
-  text-decoration: underline;
-}
-
-.closed-today-title:focus-visible,
-.closed-today-more summary:focus-visible {
+.closed-today-toggle:focus-visible,
+.closed-today-more:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-}
-
-.closed-today-meta {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  min-width: 0;
-  font-size: 12px;
-}
-
-.closed-today-domain {
-  font-family: var(--font-mono);
-  color: var(--text-muted);
-  flex-shrink: 0;
-}
-
-.closed-today-reason {
-  color: var(--text-secondary);
-  min-width: 0;
-}
-
-.closed-today-intro {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 6px 12px;
-  border-top: 1px solid var(--border-color);
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.closed-today-when {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--text-muted);
 }
 
 .closed-today-confirm {
@@ -888,6 +820,7 @@ button {
   align-items: center;
   gap: 8px;
   margin-left: auto;
+  font-size: 12px;
   color: var(--text-primary);
   font-weight: 600;
 }
@@ -907,25 +840,127 @@ button {
   color: var(--text-primary);
 }
 
-.closed-today-more summary {
-  padding: 6px 12px;
-  border-top: 1px solid var(--border-color);
+.closed-today-more {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 2px 0;
   font-size: 12px;
   color: var(--accent-text);
   cursor: pointer;
 }
 
-.closed-today-more summary:hover {
-  background: var(--bg-surface-hover);
+.closed-today-more:hover {
+  text-decoration: underline;
 }
 
-.closed-today-more .more-open,
-.closed-today-more[open] .more-closed {
+/* What a Closed today card adds: when it closed (data), and a reason only when it is unusual */
+.card-closed {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.card-closed-when {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+.card-closed-reason {
+  color: var(--text-secondary);
+}
+
+/* Compact density keeps a Closed today card to its row: the closed time, not the idle span or reason */
+.compact .card-closed-idle,
+.compact .card-closed-reason {
   display: none;
 }
 
-.closed-today-more[open] .more-open {
-  display: inline;
+/* Seen once today: one line per note (title, closed time, Reopen) in a single ruled list. */
+#closed-today-list.lines {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+#closed-today-list.lines .tab-card {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  min-height: 40px;
+  padding: 6px 12px;
+  border: none;
+  border-top: 1px solid var(--border-color);
+  border-radius: 0;
+}
+
+#closed-today-list.lines .tab-card:first-child {
+  border-top: none;
+}
+
+#closed-today-list.lines .tab-card.keyboard-selected {
+  outline-offset: -2px;
+}
+
+#closed-today-list.lines .card-title {
+  order: -1;
+  flex: 1 1 12em;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+#closed-today-list.lines .card-title-btn {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#closed-today-list.lines .card-closed { order: 0; }
+#closed-today-list.lines .card-header { order: 1; flex-wrap: nowrap; }
+#closed-today-list.lines .card-footer { order: 2; }
+
+#closed-today-list.lines .card-header:not(:has(.card-flags)) {
+  display: none;
+}
+
+#closed-today-list.lines .card-source,
+#closed-today-list.lines .card-time,
+#closed-today-list.lines .fade-chip,
+#closed-today-list.lines .card-closed-reason,
+#closed-today-list.lines .card-closed-idle,
+#closed-today-list.lines .card-tldr,
+#closed-today-list.lines .takeaways-toggle,
+#closed-today-list.lines .card-bullets,
+#closed-today-list.lines .card-tags,
+#closed-today-list.lines .card-actions {
+  display: none;
+}
+
+#closed-today-list.lines .card-flags {
+  flex-basis: auto;
+  flex-wrap: nowrap;
+}
+
+#closed-today-list.lines .card-footer {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+#closed-today-list.lines .restore-btn {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .closed-today-reopen-btn,
@@ -1061,6 +1096,7 @@ button {
 .badge-status.sleeping { --chip: var(--chip-accent); }
 .badge-status.restored { --chip: var(--chip-moss); }
 .badge-status.captured { --chip: var(--chip-ochre); }
+.badge-status.failed { --chip: var(--chip-brick); }
 .fade-chip { --chip: var(--chip-ochre); }
 
 .card-title {
@@ -1868,7 +1904,7 @@ dialog.reader-dialog[open] {
   /* State-indicator chevrons snap instead of rotating */
   .dropdown-chevron,
   .takeaways-chevron,
-  .closed-today summary::before {
+  .closed-today-toggle::before {
     transition: none;
   }
 

@@ -41,6 +41,8 @@ const {
   markClosedByTabSquirrel,
   markTabGone,
   markReopened,
+  markFiled,
+  isInInbox,
   markLeftOpen,
   markStaysSuspended,
   recordCapture,
@@ -179,6 +181,41 @@ assert.ok(stats.totalReadingMinutes >= 2);
 assert.deepStrictEqual((await getArchivedTabs({ timeRange: 'today' })).map(t => t.id), ['d-today']);
 assert.deepStrictEqual((await getArchivedTabs({ timeRange: 'yesterday' })).map(t => t.id), ['d-yesterday']);
 console.log('✓ Calendar-day stats verified');
+
+// Test 10b: a note leaves the Inbox when it is reopened, read (markFiled) or starred; unstarring
+// does not bring it back. The Inbox view and the Inbox count use the same rule.
+console.log('Testing the Inbox exit rule...');
+await clearAllHistory();
+for (const id of ['i-read', 'i-star', 'i-reopen', 'i-new']) {
+  await saveArchivedTab({ id, url: `https://i.example/${id}`, status: 'archived' });
+}
+const inboxIds = async () => (await getArchivedTabs({ view: 'inbox' })).map(t => t.id).sort();
+assert.deepStrictEqual(await inboxIds(), ['i-new', 'i-read', 'i-reopen', 'i-star'], 'New notes start in the Inbox');
+assert.strictEqual((await getStats()).inbox, 4);
+const read = await markFiled('i-read');
+assert.ok(read.filedAt > 0, 'Reading a note stamps filedAt');
+const firstRead = read.filedAt;
+await new Promise(r => setTimeout(r, 5));
+assert.strictEqual((await markFiled('i-read')).filedAt, firstRead, 'A second read keeps the first filedAt');
+const starredRec = await toggleFavoriteTab('i-star');
+assert.ok(starredRec.isFavorite && starredRec.filedAt > 0, 'Starring stamps filedAt');
+await markReopened('i-reopen');
+assert.deepStrictEqual(await inboxIds(), ['i-new'], 'Read, starred and reopened notes have all left the Inbox');
+let inboxStats = await getStats();
+assert.deepStrictEqual([inboxStats.total, inboxStats.inbox, inboxStats.reopened], [4, 1, 1], 'The Inbox count follows the same rule as the view');
+const unstarred = await toggleFavoriteTab('i-star');
+assert.strictEqual(unstarred.isFavorite, false);
+assert.ok(unstarred.filedAt > 0, 'Unstarring keeps filedAt');
+assert.ok(!(await inboxIds()).includes('i-star'), 'Unstarring does not put a note back in the Inbox');
+assert.strictEqual((await getStats()).inbox, 1, 'nor in the Inbox count');
+assert.ok(!(await getArchivedTabs({ view: 'reopened' })).some(t => t.id === 'i-read' || t.id === 'i-star'), 'Read or starred notes are not Reopened');
+assert.ok(!isInInbox({ filedAt: 1 }) && !isInInbox({ restoredAt: 1 }) && isInInbox({}), 'isInInbox: neither stamp means Inbox');
+const refiled = await saveArchivedTab({ url: 'https://i.example/i-read', status: 'archived' });
+assert.strictEqual(refiled.filedAt, undefined, 'A recapture puts a read note back in the Inbox, as it does a reopened one');
+const importedFiled = await saveArchivedTab({ id: 'i-imp', url: 'https://i.example/imp', status: 'archived', filedAt: 1234 });
+assert.strictEqual(importedFiled.filedAt, 1234, 'JSON import keeps filedAt');
+assert.strictEqual((await saveArchivedTab({ id: 'i-bad', url: 'https://i.example/bad', filedAt: 'soon' })).filedAt, undefined, 'An invalid filedAt is dropped');
+console.log('✓ Inbox exit rule verified (reopen, read, star; unstar does not return a note)');
 
 // Test 11: lastClosedAt feeds "Closed today"; reopening clears closedAt but keeps the record of the closure
 console.log('Testing record lifecycle / closedSince...');

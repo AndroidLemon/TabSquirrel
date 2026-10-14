@@ -25,7 +25,7 @@ The bet behind Tab Squirrel is that most of those tabs are worth a paragraph, no
 5. **Archive.** In the default Smart Hybrid mode, plain reading pages are closed and interactive pages are suspended. Suspended tabs that stay untouched are closed at twice the threshold. A tab is only closed when an AI tier wrote the summary, so closing never loses the gist.
 6. **File it.** Every capture goes into a local IndexedDB notebook with full-text search and one-click restore. It opens as a Chrome side panel or as a full page in a tab.
 
-Closed tabs collect in a **Closed today** list at the top of the notebook. There are no per-tab notifications.
+Closed tabs collect in a **Closed today** section at the top of the notebook's feed, each note shown once. There are no per-tab notifications.
 
 ![The notebook in the side panel next to an article](docs/store/04-side-panel.png)
 
@@ -79,7 +79,7 @@ The side panel and the full view are one page (`src/app/`), so every feature wor
 ![The full-page notebook with a sidebar of tags and a grid of summary cards](docs/store/01-notebook.png)
 
 - **Search** covers titles, URLs, summaries, tags, and the saved page text, with matches highlighted on the cards.
-- **Inbox, Reopened, and fading.** The side panel opens on the Inbox: captures you have not dealt with. Reopening a tab moves its note to Reopened, still searchable (unless Remove Notes When Reopened is on, which deletes it instead when you reopen it from the notebook; switching to a sleeping tab never deletes). Unstarred notes delete themselves 30 days after capture if never reopened, or 7 days after the last reopen. Both are configurable, and 0 means never. Notes close to fading show a `Fades in Nd` chip. Star a note to keep it forever. Capturing the same page again puts it back in the Inbox with a fresh clock.
+- **Inbox, Reopened, and fading.** The side panel opens on the Inbox: captures you have not dealt with. A note leaves the Inbox when you read it, star it or reopen its tab; unstarring does not put it back. Reopening a tab also moves its note to Reopened, still searchable (unless Remove Notes When Reopened is on, which deletes it instead when you reopen it from the notebook; switching to a sleeping tab never deletes). Unstarred notes delete themselves 30 days after capture if never reopened, or 7 days after the last reopen. Both are configurable, and 0 means never. Notes close to fading show a `Fades in Nd` chip. Star a note to keep it forever. Capturing the same page again puts it back in the Inbox with a fresh clock.
 - **Undo.** Deleting a card shows a toast with a 5-second Undo button. Deleted notes are purged an hour later.
 - **Sorting.** Newest, oldest, quick reads first, deep dives first, title, domain, and expiring soon.
 - **Filters.** By tag, domain, favorites, or time (today, yesterday, past 7 days). Clicking a tag on a card filters by it.

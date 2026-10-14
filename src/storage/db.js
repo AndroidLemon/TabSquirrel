@@ -124,6 +124,9 @@ export async function saveArchivedTab(tabData) {
         capturedAt: timestamp(tabData.capturedAt, Date.now()),
         lastActiveAt: timestamp(tabData.lastActiveAt, Date.now()),
         restoredAt: timestamp(tabData.restoredAt, undefined), // kept on JSON import; a recapture clears it
+        // First read in the reader or first star: the note leaves the Inbox. Kept on JSON import;
+        // a recapture clears it, like restoredAt, so a fresh capture lands in the Inbox again.
+        filedAt: timestamp(tabData.filedAt, undefined),
         readingTimeMinutes: Math.max(1, Math.round(Number(tabData.readingTimeMinutes)) || 1),
         summary: sanitizeSummary(tabData.summary),
         // Unknown values (JSON import) must not pass the AI-only close gate
@@ -165,6 +168,14 @@ export async function saveArchivedTab(tabData) {
 }
 
 /**
+ * The Inbox holds notes nobody has acted on yet: a note leaves it when it is reopened (restoredAt)
+ * or filed (filedAt: read in the reader, or starred). Unstarring does not bring it back.
+ */
+export function isInInbox(record) {
+  return !record.restoredAt && !record.filedAt;
+}
+
+/**
  * Query archived tabs with keyword search and filters.
  * Records come back without cleanText unless `includeText: true`; soft-deleted records
  * are always hidden.
@@ -179,7 +190,7 @@ export async function getArchivedTabs(filters = {}) {
     status = '',
     favoriteOnly = false,
     closedSince = 0, // only records Tab Squirrel last closed at/after this time (reopened ones included)
-    view = '', // 'inbox' (never reopened) | 'reopened' | '' (all)
+    view = '', // 'inbox' (see isInInbox) | 'reopened' | '' (all)
     includeText = false,
     sortBy = 'newest', // 'newest' | 'oldest' | 'reading-time-asc' | 'reading-time-desc' | 'title-asc' | 'domain' | 'expiring-soon'
     limit = 100,
@@ -199,7 +210,7 @@ export async function getArchivedTabs(filters = {}) {
     if (favoriteOnly && !item.isFavorite) return false;
     if (status && item.status !== status) return false;
     if (closedSince && !(item.lastClosedAt >= closedSince)) return false;
-    if (view === 'inbox' && item.restoredAt) return false;
+    if (view === 'inbox' && !isInInbox(item)) return false;
     if (view === 'reopened' && !item.restoredAt) return false;
     if (domain && item.domain !== domain) return false;
     if (tag && !(item.summary?.tags || []).some(t => t.toLowerCase() === tag.toLowerCase())) return false;
@@ -376,6 +387,13 @@ export async function markReopened(id) {
   });
 }
 
+/** The user read the note in the reader: it leaves the Inbox. The first read is kept. */
+export async function markFiled(id) {
+  return updateRecord(id, (record) => {
+    if (!record.filedAt) record.filedAt = Date.now();
+  });
+}
+
 /** Chrome refused to close or suspend the tab, so it is still fully open. */
 export async function markLeftOpen(id, reason) {
   return updateRecord(id, (record) => {
@@ -511,7 +529,7 @@ export async function getStats() {
     total: tabs.length,
     today: tabs.filter(t => t.capturedAt >= todayStart).length,
     favorites: tabs.filter(t => t.isFavorite).length,
-    inbox: tabs.filter(t => !t.restoredAt).length, // same split as getArchivedTabs' 'inbox' / 'reopened' views
+    inbox: tabs.filter(isInInbox).length, // same rule as getArchivedTabs' 'inbox' view
     reopened: tabs.filter(t => t.restoredAt).length,
     totalReadingMinutes: tabs.reduce((acc, t) => acc + (t.readingTimeMinutes || 2), 0)
   };
@@ -581,9 +599,11 @@ export function extractDomain(url) {
   }
 }
 
+/** Starring also files the note (it leaves the Inbox); unstarring leaves filedAt alone. */
 export async function toggleFavoriteTab(id) {
   return updateRecord(id, (record) => {
     record.isFavorite = !record.isFavorite;
+    if (record.isFavorite && !record.filedAt) record.filedAt = Date.now();
   });
 }
 

@@ -564,11 +564,13 @@ async function runHybridTests() {
     await hubPage.reload();
     await hubPage.waitForSelector('#closed-today:not([hidden])', { timeout: 5000 });
     const closedToday = await hubPage.evaluate(() => ({
-      count: Number(document.getElementById('closed-today-count').textContent),
-      titles: Array.from(document.querySelectorAll('.closed-today-title')).map(el => el.textContent)
+      count: Number(document.getElementById('closed-today-toggle').textContent.match(/^Closed (\d+) tabs? for you today/)?.[1]),
+      ids: Array.from(document.querySelectorAll('#closed-today-list .tab-card')).map(el => el.dataset.id),
+      feedIds: Array.from(document.querySelectorAll('#tabs-feed .tab-card')).map(el => el.dataset.id)
     }));
     assert.ok(closedToday.count >= 1, 'Closed today must count the auto-closed article');
-    assert.strictEqual(closedToday.titles.length, closedToday.count, 'One row per closed tab');
+    assert.strictEqual(closedToday.ids.length, Math.min(closedToday.count, 6), 'One card per closed tab (up to six before Show all)');
+    assert.ok(!closedToday.ids.some(id => closedToday.feedIds.includes(id)), 'A closed tab\'s note is not repeated in the feed below');
     console.log(`✓ Closed today shows ${closedToday.count} tab(s)`);
 
     // --- Test 6: Without an AI summary, a closable article is suspended instead ---

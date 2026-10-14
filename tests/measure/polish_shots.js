@@ -1,5 +1,5 @@
 /**
- * Throwaway: screenshots the notebook (narrow 380 / wide 1280, light / dark) with a receipt,
+ * Throwaway: screenshots the notebook (narrow 380 / wide 1280, light / dark) with Closed today,
  * starred, reopened, sleeping and long-title notes, plus the reader dialog after starring.
  * Usage: node tests/measure/polish_shots.js <outDir>
  */
@@ -54,8 +54,7 @@ try {
       await page.reload();
       await page.waitForSelector('.tab-card');
       await page.waitForTimeout(400);
-      console.log(name, scheme, 'receipt open on load:', await page.evaluate(() => document.getElementById('closed-today').open));
-      await page.evaluate(() => { document.getElementById('closed-today').open = true; });
+      console.log(name, scheme, 'Closed today expanded on load:', await page.getAttribute('#closed-today-toggle', 'aria-expanded'));
       await page.waitForTimeout(200);
       await page.screenshot({ path: `${OUT}/${name}-${scheme}.png`, fullPage: true });
       if (scheme === 'light') {

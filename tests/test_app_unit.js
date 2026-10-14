@@ -8,7 +8,7 @@ import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
 import { highlightSearch, escapeHtml } from '../src/shared/html.js';
-import { formatExtractedArticle, getStatusBadge, closedReason, closedWhen, firstRunCopy } from '../src/app/app.js';
+import { formatExtractedArticle, getStatusBadge, closedReason, closedException, closedWhen, closedTodayHeading, firstRunCopy } from '../src/app/app.js';
 
 console.log('--- Running Knowledge Hub Unit & Markup Verification Tests ---');
 
@@ -104,6 +104,24 @@ assert.ok(!closedWhen({ lastClosedAt: closedAtMs, lastActiveAt: closedAtMs - 200
 assert.strictEqual(closedWhen({}), '', 'a record with no closure says nothing');
 console.log('✓ Receipt closed time and idle time derived from the record');
 
+// Closed today: the common reason (sat idle) goes in the heading once; cards state only exceptions
+assert.strictEqual(closedException({ closureTier: 'safe_to_close' }), '', 'plain idleness is not repeated on the card');
+assert.strictEqual(closedException({}), '', 'nor is it for a record with no closure data');
+assert.match(closedException({ closedFrom: 'suspended' }), /Slept first/, 'a tab that slept first is an exception');
+assert.match(closedException({ closureReason: 'Closed: trusted domain' }), /always-close list/, 'so is the always-close list');
+const at = (minutesIdle, extra = {}) => ({ lastClosedAt: closedAtMs, lastActiveAt: closedAtMs - minutesIdle * 60000, closedAt: closedAtMs, ...extra });
+const mixed = [at(64), at(125, { closedFrom: 'suspended' }), at(70, { closureReason: 'Closed: trusted domain' }), at(61, { closedAt: null })];
+assert.strictEqual(closedTodayHeading(mixed, 60), 'Closed 4 tabs for you today, all idle 60+ min · 1 reopened',
+  'mixed reasons share one true lower bound: every closure sat idle past the threshold');
+assert.strictEqual(closedTodayHeading([at(64)], 60), 'Closed 1 tab for you today, idle 60+ min', 'singular, and no reopened part at 0');
+assert.strictEqual(closedTodayHeading([at(64), { lastClosedAt: closedAtMs, closedAt: closedAtMs }], 60), 'Closed 2 tabs for you today, all idle 60+ min',
+  'a record with no idle stamp does not contradict the threshold');
+assert.strictEqual(closedTodayHeading([at(64), at(40)], 60), 'Closed 2 tabs for you today',
+  'a real idle time under the threshold (it was raised since) drops the claim rather than overstate it');
+assert.strictEqual(closedTodayHeading([at(130)], 120), 'Closed 1 tab for you today, idle 2+ h', 'whole-hour thresholds read in hours');
+assert.strictEqual(closedTodayHeading([at(50)], 45), 'Closed 1 tab for you today, idle 45+ min', 'the real threshold, not the default');
+console.log('✓ Closed today heading: one idle reason for all, true with mixed reasons; cards carry only exceptions');
+
 // First-run copy uses the real threshold and names Save current tab only in the panel
 const firstRunPanel = firstRunCopy({ timeoutMinutes: 45, archiveMode: 'hybrid' }, 'panel');
 assert.ok(firstRunPanel.lines.join(' ').includes('45 minutes'), 'first run states the user\'s idle threshold');
@@ -120,7 +138,7 @@ assert.ok(htmlContent.includes('<dialog id="reader-dialog" class="reader-dialog"
 for (const id of [
   'search-input', 'search-clear-btn', 'search-kbd-hint', 'modal-copy-btn', 'modal-close-btn', 'perm-banner',
   'enable-perm-btn', 'view-inbox', 'view-reopened', 'view-all', 'sort-select', 'density-toggle-btn',
-  'closed-today', 'closed-today-reopen-all', 'closed-today-list', 'tabs-feed', 'toast-undo-btn', 'toast-progress', 'filters-btn', 'sidebar', 'sidebar-tags',
+  'closed-today', 'closed-today-toggle', 'closed-today-reopen-all', 'closed-today-list', 'closed-today-more', 'feed-heading', 'tabs-feed', 'toast-undo-btn', 'toast-progress', 'filters-btn', 'sidebar', 'sidebar-tags',
   'sidebar-domains', 'filter-banner', 'clear-filter-btn', 'results-count', 'export-dropdown-btn', 'settings-btn',
   'view-options', 'archive-current-btn', 'open-full-btn', 'perm-dismiss-btn', 'count-inbox', 'count-reopened', 'shortcuts-fade-note'
 ]) {
