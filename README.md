@@ -6,15 +6,19 @@
 ![Local first](https://img.shields.io/badge/Storage-Local_first-10B981)
 ![License](https://img.shields.io/badge/License-MIT-gray)
 
-Tab Squirrel is a Chrome extension that watches your background tabs. When one has sat untouched for an hour, Tab Squirrel reads the article text, writes a short summary, saves it to a searchable local notebook, and then closes the tab or puts it to sleep. Anything it closes can be reopened with one click. Nothing leaves your machine unless you choose Gemini or a server of your own.
+Tab Squirrel is a Chrome extension that watches your background tabs. When one has sat untouched for a set duration (default: 1 hour), Tab Squirrel reads the article text, writes a short summary, saves it to a searchable local notebook, and then closes the tab or puts it to sleep. Anything it closes can be reopened with one click. Nothing leaves your machine unless you choose Gemini or a server of your own.
 
 ![Searching the notebook, filtering by tag, opening the reader view, and starring a note](docs/store/demo-notebook.gif)
 
 ## Why I built it
 
+Much like a squirrel hoarding nuts for winter, I hoard tabs. I open a tab because some information there might be useful. I get distracted and see another tab, and another one, and another one, and I keep them all open because I don't want to lose information. Now I have FOMO for closing them, but now there are too many tabs, and now I can't read the system, and everything is kind of overwhelming. And, much like a squirrel hoarding nuts for the winter, I forget why I even opened the tabs in the first place.  
+
 Tab hoarding is a working-memory problem. Every open tab is a thought you have not finished with, so closing it feels like losing it, and the bar fills up with favicon slivers. Tab suspenders like The Great Suspender and Chrome's memory saver free the RAM but leave the clutter, and neither leaves any record of what you had open.
 
 The bet behind Tab Squirrel is that most of those tabs are worth a paragraph, not a slot in your tab strip. If the extension can reliably capture the gist, closing the tab stops being a loss. Most of the engineering effort went into making that "reliably" true: knowing when a page is safe to touch, and getting clean text out of it.
+
+Open tabs keep an open loop in the mind and visual clutter in the browser, and that adds passive stress in the same way a messy room would. This is an attempt to get around that in a way that doesn't ask much of the user.
 
 ## How it works
 
