@@ -112,6 +112,7 @@ async function runAppUXTests() {
         capturedAt: Date.now() - 180000,
         readingTimeMinutes: 2,
         summary: { tldr: 'A page saved while the tab stays open.', bullets: ['Still open in the browser.'], tags: ['web'] },
+        summarySource: 'prompt-api', // written by an AI model: no offline marker. The other seeds default to the heuristic.
         status: 'captured',
         closureReason: 'Saved manually; tab left open'
       });
@@ -273,7 +274,7 @@ async function runAppUXTests() {
       await purgeDeletedTabs(0);
     });
     await page.locator('#toast-undo-btn').click();
-    await page.waitForFunction(() => /Could not restore/.test(document.getElementById('toast-message').textContent));
+    await page.waitForFunction(() => /Couldn't restore/.test(document.getElementById('toast-message').textContent));
     assert.ok(!/Note restored/.test(await page.textContent('#toast-message')), 'Failed Undo does not claim success');
     assert.strictEqual(await page.locator('#toast').evaluate(el => el.classList.contains('error')), true, 'Failed Undo shows the error style');
     console.log('✓ Toast pause, visibility and honest Undo verified\n');
@@ -429,7 +430,7 @@ async function runAppUXTests() {
       };
     });
     await page.locator(`${removeCardSel} .restore-btn`).click();
-    await page.waitForFunction(() => /Note removed/.test(document.querySelector('#toast-message')?.textContent || ''));
+    await page.waitForFunction(() => /Its note was removed/.test(document.querySelector('#toast-message')?.textContent || ''));
     await page.locator('#toast-undo-btn').waitFor({ state: 'visible', timeout: 2000 });
     await page.waitForFunction((sel) => !document.querySelector(sel), removeCardSel);
     await page.evaluate(() => { chrome.runtime.sendMessage = window.__realSend; });
@@ -468,8 +469,26 @@ async function runAppUXTests() {
 
     const savedBadge = page.locator('.tab-card[data-id="test-tab-3"] .badge-status');
     assert.strictEqual((await savedBadge.textContent()).trim(), 'Saved', 'captured status renders the Saved badge');
-    assert.strictEqual(await savedBadge.getAttribute('title'), 'Saved manually; tab left open', 'Saved badge tooltip is the closureReason');
-    console.log('✓ Sidebar + multi-column grid; Saved badge with closureReason tooltip');
+    assert.strictEqual(await savedBadge.getAttribute('title'), 'You saved this tab. It stays open.', 'Saved badge tooltip is the plain wording of the closureReason');
+    console.log('✓ Sidebar + multi-column grid; Saved badge with plain-wording tooltip');
+
+    // Offline summaries are marked quietly, AI-written ones are not (card and reader)
+    const offlineMark = (id) => page.locator(`.tab-card[data-id="${id}"] .card-time .offline-summary`);
+    assert.strictEqual(await offlineMark('test-tab-1').count(), 1, 'A heuristic-written note carries the offline marker in its meta line');
+    assert.strictEqual((await offlineMark('test-tab-1').textContent()).trim().replace(/^·\s*/, ''), 'offline summary', 'and the marker is the plain words');
+    assert.strictEqual(await offlineMark('test-tab-3').count(), 0, 'An AI-written note shows nothing extra');
+    assert.strictEqual(await page.locator('.tab-card[data-id="test-tab-1"] .card-flags .offline-summary').count(), 0, 'The marker is plain text, not a coloured badge in the flags');
+    await page.click('.tab-card[data-id="test-tab-1"] .reader-btn');
+    await page.waitForSelector('#reader-dialog[open]');
+    assert.strictEqual(await page.locator('#modal-summary-box .summary-source').textContent(), 'offline summary', 'The reader marks an offline summary');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.getElementById('reader-dialog').open);
+    await page.click('.tab-card[data-id="test-tab-3"] .reader-btn');
+    await page.waitForSelector('#reader-dialog[open]');
+    assert.strictEqual(await page.locator('#modal-summary-box .summary-source').count(), 0, 'The reader shows nothing extra for an AI-written summary');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.getElementById('reader-dialog').open);
+    console.log('✓ Offline summary marker on the card and in the reader; none on AI-written notes');
 
     // Favorites
     await page.click('.tab-card[data-id="test-tab-3"] .star-btn');
@@ -544,8 +563,8 @@ async function runAppUXTests() {
     assert.strictEqual(await exportMenu.locator('.export-option-btn').count(), 3, 'Export offers Markdown, Obsidian and JSON');
     assert.ok(!/respects active filters/i.test(await exportMenu.textContent()), 'The export menu does not repeat "respects active filters"');
     assert.strictEqual(await exportMenu.locator('[data-format="json"] .option-title').textContent(), 'JSON backup (.json)', 'Export titles are sentence case');
-    assert.match(await exportMenu.locator('[data-format="json"] .option-desc').textContent(), /ignoring filters/, 'JSON says it ignores filters');
-    assert.match(await exportMenu.locator('[data-format="markdown"] .option-desc').textContent(), /you are viewing/, 'Markdown says it follows the current view');
+    assert.match(await exportMenu.locator('[data-format="json"] .option-desc').textContent(), /whatever the filter/, 'JSON says it ignores filters');
+    assert.match(await exportMenu.locator('[data-format="markdown"] .option-desc').textContent(), /in this view/, 'Markdown says it follows the current view');
     await page.keyboard.press('Escape');
     assert.strictEqual(await exportMenu.isHidden(), true, 'Escape closes the export menu');
     await page.click('#export-dropdown-btn');
@@ -816,7 +835,7 @@ async function runAppUXTests() {
     await page.locator('#toast-undo-btn').waitFor({ state: 'visible', timeout: 5000 });
     assert.match(await page.textContent('#toast-message'), /Reopened 2 tabs\. Their notes were removed\./, 'Reopen all says the notes were removed');
     await page.click('#toast-undo-btn');
-    await page.waitForFunction(() => document.getElementById('toast-message').textContent === 'Notes restored');
+    await page.waitForFunction(() => document.getElementById('toast-message').textContent === 'Notes restored.');
     const removedAfterUndo = await page.evaluate(async () => {
       const { getTabById } = await import('/src/storage/db.js');
       return Promise.all(['removed-a', 'removed-b'].map(async id => { const t = await getTabById(id); return { present: Boolean(t), deleted: Boolean(t?.deletedAt), status: t?.status }; }));
@@ -1461,7 +1480,7 @@ async function runAppUXTests() {
     assert.strictEqual(await permBanner.isVisible(), true, 'The permission note shows while permission is missing');
     assert.strictEqual(await permBanner.evaluate(el => el.classList.contains('quiet')), true, 'With notes it is quiet');
     assert.strictEqual(await permBanner.evaluate(el => getComputedStyle(el).backgroundColor), 'rgba(0, 0, 0, 0)', 'Quiet means no ink-wash fill');
-    assert.strictEqual((await hub.textContent('#perm-text')).trim(), "Some sites can't be read, so their tabs stay open with no note.", 'Quiet, it is a full sentence with its own subject');
+    assert.strictEqual((await hub.textContent('#perm-text')).trim(), "Tab Squirrel can't read sites you haven't allowed, so their tabs stay open with no note.", 'Quiet, it is a full sentence with its own subject');
     assert.strictEqual((await hub.textContent('#enable-perm-btn')).trim(), 'Allow all sites', 'and the action says what it does');
     await hub.click('#perm-dismiss-btn');
     assert.strictEqual(await permBanner.isHidden(), true, 'Dismiss hides the note');

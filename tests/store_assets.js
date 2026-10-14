@@ -381,14 +381,14 @@ function writeSidePanelWrapper(extensionPath) {
 }
 
 /**
- * Scroll position that frames "Archival Action" cleanly: the card containing it (the product's
+ * Scroll position that frames "What happens to an idle tab" cleanly: the card containing it (the product's
  * core setting) sits whole and un-clipped near the top of the frame, about 24px down. The
  * domain lists fall below the fold rather than forcing a mid-radio-button crop at the top.
  */
 async function computeOptionsScroll(page) {
   return page.evaluate(() => {
     const label = Array.from(document.querySelectorAll('.setting-label-group label'))
-      .find(l => l.textContent.trim() === 'Archival Action');
+      .find(l => l.textContent.trim() === 'What happens to an idle tab');
     const card = label.closest('.settings-card');
     const top = card.getBoundingClientRect().top + window.scrollY;
     return Math.max(0, top - 24);
@@ -577,7 +577,7 @@ async function main() {
     await page.hover('#toast-undo-btn');
     await page.waitForTimeout(250);
     await toastShot('06-toast-undo-hover.png');
-    await setToast('Could not reopen that tab. Please try again.', true, false);
+    await setToast('Couldn\'t reopen that tab. Try again.', true, false);
     await page.mouse.move(10, 10);
     await page.waitForTimeout(350);
     await toastShot('06-toast-error.png');
@@ -606,7 +606,7 @@ async function main() {
     await page.click('#clear-filter-btn');
     await page.waitForTimeout(200);
 
-    // 05: options, scrolled to frame Archival Action cleanly at the top
+    // 05: options, scrolled to frame What happens to an idle tab cleanly at the top
     const optionsPage = await context.newPage();
     await optionsPage.setViewportSize(WIDE);
     await optionsPage.goto(OPTIONS_URL);

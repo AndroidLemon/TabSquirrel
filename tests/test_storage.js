@@ -388,7 +388,7 @@ console.log('✓ Inbox views, fading and expiring-soon sort verified');
 const imported = await saveArchivedTab({ id: 'imp-1', url: 'https://f.example/new', title: 42, readingTimeMinutes: '<img src=x onerror=alert(1)>', summarySource: 'manual' });
 assert.strictEqual(imported.summarySource, 'heuristic', 'Unknown summary sources cannot pass the AI-only close gate');
 assert.strictEqual(imported.id, 'f-new', 'Unknown id falls back to URL dedupe');
-assert.strictEqual(imported.title, 'Untitled Tab');
+assert.strictEqual(imported.title, 'Untitled page');
 assert.strictEqual(imported.readingTimeMinutes, 1, 'Non-numeric reading time is coerced');
 assert.strictEqual((await getArchivedTabs({ query: 'f.example' })).length > 0, true, 'Search still works after import');
 const restoredImport = await saveArchivedTab({ id: 'imp-2', url: 'https://f.example/imp2', status: 'restored', restoredAt: nowMs - DAY, capturedAt: 'garbage' });

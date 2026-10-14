@@ -11,7 +11,7 @@ To do its job, Tab Squirrel reads two kinds of data from your browser:
 - **Website content.** The text of a web page, read from an inactive tab that is about to be archived, or from the active tab when you press the archive shortcut. Only pages on sites you have granted access to are read. Tab Squirrel also checks the page for unsaved form input and playing media so it can leave those tabs alone.
 - **Tab metadata.** The URL, title, and favicon of each tab, and the time it was last active. This is how Tab Squirrel decides which tabs are inactive and how it reopens a tab later.
 
-Tab Squirrel reads nothing else. It does not read cookies, passwords, form values, or anything from tabs on sites you have not granted access to.
+Tab Squirrel reads nothing else. It does not store or send cookies, passwords or form values. To spot unsaved typing, it only checks inside the page whether a field has changed. It reads nothing from sites you have not granted access to.
 
 ## Where it is stored
 
@@ -24,9 +24,9 @@ Nothing is synced to other devices or to any Google account. Like all extension 
 
 ## What leaves your computer
 
-**With the default settings, nothing.** Tab Squirrel makes no network requests of its own. Summaries are written by Chrome's built-in on-device model if it is available, or by an offline heuristic if it is not.
+**With the default settings, nothing.** Tab Squirrel makes no network requests of its own. Summaries are written by Chrome's built-in on-device model if it is already downloaded (Tab Squirrel never downloads it), or by an offline heuristic if it is not.
 
-Page text leaves your computer only if you choose one of these summarization providers in Options:
+Page text leaves your computer only if you choose one of these summarization providers in Settings:
 
 - **Google Gemini.** If you enter a Gemini API key, the extracted text of each archived page is sent to Google's Gemini API using your key. Google's terms and privacy policy for that API apply to those requests. Tab Squirrel sends the page text and nothing else.
 - **A local or OpenAI-compatible server.** If you enter a server URL, the extracted text is sent to that URL. This is typically a model running on your own machine. Access to the server's origin is granted through a permission prompt when you click Test Connection. What that server does with the text is up to whoever runs it.
@@ -41,8 +41,9 @@ The other permissions it holds (tabs, storage, alarms, idle, scripting, side pan
 
 ## Retention and deletion
 
-- Unstarred notes delete themselves 30 days after capture, or 7 days after you last reopened the tab. Both timers are configurable in Options, and 0 means never. Starred notes are kept until you delete them.
-- Deleting a note tombstones it for one hour so it can be undone, then removes it permanently.
+- Unstarred notes delete themselves 30 days after capture, or 7 days after you last reopened the tab. Both timers are configurable in Settings, and 0 means never. Starred notes are kept until you delete them.
+- A deleted note is kept for one hour so Undo can bring it back, then removed for good.
+- Delete all notes in Settings removes everything at once and cannot be undone.
 - Uninstalling the extension removes all of its stored data, as Chrome does for any extension.
 - You can export everything as JSON, Markdown, or an Obsidian vault at any time from the notebook.
 

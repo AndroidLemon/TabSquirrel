@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Tab Squirrel: Inactive Tab Summarizer & Knowledge Wiki",
+  "name": "Tab Squirrel: Close idle tabs, keep the gist",
   "version": "1.0.0",
-  "description": "Automatically summarizes neglected tabs and archives them into an in-browser knowledge wiki with 1-click restore.",
+  "description": "Closes tabs you leave idle and keeps a short summary of each, so you can let them go. Reopen any tab in one click.",
   "homepage_url": "https://github.com/AndroidLemon/TabSquirrel",
   "minimum_chrome_version": "141",
   "icons": {
@@ -11,7 +11,7 @@
     "128": "src/assets/icons/icon-128.png"
   },
   "action": {
-    "default_title": "Tab Squirrel: Notebook",
+    "default_title": "Open Tab Squirrel notebook",
     "default_icon": {
       "16": "src/assets/icons/icon-16.png",
       "48": "src/assets/icons/icon-48.png",
@@ -24,14 +24,14 @@
         "default": "Ctrl+Shift+S",
         "mac": "Command+Shift+S"
       },
-      "description": "Open Side Panel / Notebook"
+      "description": "Open the notebook"
     },
     "archive_active_tab": {
       "suggested_key": {
         "default": "Ctrl+Shift+E",
         "mac": "Command+Shift+E"
       },
-      "description": "Archive and summarize active tab"
+      "description": "Save a note of the current tab (it stays open)"
     }
   },
   "background": {

@@ -2089,7 +2089,14 @@ dialog.reader-dialog[open] {
   border-top: 1px solid var(--border-color);
 }
 
-.fade-date {
+.fade-date,
+.offline-summary {
+  color: var(--text-muted);
+}
+
+.modal-summary-box p.summary-source {
+  margin-top: 8px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 

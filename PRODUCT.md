@@ -29,8 +29,8 @@ Tab suspenders free memory but leave the clutter and keep no record. Read-later 
 
 ## Capabilities and Constraints
 
-- Archival modes: Smart Hybrid (the default: closes plain reading pages, suspends interactive ones, and closes suspended tabs at twice the threshold), Soft Suspend All, and Auto-Close All.
-- Safety: tabs with unsaved input, rich-text editors, audio, pinned tabs or whitelisted domains are never closed. Trusted domains may be closed even where a check would only suspend them. Everything is re-checked at the last moment before acting.
+- Modes (what happens to an idle tab): Close or sleep (the default: closes plain reading pages, puts interactive ones to sleep, and closes sleeping tabs at twice the threshold), Sleep only, and Close all.
+- Safety: tabs with unsaved input, rich-text editors, audio, pinned tabs or domains on the never-touch list are never closed. Trusted domains may be closed even where a check would only suspend them. Everything is re-checked at the last moment before acting.
 - By default a tab is closed only when an AI tier wrote its summary. With only the heuristic fallback available, it is suspended instead.
 - Summarizer tiers: offline heuristic, Chrome's on-device Prompt API, Gemini with the user's own key, or any OpenAI-compatible local server.
 - Local-first: data stays in IndexedDB and chrome.storage. Nothing leaves the machine unless the user configures a cloud or remote summarizer (see PRIVACY.md).

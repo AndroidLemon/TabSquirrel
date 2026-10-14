@@ -118,7 +118,7 @@ export async function saveArchivedTab(tabData) {
         id: existing?.id || tabData.id || crypto.randomUUID(),
         url: safeUrl,
         // JSON import feeds arbitrary values here; the UI assumes these types
-        title: (typeof tabData.title === 'string' && tabData.title) || 'Untitled Tab',
+        title: (typeof tabData.title === 'string' && tabData.title) || 'Untitled page',
         domain: (typeof tabData.domain === 'string' && tabData.domain) || extractDomain(safeUrl),
         favIconUrl: safeFavicon,
         capturedAt: timestamp(tabData.capturedAt, Date.now()),

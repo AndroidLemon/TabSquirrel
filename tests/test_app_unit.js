@@ -7,8 +7,9 @@
 import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
-import { highlightSearch, escapeHtml } from '../src/shared/html.js';
-import { formatExtractedArticle, getStatusBadge, closedReason, closedException, closedWhen, closedTodayHeading, firstRunCopy } from '../src/app/app.js';
+import { highlightSearch, escapeHtml, reasonLabel, offlineSummaryHtml, isOfflineSummary } from '../src/shared/html.js';
+import { plannedSource } from '../src/ai/summarizer.js';
+import { formatExtractedArticle, getStatusBadge, closedReason, closedException, closedWhen, closedTodayHeading, firstRunCopy, resolvesToHeuristic, starLabel } from '../src/app/app.js';
 
 console.log('--- Running Knowledge Hub Unit & Markup Verification Tests ---');
 
@@ -81,9 +82,73 @@ assert.ok(badge('restored').includes('class="badge-status restored"') && badge('
 assert.ok(badge('captured').includes('class="badge-status captured"') && badge('captured').includes('>Saved</span>'), 'captured -> Saved');
 assert.strictEqual(badge('archived'), '', 'archived (the default state) renders no badge');
 assert.strictEqual(badge(undefined), '', 'Unknown status renders no badge');
-assert.ok(badge('captured', 'Chrome refused to close this tab; summary saved, tab left open').includes('title="Chrome refused to close this tab; summary saved, tab left open"'), 'Badge tooltip is the closureReason');
-assert.ok(!badge('captured', '"><img src=x>').includes('<img'), 'closureReason tooltip must be escaped');
+assert.ok(badge('captured', 'Chrome refused to close this tab; summary saved, tab left open').includes('title="Chrome wouldn&#39;t close this tab. Its note is saved and the tab is still open."'), 'Badge tooltip is the plain wording of the closureReason');
+assert.ok(!badge('captured', 'Chrome refused to close this tab; summary saved, tab left open').includes('summary saved, tab left open'), 'the internal reason is not shown to the user');
+assert.ok(!badge('discarded', '"><img src=x>').includes('<img'), 'tooltip text must be escaped');
 console.log('✓ Status badges verified (Sleeping, Reopened, Saved, Closed)');
+
+// Closure reasons: internal strings stay as they are; users read the mapped wording
+const label = (status, closureReason) => reasonLabel({ status, closureReason });
+assert.strictEqual(label('discarded', 'Contains form or interactive input controls'), 'Put to sleep: the page has a form or app controls.');
+assert.strictEqual(label('discarded', 'Stateful URL path or client-side hash route'), 'Put to sleep: the address looks like an app page, such as a checkout or editor.');
+assert.strictEqual(label('discarded', 'Complex search/filter query state'), 'Put to sleep: the address holds a search or filter.');
+assert.strictEqual(label('discarded', 'Media-dominated page with little prose'), 'Put to sleep: mostly video or images, little text.');
+assert.strictEqual(label('discarded', 'Short or low-confidence content'), 'Put to sleep: too little text to summarize with confidence.');
+assert.strictEqual(label('discarded', 'Suspended instead of closed: no AI summary available'), 'Put to sleep, not closed: only the offline summary was available.');
+assert.strictEqual(label('discarded', 'Chrome refused to close this tab; it stays suspended'), 'Chrome wouldn\'t close this tab, so it stays asleep.');
+assert.strictEqual(label('captured', 'You switched to this tab while it was being archived; summary saved, tab left open'), 'You came back to this tab while its note was being written, so it stayed open.');
+assert.strictEqual(label('captured', 'Chrome refused to close this tab; summary saved, tab left open'), 'Chrome wouldn\'t close this tab. Its note is saved and the tab is still open.');
+assert.strictEqual(label('captured', 'Chrome refused to suspend this tab; summary saved, tab left open'), 'Chrome wouldn\'t put this tab to sleep. Its note is saved and the tab is still open.');
+assert.strictEqual(label('captured', 'Saved manually; tab left open'), 'You saved this tab. It stays open.');
+assert.strictEqual(label('archived', 'Pure stateless reading article'), 'A reading page, so it was closed.');
+assert.strictEqual(label('archived', 'Closed: trusted domain'), 'On your always-close list, so it was closed.');
+assert.strictEqual(label('discarded', ''), 'Asleep in the tab strip to save memory', 'no reason: the generic sleeping line');
+assert.strictEqual(label('discarded', 'something new'), 'Asleep in the tab strip to save memory', 'an unknown reason never leaks internal wording');
+assert.strictEqual(label('captured', ''), 'Its note is saved and the tab is still open.');
+// A reopened record keeps the reason it was closed for; the tooltip must never repeat it
+for (const reason of ['Pure stateless reading article', 'Closed: trusted domain', 'Contains form or interactive input controls', '']) {
+  assert.strictEqual(label('restored', reason), 'You reopened this tab', `Reopened never shows the old closure reason (${reason || 'none'})`);
+}
+assert.ok(badge('restored', 'Pure stateless reading article').includes('title="You reopened this tab"'), 'the Reopened badge carries its own tooltip');
+assert.ok(!/Pure stateless|reading page/.test(badge('restored', 'Pure stateless reading article')), 'and not the closure reason');
+console.log('✓ Closure reasons read as plain text; Reopened has its own tooltip');
+
+// Offline summaries are marked quietly; AI-written ones are not
+assert.ok(isOfflineSummary({ summarySource: 'heuristic' }));
+assert.ok(offlineSummaryHtml({ summarySource: 'heuristic' }).includes('offline summary'), 'a heuristic-written note says so');
+for (const source of ['prompt-api', 'gemini-api', 'openai-compatible']) {
+  assert.strictEqual(offlineSummaryHtml({ summarySource: source }), '', `${source} shows nothing extra`);
+}
+console.log('✓ Offline summary marker: heuristic only');
+
+// Which provider the settings resolve to decides whether the first run can promise closing
+assert.strictEqual(plannedSource({}), 'prompt-api', 'Auto plans for the on-device model');
+assert.strictEqual(plannedSource({ aiProvider: 'heuristic' }), 'heuristic');
+assert.strictEqual(plannedSource({ aiProvider: 'gemini-api' }), 'heuristic', 'Gemini without a key falls back');
+assert.strictEqual(plannedSource({ aiProvider: 'gemini-api', geminiApiKey: 'k' }), 'gemini-api');
+assert.strictEqual(plannedSource({ aiProvider: 'openai-compatible', openaiBaseUrl: 'http://x/v1' }), 'heuristic', 'a server without a model falls back');
+assert.strictEqual(plannedSource({ aiProvider: 'openai-compatible', openaiBaseUrl: 'http://x/v1', openaiModel: 'm' }), 'openai-compatible');
+assert.strictEqual(resolvesToHeuristic({}, false), true, 'Auto with no downloaded model is the heuristic');
+assert.strictEqual(resolvesToHeuristic({}, true), false, 'Auto with the model downloaded is AI');
+assert.strictEqual(resolvesToHeuristic({ aiProvider: 'heuristic' }, true), true);
+assert.strictEqual(resolvesToHeuristic({ aiProvider: 'gemini-api', geminiApiKey: 'k' }, false), false, 'a cloud key does not depend on the on-device model');
+const heuristicOnly = 'Without an AI summarizer, tabs are put to sleep rather than closed. Choose one in Settings.';
+assert.ok(firstRunCopy({}, 'tab', false).lines.includes(heuristicOnly), 'Auto with no on-device model says tabs are put to sleep');
+assert.ok(!firstRunCopy({}, 'tab', true).lines.includes(heuristicOnly), 'with the model downloaded it does not');
+assert.ok(!firstRunCopy({}, 'tab', undefined).lines.includes(heuristicOnly), 'with the model state unknown it makes no claim');
+assert.ok(!firstRunCopy({ closeRequiresAiSummary: false }, 'tab', false).lines.includes(heuristicOnly), 'with the AI-summary rule off the heuristic still closes');
+assert.ok(!firstRunCopy({ archiveMode: 'discard' }, 'tab', false).lines.includes(heuristicOnly), 'Sleep only never closes, so there is nothing to add');
+assert.ok(!firstRunCopy({ aiProvider: 'gemini-api', geminiApiKey: 'k' }, 'tab', false).lines.includes(heuristicOnly), 'a configured cloud summarizer is AI');
+assert.ok(firstRunCopy({ aiProvider: 'heuristic' }, 'tab', true).lines.includes(heuristicOnly), 'the heuristic provider says it whatever Chrome has');
+assert.match(firstRunCopy({ timeoutMinutes: 120 }, 'tab').lines[0], /^Tabs left idle for 2 hours /, 'whole hours read as hours from two hours up');
+assert.match(firstRunCopy({ timeoutMinutes: 60 }, 'tab').lines[0], /^Tabs left idle for 60 minutes /, 'an hour stays in minutes, as the setting reads');
+
+// The star tooltip promises "it won't fade" only while fading is on
+assert.strictEqual(starLabel(false, { fadeUnopenedDays: 30, fadeReopenedDays: 7 }), 'Star: keep this note; it won\'t fade');
+assert.strictEqual(starLabel(true, { fadeUnopenedDays: 0, fadeReopenedDays: 7 }), 'Unstar: let this note fade again', 'either window on means notes fade');
+assert.strictEqual(starLabel(false, { fadeUnopenedDays: 0, fadeReopenedDays: 0 }), 'Star', 'fading off: no promise about fading');
+assert.strictEqual(starLabel(true, { fadeUnopenedDays: 0, fadeReopenedDays: 0 }), 'Unstar');
+assert.strictEqual(starLabel(false, null), 'Star', 'settings not loaded yet: no claim');
 
 // Receipt reasons are derived from the record, never invented
 assert.match(closedReason({ closureTier: 'safe_to_close', closureReason: 'Pure stateless reading article' }), /idle/, 'a plain reading page closed after sitting idle');
@@ -129,7 +194,7 @@ const firstRunPanel = firstRunCopy({ timeoutMinutes: 45, archiveMode: 'hybrid' }
 assert.ok(firstRunPanel.lines.join(' ').includes('45 minutes'), 'first run states the user\'s idle threshold');
 assert.ok(firstRunPanel.lines.some(l => /Save current tab/.test(l)), 'the panel names Save current tab');
 assert.ok(!firstRunCopy({ timeoutMinutes: 45 }, 'tab').lines.some(l => /Save current tab/.test(l)), 'the full tab does not');
-assert.match(firstRunCopy({ timeoutMinutes: 1, archiveMode: 'close' }, 'tab').lines[0], /^Tabs left idle for 1 minute are closed\.$/, 'singular minute, close mode');
+assert.match(firstRunCopy({ timeoutMinutes: 1, archiveMode: 'close' }, 'tab').lines[0], /^Tabs left idle for 1 minute are closed once a summary is written\./, 'singular minute, close mode');
 assert.match(firstRunCopy({ timeoutMinutes: 30, archiveMode: 'discard' }, 'tab').lines[0], /put to sleep/, 'suspend-only mode does not promise closing');
 console.log('✓ First-run copy verified');
 

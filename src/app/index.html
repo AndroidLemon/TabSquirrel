@@ -81,15 +81,15 @@
           <div id="export-dropdown-menu" class="export-dropdown-menu" role="menu" aria-label="Export options" popover>
             <button class="export-option-btn" role="menuitem" data-format="markdown">
               <span class="option-title">Markdown (.md)</span>
-              <span class="option-desc">One note with everything you are viewing</span>
+              <span class="option-desc">One file with every note in this view</span>
             </button>
             <button class="export-option-btn" role="menuitem" data-format="obsidian">
               <span class="option-title">Obsidian vault (.zip)</span>
-              <span class="option-desc">One file per note you are viewing</span>
+              <span class="option-desc">One file per note in this view</span>
             </button>
             <button class="export-option-btn" role="menuitem" data-format="json">
               <span class="option-title">JSON backup (.json)</span>
-              <span class="option-desc">Every note, ignoring filters; can be re-imported</span>
+              <span class="option-desc">Every note, whatever the filter. Import it again from Settings.</span>
             </button>
           </div>
         </div>
@@ -167,7 +167,7 @@
               <option value="domain">Domain</option>
               <option value="expiring-soon">Fading soonest</option>
             </select>
-            <button id="density-toggle-btn" class="density-toggle-btn" aria-pressed="false" aria-label="Toggle compact view" title="Switch to compact view"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></button>
+            <button id="density-toggle-btn" class="density-toggle-btn" aria-pressed="false" aria-label="Compact view" title="Compact view"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></button>
 
             </div>
           </details>
@@ -242,7 +242,7 @@
     <dl class="shortcuts-list">
       <div><dt><kbd>j</kbd> <kbd>↓</kbd></dt><dd>Next note</dd></div>
       <div><dt><kbd>k</kbd> <kbd>↑</kbd></dt><dd>Previous note</dd></div>
-      <div><dt><kbd>Enter</kbd></dt><dd>Reopen the selected note (or go to its tab, if it is still open)</dd></div>
+      <div><dt><kbd>Enter</kbd></dt><dd>Reopen the selected note's tab (or go to it, if it is still open)</dd></div>
       <div><dt><kbd>o</kbd></dt><dd>Open the selected note in the reader</dd></div>
       <div><dt><kbd>s</kbd></dt><dd>Star or unstar the selected note</dd></div>
       <div><dt><kbd>Del</kbd> <kbd>Backspace</kbd></dt><dd>Delete the selected note</dd></div>

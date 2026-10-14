@@ -50,7 +50,7 @@ function setupListeners() {
     try {
       const granted = await chrome.permissions.request({ origins: ['<all_urls>'] });
       if (granted) {
-        showToast('Extraction permissions granted.');
+        showToast('Tab Squirrel can now read pages.');
       }
       await checkPermissions();
     } catch (err) {
@@ -68,33 +68,33 @@ function setupListeners() {
   document.getElementById('timeout-select').addEventListener('change', async (e) => {
     currentSettings.timeoutMinutes = parseInt(e.target.value, 10);
     await saveSettings(currentSettings);
-    showToast('Inactivity timeout updated');
+    showToast('Saved.');
   });
 
   document.querySelectorAll('input[name="archiveMode"]').forEach(radio => {
     radio.addEventListener('change', async (e) => {
       currentSettings.archiveMode = e.target.value;
       await saveSettings(currentSettings);
-      showToast('Archival mode updated');
+      showToast('Saved.');
     });
   });
 
   document.getElementById('ignore-pinned-toggle').addEventListener('change', async (e) => {
     currentSettings.ignorePinnedTabs = e.target.checked;
     await saveSettings(currentSettings);
-    showToast('Pinned tab preference saved');
+    showToast('Saved.');
   });
 
   document.getElementById('ai-close-toggle').addEventListener('change', async (e) => {
     currentSettings.closeRequiresAiSummary = e.target.checked;
     await saveSettings(currentSettings);
-    showToast('Closing preference saved');
+    showToast('Saved.');
   });
 
   document.getElementById('remove-on-reopen-toggle').addEventListener('change', async (e) => {
     currentSettings.removeOnReopen = e.target.checked;
     await saveSettings(currentSettings);
-    showToast('Reopen preference saved');
+    showToast('Saved.');
   });
 
   // Fade windows (days; 0 = never)
@@ -113,14 +113,14 @@ function setupListeners() {
     toggleApiKeyRow(e.target.value === 'gemini-api');
     toggleLocalLlmRows(e.target.value === 'openai-compatible');
     await saveSettings(currentSettings);
-    showToast('AI Provider updated');
+    showToast('Saved.');
   });
 
   for (const [id, key] of [['openai-base-url', 'openaiBaseUrl'], ['openai-model', 'openaiModel'], ['openai-api-key', 'openaiApiKey']]) {
     document.getElementById(id).addEventListener('change', async (e) => {
       currentSettings[key] = e.target.value.trim();
       await saveSettings(currentSettings);
-      showToast('Local model settings saved');
+      showToast('Saved.');
     });
   }
 
@@ -129,7 +129,7 @@ function setupListeners() {
   document.getElementById('gemini-api-key').addEventListener('change', async (e) => {
     currentSettings.geminiApiKey = e.target.value.trim();
     await saveSettings(currentSettings);
-    showToast('API key saved locally');
+    showToast('Saved.');
   });
 
   bindDomainList({ key: 'excludedDomains', inputId: 'new-domain-input', btnId: 'add-domain-btn' });
@@ -173,18 +173,18 @@ function setupListeners() {
       }
 
       await updateStorageMeter();
-      showToast(`Imported ${imported} notes`);
+      showToast(`Imported ${imported} ${imported === 1 ? 'note' : 'notes'}`);
     } catch (err) {
       console.error('Import failed:', err);
-      showToast('Import failed: invalid JSON backup file');
+      showToast('Couldn\'t import: that file isn\'t a Tab Squirrel JSON backup.');
     }
   });
 
   document.getElementById('clear-history-btn').addEventListener('click', async () => {
-    if (confirm('Are you sure you want to delete all stored tab summaries and notes? This action cannot be undone.')) {
+    if (confirm('Delete every note, including starred ones? This can\'t be undone.')) {
       await clearAllHistory();
       await updateStorageMeter();
-      showToast('All history cleared');
+      showToast('All notes deleted.');
     }
   });
 }
@@ -195,7 +195,7 @@ async function updateStorageMeter() {
     const count = estimate.itemCount || 0;
     const bytes = estimate.byteEstimate || 0;
     const kb = Math.round(bytes / 1024);
-    document.getElementById('storage-meter-text').textContent = `Current Storage: ${count} tabs (~${kb} KB)`;
+    document.getElementById('storage-meter-text').textContent = `${count} ${count === 1 ? 'note' : 'notes'}, about ${kb} KB`;
   } catch (err) {
     console.error('Failed to update storage meter:', err);
   }
@@ -210,12 +210,12 @@ async function checkPermissions() {
     const hasPermission = await chrome.permissions.contains({ origins: ['<all_urls>'] });
     card.classList.toggle('granted', hasPermission);
     if (hasPermission) {
-      statusEl.textContent = '✓ Extraction permissions are active across all websites.';
-      grantBtn.textContent = 'Permission Active';
+      statusEl.textContent = '✓ Tab Squirrel can read pages on all sites.';
+      grantBtn.textContent = 'Allowed';
       grantBtn.disabled = true;
     } else {
-      statusEl.textContent = '⚠ Tab Squirrel requires permission to read background tab content.';
-      grantBtn.textContent = 'Enable on All Sites';
+      statusEl.textContent = 'Tab Squirrel can\'t read pages yet, so idle tabs stay open with no note.';
+      grantBtn.textContent = 'Allow all sites';
       grantBtn.disabled = false;
     }
   } catch (err) {
@@ -266,7 +266,7 @@ async function testLocalLlmConnection() {
     const list = document.getElementById('openai-model-list');
     list.innerHTML = models.map(id => `<option value="${escapeHtml(id)}"></option>`).join('');
     const chosen = document.getElementById('openai-model').value.trim();
-    status.textContent = `✓ Connected: ${models.length} model(s)` +
+    status.textContent = `✓ Connected: ${models.length} ${models.length === 1 ? 'model' : 'models'}` +
       (chosen && !models.includes(chosen) ? ` — "${chosen}" isn't one of them` : '');
   } catch (err) {
     status.textContent = `✗ Could not reach ${baseUrl} (${err.name === 'TimeoutError' ? 'timed out' : 'is the server running?'})`;
@@ -290,7 +290,7 @@ function renderDomainChips(container, key) {
     chip.className = 'domain-chip';
     chip.innerHTML = `
       <span>${escapeHtml(domain)}</span>
-      <button class="chip-remove-btn" data-domain="${escapeHtml(domain)}">✕</button>
+      <button class="chip-remove-btn" data-domain="${escapeHtml(domain)}" aria-label="Remove ${escapeHtml(domain)}">✕</button>
     `;
 
     chip.querySelector('.chip-remove-btn').addEventListener('click', async () => {
@@ -317,7 +317,7 @@ function bindDomainList({ key, inputId, btnId }) {
     currentSettings = await setDomainList(domain, key);
     renderAllChips();
     input.value = '';
-    showToast(key === 'excludedDomains' ? `Added ${domain} to whitelist` : `Added ${domain} to trusted sites`);
+    showToast(key === 'excludedDomains' ? `Added ${domain} to Never touch` : `Added ${domain} to Always close`);
   });
 }
 

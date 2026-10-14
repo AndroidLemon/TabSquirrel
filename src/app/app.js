@@ -24,7 +24,8 @@ import {
   getSettings,
   DEFAULT_SETTINGS
 } from '../storage/db.js';
-import { escapeHtml, highlightSearch, faviconUrl, fadeChipHtml, fadeDateHtml } from '../shared/html.js';
+import { escapeHtml, highlightSearch, faviconUrl, fadeChipHtml, fadeDateHtml, reasonLabel, offlineSummaryHtml, isOfflineSummary } from '../shared/html.js';
+import { plannedSource } from '../ai/summarizer.js';
 import { fadeChipLabel, fadeDateLabel, fadeExplanation } from '../shared/fade.js';
 import { THEME_LABELS, nextTheme, setTheme, startTheme } from '../shared/theme.js';
 import {
@@ -59,8 +60,9 @@ const REOPEN_ALL_CONFIRM_ABOVE = 5; // more still-closed notes than this and Reo
 const PERM_DISMISSED_KEY = 'perm_banner_dismissed'; // the quiet permission note was dismissed
 const PERM_TEXT = {
   loud: 'Without it, tabs from sites you haven\'t allowed stay open and get no note.',
-  quiet: 'Some sites can\'t be read, so their tabs stay open with no note.' // no heading above it, so it carries its own subject
+  quiet: 'Tab Squirrel can\'t read sites you haven\'t allowed, so their tabs stay open with no note.' // no heading above it, so it carries its own subject
 };
+const SAVE_FAILED = 'Couldn\'t save this page. Tab Squirrel can\'t read browser pages, or sites you haven\'t allowed.';
 const VIEW_LABELS = { inbox: 'Inbox', reopened: 'Reopened' };
 
 let fadeSettings = null;
@@ -467,7 +469,9 @@ async function renderFeed(showSkeletons = false, { keepIndex = false } = {}) {
   if (today.length === 0 && rest.length === 0) {
     const total = (await getStats().catch(() => null))?.total ?? 1; // unknown: don't claim a first run
     if (seq !== renderSeq) return;
-    feed.innerHTML = emptyStateHtml(settings, total);
+    const nano = total === 0 ? await nanoReady() : undefined; // only the first-run copy depends on it
+    if (seq !== renderSeq) return;
+    feed.innerHTML = emptyStateHtml(settings, total, nano);
     clearSelection();
     return;
   }
@@ -489,21 +493,51 @@ function setResultsCount(n) {
 }
 
 /**
+ * Whether Chrome's on-device model is downloaded, the one thing the Auto provider needs that only
+ * Chrome can say (asynchronously). Anything unexpected counts as no: the summarizer treats it the same way.
+ */
+async function nanoReady() {
+  try {
+    return typeof LanguageModel !== 'undefined' && (await LanguageModel.availability()) === 'available';
+  } catch {
+    return false;
+  }
+}
+
+/** True when the settings resolve to the offline heuristic, so the AI-summary rule means nothing is closed. */
+export function resolvesToHeuristic(settings, nano) {
+  const source = plannedSource(settings);
+  return source === 'heuristic' || (source === 'prompt-api' && !nano);
+}
+
+/** "2 hours" from two hours up when it is whole hours, else "45 minutes"; the way the Closed today heading reads. */
+function idleSpan(minutes) {
+  if (minutes >= 120 && minutes % 60 === 0) return `${minutes / 60} hours`;
+  return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`;
+}
+
+/**
  * What the notebook says before it holds any note: what will happen, with the user's own
  * threshold. "Save current tab" exists only in the side panel, so only the panel names it.
+ * `nano` is whether Chrome's on-device model is downloaded; with it unknown (undefined) the
+ * copy makes no claim about what writes the summaries.
  */
-export function firstRunCopy(settings, surface) {
-  const { timeoutMinutes, archiveMode } = { ...DEFAULT_SETTINGS, ...settings };
-  const idle = `${timeoutMinutes} ${timeoutMinutes === 1 ? 'minute' : 'minutes'}`;
+export function firstRunCopy(settings, surface, nano) {
+  const merged = { ...DEFAULT_SETTINGS, ...settings };
+  const { timeoutMinutes, archiveMode } = merged;
+  const idle = idleSpan(timeoutMinutes);
   const asleep = archiveMode === 'discard';
   const lines = [
     asleep ? `Tabs left idle for ${idle} are put to sleep.`
-      : archiveMode === 'close' ? `Tabs left idle for ${idle} are closed.`
-      : `Tabs left idle for ${idle} are closed, or put to sleep if they might hold unsaved work.`,
+      : archiveMode === 'close' ? `Tabs left idle for ${idle} are closed once a summary is written. Tabs with unsaved typing are left alone.`
+      : `Tabs left idle for ${idle} are closed once a summary is written. Pages that look like apps are put to sleep instead, and tabs with unsaved typing are left alone.`,
     'A short note of each is kept here.',
     asleep ? 'Any note reopens its tab in one click.' : 'Anything closed reopens in one click.'
   ];
-  if (surface === 'panel') lines.push('To keep a page now, use Save current tab.');
+  if (!asleep && merged.closeRequiresAiSummary !== false && nano !== undefined && resolvesToHeuristic(merged, nano)) {
+    lines.splice(1, 0, 'Without an AI summarizer, tabs are put to sleep rather than closed. Choose one in Settings.');
+  }
+  if (surface === 'panel') lines.push('To keep a page now, press the bookmark button at the top (Save current tab).');
   return { title: 'Nothing here yet', lines };
 }
 
@@ -512,14 +546,14 @@ function searchScope() {
   return state.time === 'favorites' ? 'Starred' : state.time ? '' : VIEW_LABELS[state.view] || '';
 }
 
-function emptyStateHtml(settings, total) {
+function emptyStateHtml(settings, total, nano) {
   const hasFilter = Boolean(state.query || state.tag || state.domain || state.time);
   const scope = searchScope();
   let title;
   let lines;
   let action = '';
   if (total === 0 && !hasFilter) {
-    ({ title, lines } = firstRunCopy(settings, state.surface));
+    ({ title, lines } = firstRunCopy(settings, state.surface, nano));
   } else if (state.view === 'inbox' && !hasFilter) {
     title = 'Nothing new in your Inbox';
     lines = ['Notes leave it when you read, star or reopen them.'];
@@ -529,7 +563,7 @@ function emptyStateHtml(settings, total) {
     action = '<button class="empty-action-btn" type="button" data-action="search-all">Search all notes</button>';
   } else {
     title = 'No matching notes';
-    lines = ['Try adjusting your search terms or filters.'];
+    lines = ['Clear the search or a filter to see more.'];
   }
   // Fading is explained in the shortcuts list and when an Inbox empties, not above every feed or on the
   // first run, where nothing can fade yet and the sentence only lengthens a promise that is already three lines.
@@ -545,23 +579,26 @@ function emptyStateHtml(settings, total) {
 /**
  * Status badge for a record: sleeping (discarded), reopened (restored), saved (captured:
  * summary saved but the tab is still open). Closed is the default state, so it gets no badge
- * (empty string). Tooltip = closureReason.
+ * (empty string). Tooltip = reasonLabel (plain wording for the record's closureReason).
  * @param {Object} tab
  * @returns {string}
  */
 export function getStatusBadge(tab) {
   const entry = {
-    discarded: ['sleeping', 'Sleeping', 'Sleeping tab (RAM suspended)'],
-    restored: ['restored', 'Reopened', 'Tab was reopened'],
-    captured: ['captured', 'Saved', 'Note saved; tab left open']
+    discarded: ['sleeping', 'Sleeping'],
+    restored: ['restored', 'Reopened'],
+    captured: ['captured', 'Saved']
   }[tab.status];
   if (!entry) return '';
-  const [cls, label, fallback] = entry;
-  return `<span class="badge-status ${cls}" title="${escapeHtml(tab.closureReason || fallback)}">${label}</span>`;
+  const [cls, label] = entry;
+  return `<span class="badge-status ${cls}" title="${escapeHtml(reasonLabel(tab))}">${label}</span>`;
 }
 
-function starLabel(isFavorite) {
-  return isFavorite ? 'Unstar: let this note fade again' : 'Star: keep this note; it won\'t fade';
+/** "Star" / "Unstar", with what that changes only while notes fade at all (with fading off it changes nothing). */
+export function starLabel(isFavorite, settings = fadeSettings) {
+  const fading = Boolean(settings && (settings.fadeUnopenedDays || settings.fadeReopenedDays));
+  if (isFavorite) return fading ? 'Unstar: let this note fade again' : 'Unstar';
+  return fading ? 'Star: keep this note; it won\'t fade' : 'Star';
 }
 
 /**
@@ -595,12 +632,12 @@ function cardHtml(tab, extras = null) {
           <img class="favicon" src="${escapeHtml(faviconUrl(tab.url))}" alt="">
           <span class="card-domain">${highlightSearch(tab.domain, q)}</span>
         </div>
-        <span class="card-time" title="Saved ${escapeHtml(new Date(tab.capturedAt).toLocaleString())}">${tab.readingTimeMinutes || 1} min read · saved ${formatTimeAgo(tab.capturedAt)}${fadeDateHtml(tab, fadeSettings, state.sortBy)}</span>
+        <span class="card-time" title="Saved ${escapeHtml(new Date(tab.capturedAt).toLocaleString())}">${tab.readingTimeMinutes || 1} min read · saved ${formatTimeAgo(tab.capturedAt)}${offlineSummaryHtml(tab)}${fadeDateHtml(tab, fadeSettings, state.sortBy)}</span>
         ${flags ? `<div class="card-flags">${flags}</div>` : ''}
       </div>
       ${extras?.line || ''}
       <h3 class="card-title"><button class="card-title-btn" type="button" title="${escapeHtml(tab.title)}" aria-label="Read note: ${escapeHtml(tab.title)}">${highlightSearch(tab.title, q)}</button></h3>
-      ${tab.summary?.tldr ? `<div class="card-tldr">${highlightSearch(tab.summary.tldr, q)}</div>` : '<div class="card-tldr card-tldr-empty">No AI note for this tab</div>'}
+      ${tab.summary?.tldr ? `<div class="card-tldr">${highlightSearch(tab.summary.tldr, q)}</div>` : '<div class="card-tldr card-tldr-empty">No summary could be written for this page.</div>'}
       ${bullets.length ? `
         <button class="takeaways-toggle" type="button" aria-expanded="false"><span class="takeaways-chevron">▶</span> Key takeaways (${bullets.length})</button>
         <ul class="card-bullets collapsed">${bullets.map(b => `<li>${highlightSearch(b, q)}</li>`).join('')}</ul>` : ''}
@@ -610,7 +647,7 @@ function cardHtml(tab, extras = null) {
         <div class="card-actions">
           <button class="action-icon-btn star-btn${tab.isFavorite ? ' active' : ''}" title="${star}" aria-label="${star}">${ICONS.star}</button>
           <button class="action-icon-btn reader-btn" title="Read note" aria-label="Read note">${ICONS.reader}</button>
-          <button class="action-icon-btn copy-btn" title="Copy note (Markdown)" aria-label="Copy note">${ICONS.copy}</button>
+          <button class="action-icon-btn copy-btn" title="Copy note as Markdown" aria-label="Copy note as Markdown">${ICONS.copy}</button>
           <button class="action-icon-btn delete-btn" title="Delete note" aria-label="Delete note">${ICONS.trash}</button>
         </div>
       </div>
@@ -648,7 +685,7 @@ async function onFeedClick(e) {
 
 async function reopenTab(url, recordId) {
   if (!url) {
-    showToast('This note has no web address to reopen', true);
+    showToast('This note has no web address to reopen.', true);
     return;
   }
   try {
@@ -660,7 +697,7 @@ async function reopenTab(url, recordId) {
     if (res.removed) showRemovedOnReopenToast(recordId);
   } catch (err) {
     console.error('Error reopening tab:', err);
-    showToast('Could not reopen that tab. Please try again.', true);
+    showToast('Couldn\'t reopen that tab. Try again.', true);
   }
 }
 
@@ -672,7 +709,7 @@ async function toggleStar(tab, card) {
     if (updated) tab.filedAt = updated.filedAt;
   } catch (err) {
     console.error('Error toggling favorite:', err);
-    showToast('Could not update the star', true);
+    showToast('Couldn\'t update the star.', true);
     return;
   }
   const btn = card?.querySelector('.star-btn');
@@ -682,7 +719,7 @@ async function toggleStar(tab, card) {
     btn.setAttribute('aria-label', btn.title);
   }
   const leftInbox = wasInInbox && !isInInbox(tab); // starring files a note; unstarring never puts it back
-  showToast(tab.isFavorite ? `Starred. This note will not fade.${leftInbox ? ' It left your Inbox.' : ''}` : 'Unstarred');
+  showToast(tab.isFavorite ? `Starred. This note will not fade.${leftInbox ? ' It left your Inbox.' : ''}` : 'Unstarred.');
   updateStats();
   // No card (the reader outlived it) in Starred means the note has to come back, or go, with the feed.
   if (state.time === 'favorites' && (!tab.isFavorite || !card)) {
@@ -714,7 +751,7 @@ async function copyText(text, message, btn) {
     await navigator.clipboard.writeText(text);
   } catch (err) {
     console.error('Clipboard write failed:', err);
-    showToast('Could not copy to clipboard', true);
+    showToast('Couldn\'t copy to clipboard.', true);
     return;
   }
   showToast(message);
@@ -750,7 +787,7 @@ async function deleteCard(tab, card = null, { viaKeyboard = false } = {}) {
     console.error('Error deleting tab:', err);
     card?.classList.remove('removing');
     if (keyboard && position >= 0) selectCard(liveCards().indexOf(card));
-    showToast('Could not delete that note.', true);
+    showToast('Couldn\'t delete that note.', true);
     return;
   }
   setResultsCount(liveCards().length + closedTodayCappedOut);
@@ -767,14 +804,14 @@ async function deleteCard(tab, card = null, { viaKeyboard = false } = {}) {
     }
   }, 260);
 
-  showUndoToast('Note deleted', tab.id, () => restoreDeletedTab(tab.id));
+  showUndoToast('Note deleted.', tab.id, () => restoreDeletedTab(tab.id));
 }
 
 /**
  * Undo toast for a note removed because it was reopened (Remove Notes When Reopened). Undo restores it
  * the way it would have been with the setting off: back in the list, marked Reopened.
  */
-function showRemovedOnReopenToast(recordIds, message = 'Note removed (reopened)') {
+function showRemovedOnReopenToast(recordIds, message = 'Tab reopened. Its note was removed.') {
   const ids = [].concat(recordIds);
   showUndoToast(message, ids[0], async () => {
     let failed = 0;
@@ -788,19 +825,19 @@ function showRemovedOnReopenToast(recordIds, message = 'Note removed (reopened)'
       }
     }
     if (ids.length === 1) return failed === 0;
-    return failed ? `Could not restore ${failed} of ${ids.length} notes. They may already be gone.` : true;
-  }, ids.length === 1 ? 'Note restored' : 'Notes restored');
+    return failed ? `Couldn\'t restore ${failed} of ${ids.length} notes. They may already be gone.` : true;
+  }, ids.length === 1 ? 'Note restored.' : 'Notes restored.');
 }
 
 /**
  * 5-second toast whose Undo runs `restore`, then refreshes and highlights the returned card.
  * `restore` resolves truthy on success, falsy on failure, or a string to fail with that message.
  */
-function showUndoToast(message, id, restore, restoredMessage = 'Note restored') {
+function showUndoToast(message, id, restore, restoredMessage = 'Note restored.') {
   showToast(message, false, async () => {
     hideToast();
     let restoredOk = false;
-    let failMessage = 'Could not restore that note. It may already be gone.';
+    let failMessage = 'Couldn\'t restore that note. It may already be gone.';
     try {
       const result = await restore();
       restoredOk = Boolean(result) && typeof result !== 'string';
@@ -860,7 +897,7 @@ function syncControls() {
     b.setAttribute('aria-pressed', String(on));
   });
 
-  const label = state.tag ? `Filtered by topic: #${state.tag}`
+  const label = state.tag ? `Filtered by tag: #${state.tag}`
     : state.domain ? `Filtered by domain: ${state.domain}`
     : TIME_LABELS[state.time] ? `Filtered by: ${TIME_LABELS[state.time]}` : '';
   $('filter-banner').hidden = !label;
@@ -990,7 +1027,7 @@ async function openReader(tab) {
       .catch(err => { readerFiled = false; console.error('Failed to file the note:', err); });
   }
   const dialog = $('reader-dialog');
-  $('modal-title').textContent = tab.title || 'Untitled tab';
+  $('modal-title').textContent = tab.title || 'Untitled page';
   const link = $('modal-source-link');
   link.textContent = tab.domain || tab.url || ''; // the domain reads at any width; href and title keep the full address
   link.title = tab.url || '';
@@ -1000,7 +1037,8 @@ async function openReader(tab) {
   const bullets = toSafeStringArray(tab.summary?.bullets);
   $('modal-summary-box').innerHTML = (tab.summary?.tldr || bullets.length)
     ? (tab.summary?.tldr ? `<p>${escapeHtml(tab.summary.tldr)}</p>` : '') +
-      (bullets.length ? `<ul class="modal-bullets">${bullets.map(b => `<li>${escapeHtml(b)}</li>`).join('')}</ul>` : '')
+      (bullets.length ? `<ul class="modal-bullets">${bullets.map(b => `<li>${escapeHtml(b)}</li>`).join('')}</ul>` : '') +
+      (isOfflineSummary(tab) ? '<p class="summary-source">offline summary</p>' : '')
     : '<p>No overview available</p>';
   $('modal-text-content').innerHTML = '<p class="empty-article-text">Loading article text…</p>';
   dialog.showModal();
@@ -1109,11 +1147,11 @@ async function archiveCurrentTab(btn) {
       await refresh();
     } else {
       console.error('Archive failed:', response?.error);
-      showToast('Could not save this tab. Please try again.', true);
+      showToast(SAVE_FAILED, true);
     }
   } catch (err) {
     console.error('Error archiving tab:', err);
-    showToast('Could not save this tab. Please try again.', true);
+    showToast(SAVE_FAILED, true);
   } finally {
     btn.disabled = false;
     btn.removeAttribute('aria-busy');
@@ -1150,7 +1188,8 @@ function applyDensity() {
   const btn = $('density-toggle-btn');
   btn.classList.toggle('active', compact);
   btn.setAttribute('aria-pressed', String(compact));
-  btn.title = compact ? 'Switch to comfortable view' : 'Switch to compact view';
+  btn.title = 'Compact view'; // a toggle: aria-pressed carries the state, the name stays put
+  btn.setAttribute('aria-label', 'Compact view');
 }
 
 async function checkPermissions() {
@@ -1201,7 +1240,7 @@ function showToast(message, isError = false, onUndo = null, duration = 2600) {
   const progress = $('toast-progress');
   clearTimeout(toastTimer);
   $('toast-message').textContent = message;
-  announce(onUndo ? `${message}. Press U to undo.` : message);
+  announce(onUndo ? `${message.replace(/[.!?]$/, '')}. Press U to undo.` : message);
   toast.classList.toggle('error', isError);
   undoBtn.hidden = !onUndo;
   undoBtn.onclick = onUndo ? (e) => { e.stopPropagation(); onUndo(); } : null;
@@ -1353,13 +1392,13 @@ function setupEventListeners() {
       if (await chrome.permissions.request({ origins: ['<all_urls>'] })) {
         permMissing = false;
         syncPermBanner();
-        showToast('Permission granted.');
+        showToast('Tab Squirrel can now read pages.');
       } else {
         showToast('Permission was not granted, so page text can\'t be read yet.', true);
       }
     } catch (err) {
       console.error('Permission request failed:', err);
-      showToast('Could not ask for permission. Please try again.', true);
+      showToast('Couldn\'t ask for permission. Try again.', true);
     }
   });
 
